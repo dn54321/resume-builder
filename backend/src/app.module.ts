@@ -5,6 +5,7 @@ import { LoggerModule } from './common/logger/logger.module';
 import { DatabaseModule } from './common/database/database.module';
 import { CryptoModule } from './common/crypto/crypto.module';
 import { AuthModule } from './auth/auth.module';
+import { ResumesModule } from './resumes/resumes.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -15,6 +16,7 @@ import { AppService } from './app.service';
     DatabaseModule,
     CryptoModule,
     AuthModule,
+    ResumesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

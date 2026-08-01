@@ -240,10 +240,24 @@ async function run(): Promise<void> {
     });
 
     const field1 = await prisma.sectionField.create({
-      data: { sectionEntryId: entry.id, key: 'name', value: 'encrypted_value', order: 0 },
+      data: {
+        sectionEntryId: entry.id,
+        key: 'name',
+        value: 'encrypted_value',
+        iv: 'mock_iv',
+        authTag: 'mock_auth_tag',
+        order: 0,
+      },
     });
     const field2 = await prisma.sectionField.create({
-      data: { sectionEntryId: entry.id, key: 'email', value: 'encrypted_email', order: 1 },
+      data: {
+        sectionEntryId: entry.id,
+        key: 'email',
+        value: 'encrypted_email',
+        iv: 'mock_iv',
+        authTag: 'mock_auth_tag',
+        order: 1,
+      },
     });
 
     assert(field1.key === 'name', 'SectionField.key matches');
