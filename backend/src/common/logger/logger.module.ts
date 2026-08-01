@@ -15,7 +15,10 @@ import { type EnvConfig } from '../config/env.interface';
           level: config.get('NODE_ENV') === 'production' ? 'info' : 'debug',
           transport:
             config.get('NODE_ENV') !== 'production'
-              ? { target: 'pino-pretty', options: { colorize: true, singleLine: true } }
+              ? {
+                  target: 'pino-pretty',
+                  options: { colorize: true, singleLine: true },
+                }
               : undefined,
           serializers: {
             req: (req: Request) => ({
