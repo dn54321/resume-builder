@@ -239,7 +239,16 @@ export async function buildGraph(
 /** Determine which tickets are ready to start (all deps done, not already running/done/failed). */
 export function readyTickets(nodes: Map<string, GraphNode>): GraphNode[] {
   const ready: GraphNode[] = [];
+  // Build set of ticket IDs that are parents (epics with children in the graph)
+  const parentIds = new Set<string>();
   for (const [, node] of nodes) {
+    if (node.ticket.parentId) {
+      parentIds.add(node.ticket.parentId);
+    }
+  }
+  for (const [, node] of nodes) {
+    // Skip parent epics — they have no implementation work
+    if (parentIds.has(node.ticket.id)) continue;
     if (node.state.status === 'pending' || node.state.status === 'blocked') {
       const allDepsDone = node.dependencies.every(
         (d) => d.state.status === 'done',

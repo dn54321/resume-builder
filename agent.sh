@@ -105,15 +105,23 @@ On startup:
 3. Announce idle: intercom({ action: "send", to: "server", message: "IDLE" })
 4. Wait for a TASK: message from the server with a ticket to work on
 
+When you receive a TASK, the message includes the path to your worktree.
+cd to that worktree directory before doing anything.
+
 While working:
 - Send STATUS updates to the boss: intercom({ action: "send", to: "boss", message: "STATUS: doing X" })
 - Ask boss if stuck: intercom({ action: "ask", to: "boss", message: "Question: ..." })
 - Write the PR description to pr-body.md in the worktree root
 
+CRITICAL RULES:
+- You work in an isolated git worktree — git reset and clean are safe here
+- NEVER leave your worktree directory — all work must stay inside it
+- NEVER run git commands affecting other branches (like git checkout other branches)
+- Only git add, git commit, and git push are allowed for shared repo changes
+
 When done, use the create-pr skill:
-- The skill commits, pushes, creates the PR, writes pr-url.txt
 - Read .agents/skills/create-pr/SKILL.md for details
-- Do NOT use gh pr create directly — use the create-pr skill
+- The skill commits, pushes, creates the PR, writes pr-url.txt
 - Then: intercom({ action: "send", to: "boss", message: "DONE: <pr-url>" })
 - Then: intercom({ action: "send", to: "server", message: "IDLE" })'
 
@@ -143,6 +151,28 @@ BOSS_IDX=$((MAX_AGENTS + 1))
 tmux split-window -v -t "$SESSION_NAME:0.0" -c "$REPO_ROOT" -l 8 \
   "$PI_BIN --append-system-prompt '$BOSS_PROMPT' Start"
 
+# Monitor boss pane — restart pi if it dies
+(
+  while tmux has-session -t "$SESSION_NAME" 2>/dev/null; do
+    sleep 5
+    if ! tmux list-panes -t "$SESSION_NAME:0" -F '#{pane_pid}' 2>/dev/null | grep -q .; then
+      continue
+    fi
+    BOSS_PANE_PID=$(tmux list-panes -t "$SESSION_NAME:0.$BOSS_IDX" -F '#{pane_pid}' 2>/dev/null || echo '')
+    if [ -z "$BOSS_PANE_PID" ]; then
+      continue
+    fi
+    if ! kill -0 "$BOSS_PANE_PID" 2>/dev/null; then
+      echo "[$(date -Is)] Boss died in pane $BOSS_IDX — restarting..." >> "$SERVER_LOG"
+      tmux send-keys -t "$SESSION_NAME:0.$BOSS_IDX" C-c 2>/dev/null || true
+      sleep 0.5
+      tmux send-keys -t "$SESSION_NAME:0.$BOSS_IDX" \
+        "$PI_BIN --append-system-prompt '$BOSS_PROMPT' Start" Enter
+    fi
+  done
+) &
+BOSS_WATCHER_PID=$!
+
 echo "Panes:"
 tmux list-panes -t "$SESSION_NAME:0" -F "  #{pane_index}: #{pane_current_command}"
 
@@ -152,6 +182,7 @@ echo "All panes running. Attaching tmux..."
 tmux select-pane -t "$SESSION_NAME:0.0"
 
 cleanup() {
+  kill "$BOSS_WATCHER_PID" 2>/dev/null || true
   kill "$SERVER_PID" 2>/dev/null || true
   tmux kill-session -t "$SESSION_NAME" 2>/dev/null || true
 }

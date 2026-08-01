@@ -1,5 +1,6 @@
 {
   "packages": [
+    "npm:pi-intercom",
     "npm:pi-web-access"
   ]
 }

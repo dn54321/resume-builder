@@ -15,9 +15,10 @@ export interface TicketInfo {
 export type TicketStatus =
   | 'pending'
   | 'blocked'
-  | 'running'
+  | 'in_progress'
   | 'done'
-  | 'failed';
+  | 'failed'
+  | 'merged';
 
 export interface TicketState {
   identifier: string;
@@ -32,6 +33,7 @@ export interface TicketState {
   error: string | null;
   assignedPort: number | null;
   retryCount: number;
+  workerName: string | null;
 }
 
 export interface OrchestratorState {

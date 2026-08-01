@@ -387,6 +387,21 @@ async function syncLinearStatus(): Promise<void> {
   }
 }
 
+// ─── Boss health monitoring ─────────────────────────────────────────
+
+let bossPid: number | null = null;
+
+async function checkBossAlive(): Promise<void> {
+  if (!intercom) return;
+  try {
+    const sessions = await intercom.listSessions();
+    const bossSession = sessions.find((s: any) => s.name === 'boss');
+    if (!bossSession) {
+      log('Boss intercom session missing — boss may have crashed. Check the boss pane.');
+    }
+  } catch { /* best effort */ }
+}
+
 function logStatus(): void {
   if (!currentNodes) {
     log('── Status: No active tickets ──');
@@ -638,6 +653,7 @@ async function main(): Promise<void> {
 
   // Periodic: Linear sync + status display + PR scan
   setInterval(async () => {
+    await checkBossAlive();
     await syncLinearStatus();
     logStatus();
     if (!currentNodes) return;
