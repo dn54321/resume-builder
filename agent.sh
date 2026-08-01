@@ -153,7 +153,7 @@ echo "All panes running. Attaching tmux..."
 tmux select-pane -t "$SESSION_NAME:0.0"
 
 cleanup() {
-  kill "$SERVER_PID" 2>/dev/null || true
+  kill "${SERVER_PID:-}" 2>/dev/null || true
   tmux kill-session -t "$SESSION_NAME" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM

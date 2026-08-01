@@ -80,6 +80,7 @@ function log(msg: string): void {
 
 const workers = new Map<string, cp.ChildProcess>(); // ticketId → process
 const workerAssignment = new Map<string, string>();  // agentName → ticketId
+const agentSessionMap = new Map<string, string>();  // intercom session id → agentName
 const idleAgents = new Set<string>();                // agent names waiting for work
 
 let currentNodes: Map<string, GraphNode> | null = null;
@@ -99,6 +100,18 @@ async function assignWork(node: GraphNode): Promise<boolean> {
   // Find an idle agent
   const agentName = [...idleAgents][0];
   if (!agentName) return false;
+
+  // Verify agent is actually connected
+  if (!intercom) return false;
+  let sessions: any[] = [];
+  try { sessions = await intercom.listSessions(); } catch { return false; }
+  const agentSession = sessions.find((s: any) => s.name === agentName);
+  if (!agentSession) {
+    // Agent disconnected — remove from idle and try next
+    idleAgents.delete(agentName);
+    log(`Agent ${agentName} not connected — removed from idle`);
+    return assignWork(node); // try next agent
+  }
 
   idleAgents.delete(agentName);
 
@@ -419,6 +432,19 @@ async function checkBossAlive(): Promise<void> {
     if (!bossSession) {
       log('Boss not connected');
     }
+    // Clean up idleAgents: remove any that aren't actually connected
+    const connectedNames = new Set(sessions.map((s: any) => s.name).filter(Boolean));
+    const connectedIds = new Set(sessions.map((s: any) => s.id));
+    for (const name of idleAgents) {
+      // Check if any session maps to this agent name
+      const hasSession = [...agentSessionMap.entries()].some(
+        ([key, agentName]) => agentName === name && (connectedNames.has(key) || connectedIds.has(key))
+      );
+      if (!hasSession && !connectedNames.has(name)) {
+        idleAgents.delete(name);
+        log(`Removed stale agent from idle: ${name}`);
+      }
+    }
   } catch { /* best effort */ }
 }
 
@@ -633,25 +659,28 @@ async function main(): Promise<void> {
       return;
     }
 
-    // Worker registration
+    // Worker registration — map intercom session ID to agent name
     if (text.startsWith('REGISTER:')) {
       const agentName = text.slice('REGISTER:'.length).trim();
-      log(`Worker registered: ${agentName}`);
+      log(`Worker registered: ${agentName} (session: ${senderName})`);
+      // Track the mapping so IDLE messages from subagent-chat-* sessions work
+      agentSessionMap.set(from.id, agentName);
+      agentSessionMap.set(senderName, agentName);
+      idleAgents.add(agentName);
       if (currentNodes) launchReady();
     } else if (text === 'IDLE' || text === 'idle') {
-      log(`Agent ${senderName} is idle`);
-      idleAgents.add(senderName);
+      // Resolve agent name from session map (workers have subagent-chat-* intercom names)
+      const resolvedName = agentSessionMap.get(from.id) || agentSessionMap.get(senderName);
+      const agentName = resolvedName || senderName;
+      log(`Agent ${agentName} is idle`);
+      idleAgents.add(agentName);
       if (currentNodes) launchReady();
     }
   });
 
   // Watch for new sessions
   intercom.on('session_joined', (session: any) => {
-    if (session.name?.startsWith('agent-')) {
-      log(`Agent session joined: ${session.name}`);
-      idleAgents.add(session.name);
-      if (currentNodes) launchReady();
-    }
+    log(`Session joined: ${session.name} (${session.id?.slice(0, 8)})`);
   });
 
   // Start webhook server

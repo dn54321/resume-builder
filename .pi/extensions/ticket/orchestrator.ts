@@ -401,20 +401,12 @@ function findPiBinary(): string | null {
 }
 
 function getPiInvocation(args: string[]): { command: string; args: string[] } {
-  const currentScript = process.argv[1];
-  // Detect if we're running from the CLI dashboard — workers should use 'pi', not cli.ts
-  if (currentScript && currentScript.includes('cli.ts')) {
-    const pi = findPiBinary();
-    if (pi === 'npx') {
-      return { command: 'npx', args: ['pi', ...args] };
-    }
-    return { command: pi, args: args };
+  // Always use the pi binary for workers, never re-invoke the server.
+  const pi = findPiBinary();
+  if (pi === 'npx') {
+    return { command: 'npx', args: ['pi', ...args] };
   }
-  // Running from pi extension — re-invoke the same entry point
-  if (currentScript && fs.existsSync(currentScript)) {
-    return { command: process.execPath, args: [currentScript, ...args] };
-  }
-  return { command: 'pi', args };
+  return { command: pi, args: args };
 }
 
 /** Build a context section showing the worker's current git state. */
