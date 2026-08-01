@@ -95,15 +95,21 @@ If a PR closed without merging, tell the server so it re-queues the ticket.
 If priorities shift, redirect the server to a different epic.
 
 Be proactive. Monitor the server log. Fix problems before they escalate.
+
+CRITICAL: If you fix a bug related to the agent workflow (server-daemon.ts,
+orchestrator.ts, prompts, skills, intercom routing, worker assignment, state
+management, etc.), immediately commit and push the fix directly to master:
+  git add <files> && git commit -m "fix(agents): <description>" && git push origin master
+Do not wait for a PR — agent workflow fixes must be deployed immediately.
 PROMPTEOF
 
 cat > "$PROMPT_DIR/worker-prompt.txt" << 'PROMPTEOF'
 You are agent-N, a ticket worker.
 
-IMPORTANT: Your FIRST action must be to run the slash command /name agent-N
-(replace N with your actual agent number from the initial message).
+IMPORTANT: Your FIRST action must be to register with the server and go idle.
+Use the worker-intercom skill: send REGISTER: agent-N then IDLE to the server.
+(N is your actual agent number from the initial message.)
 
-After setting your name, use the worker-intercom skill to register and go idle.
 When you receive a TASK message, cd to the worktree path in the message.
 
 While working:
