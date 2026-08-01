@@ -57,7 +57,10 @@ describe('PrismaService', () => {
     it('should call _getClient and connect', async () => {
       const mockClient = { $connect: jest.fn().mockResolvedValue(undefined) };
       jest
-        .spyOn(service as unknown as { _getClient: () => Promise<unknown> }, '_getClient')
+        .spyOn(
+          service as unknown as { _getClient: () => Promise<unknown> },
+          '_getClient',
+        )
         .mockResolvedValue(mockClient);
 
       await service.onModuleInit();
@@ -89,9 +92,11 @@ describe('PrismaService', () => {
       const mockClient = {};
       (service as unknown as { _client: unknown })._client = mockClient;
 
-      const getClient = (service as unknown as {
-        _getClient: () => Promise<unknown>;
-      })._getClient;
+      const getClient = (
+        service as unknown as {
+          _getClient: () => Promise<unknown>;
+        }
+      )._getClient;
       const result = await getClient.call(service);
       expect(result).toBe(mockClient);
     });
@@ -102,9 +107,11 @@ describe('PrismaService', () => {
         .spyOn(service as unknown as { _init: () => Promise<unknown> }, '_init')
         .mockResolvedValue(mockClient);
 
-      const getClient = (service as unknown as {
-        _getClient: () => Promise<unknown>;
-      })._getClient;
+      const getClient = (
+        service as unknown as {
+          _getClient: () => Promise<unknown>;
+        }
+      )._getClient;
       const result = await getClient.call(service);
       expect(result).toBe(mockClient);
     });
