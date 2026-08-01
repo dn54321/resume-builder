@@ -155,12 +155,12 @@ async function main() {
     style: { border: { fg: 'cyan' }, focus: { border: { fg: 'cyan' } } },
   });
 
-  // Output panel — plain scrollable box, content managed manually
+  // Output panel — agent's work (commands, test results, PR)
   const outputBox = blessed.box({
     top: 1,
     left: '25%',
     width: '75%',
-    height: '100%-3',
+    height: '100%-6',
     label: ' Output ',
     border: { type: 'line' },
     scrollable: true,
@@ -171,13 +171,26 @@ async function main() {
     style: { border: { fg: 'green' }, focus: { border: { fg: 'green' } } },
   });
 
+  // Thinking panel — shows agent-status.txt (what the agent is currently doing)
+  const thinkingBox = blessed.box({
+    bottom: 3,
+    left: '25%',
+    width: '75%',
+    height: 3,
+    label: ' Thinking ',
+    border: { type: 'line' },
+    tags: true,
+    content: '',
+    style: { border: { fg: 'yellow' } },
+  });
+
   // Help bar
   const helpBar = blessed.box({
     bottom: 1,
     left: 0,
     width: '100%',
     height: 1,
-    content: ' ↑↓:navigate  Tab:switch panel  Enter:view log  p:prompt  r:retry  x:kill  q:quit',
+    content: ' ↑↓:navigate  Tab:switch  Enter:view  p:prompt  r:retry  x:kill  m:merge-check  q:quit',
     style: { bg: 'blue', fg: 'white' },
     tags: true,
   });
@@ -214,6 +227,7 @@ async function main() {
   screen.append(header);
   screen.append(agentList);
   screen.append(outputBox);
+  screen.append(thinkingBox);
   screen.append(helpBar);
   screen.append(promptInput);
   screen.append(statusLine);
@@ -345,15 +359,16 @@ async function main() {
     const lines = agentOutput.get(ticketId) ?? [];
     outputBox.setContent(lines.join('\n') || '(no output yet)');
     outputBox.setScroll(999999);
+    // Update thinking panel from agent-status.txt
     const node = nodes.get(ticketId);
-    let label = ` Output — ${ticketId} `;
-    if (node?.state.status === 'running' && node.state.worktreePath) {
+    let status = '';
+    if (node?.state.worktreePath) {
       try {
-        const s = fs.readFileSync(node.state.worktreePath + '/agent-status.txt', 'utf-8').trim();
-        if (s) label = ` Output — ${ticketId} — ${s.slice(0, 40)} `;
+        status = fs.readFileSync(node.state.worktreePath + '/agent-status.txt', 'utf-8').trim();
       } catch { /* no status */ }
     }
-    outputBox.setLabel(label);
+    thinkingBox.setContent(status ? ` {cyan-fg}${status}{/cyan-fg}` : ` {yellow-fg}${node?.state.status || 'unknown'}{/yellow-fg}`);
+    outputBox.setLabel(` Output — ${ticketId} `);
     screen.render();
   }
 
@@ -678,6 +693,31 @@ async function main() {
     renderAll();
   });
 
+  screen.key(['m'], () => {
+    if (isPrompting) return;
+    const node = getSelectedNode();
+    if (!node) return;
+    appendOutput(node.ticket.identifier, 'Checking merge conflicts...');
+    import('./github-pr.js').then(({ checkPRMergeConflict, listOpenPRs }) => {
+      listOpenPRs().then((prs) => {
+        const pr = prs.find(p => p.ticketIdentifier === node.ticket.identifier);
+        if (!pr) { appendOutput(node.ticket.identifier, 'No open PR found for ' + node.ticket.identifier); return; }
+        checkPRMergeConflict(pr.number).then(({ hasConflict, state }) => {
+          if (hasConflict) {
+            conflictTicketIds.add(node.ticket.identifier);
+            node.context = `## Base Branch Conflict\nPR #${pr.number} is ${state} — needs rebase against base branch`;
+            if (node.state.status === 'done') { node.state.status = 'pending'; node.state.error = null; node.state.pid = null; node.state.finishedAt = null; }
+            appendOutput(node.ticket.identifier, `✗ PR #${pr.number} is ${state} — needs rebase. Spinning up agent...`);
+            launchFromQueue();
+            renderAll();
+          } else {
+            appendOutput(node.ticket.identifier, `✓ PR #${pr.number} is clean (${state})`);
+          }
+        }).catch(() => appendOutput(node.ticket.identifier, '✗ Failed to check merge status'));
+      }).catch(() => appendOutput(node.ticket.identifier, '✗ Failed to list PRs'));
+    }).catch(() => appendOutput(node.ticket.identifier, '✗ Failed to load PR checker'));
+  });
+
   screen.key(['tab'], () => {
     if (isPrompting) return;
     if (screen.focused === agentList) {
@@ -850,12 +890,20 @@ async function main() {
     renderAll();
   }).catch(() => {});
 
-  // Periodic refresh — header/status only; output streams live via stdout pipe
+  // Periodic refresh — header/status + thinking panel from agent-status.txt
   refreshTimer = setInterval(() => {
     checkPreemption();
     renderHeader();
     renderAgentList();
     renderStatus();
+    // Refresh thinking panel
+    const node = getSelectedNode();
+    if (node?.state.worktreePath) {
+      try {
+        const s = fs.readFileSync(node.state.worktreePath + '/agent-status.txt', 'utf-8').trim();
+        if (s) thinkingBox.setContent(` {cyan-fg}${s}{/cyan-fg}`);
+      } catch { /* no update */ }
+    }
     screen.render();
   }, 2000);
 }

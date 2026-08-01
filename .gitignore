@@ -4,3 +4,4 @@
 node_modules
 agent-status.txt
 .pi/tickets/
+pr-body.md

@@ -9,9 +9,9 @@
    - Frontend: \`pnpm type-check && pnpm lint && pnpm test:unit\`
    - If you made a risky change or fixed a bug, run tests for that area specifically before the final pass.
    - Never run \`pnpm build\`, \`prisma migrate dev\`, \`prisma db push\`, or \`pnpm format\` during validation.
-7. After all changes pass validation, produce a PR description as the **final section** of your output, delimited by \`<!-- PR_SUMMARY_START -->\` and \`<!-- PR_SUMMARY_END -->\` markers.
+7. Write your PR description to the file \`pr-body.md\` in the worktree root. This is how the orchestrator reads your PR. Do NOT use HTML comment markers — just write the markdown directly.
 
-### PR Summary format (REQUIRED in final output)
+### PR body format (REQUIRED)
 
 **Critical rules for PR content:**
 - Show the **exact command** AND its **full output**. Never summarize what the output contained.

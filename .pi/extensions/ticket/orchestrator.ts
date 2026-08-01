@@ -559,54 +559,28 @@ ${getWorkerPromptTemplate()}${extraSection}`;
 
 /** Extract the PR summary from the agent's log output, delimited by HTML comment markers. */
 function extractPRSummary(logPath: string, ticket: TicketInfo): string {
+  // Read PR body from pr-body.md in the worktree (agent writes it directly)
+  const worktreePath = logPath.replace('/logs/', '/worktrees/').replace(/\.log$/, '');
+  const prFile = `${worktreePath}/pr-body.md`;
+  try {
+    if (fs.existsSync(prFile)) {
+      const content = fs.readFileSync(prFile, 'utf-8').trim();
+      if (content.length > 50) return content;
+    }
+  } catch { /* not found or empty */ }
+
+  // Fallback: try extracting from log (old agents that don't know about pr-body.md)
   try {
     const content = fs.readFileSync(logPath, 'utf-8');
     const start = content.lastIndexOf('<!-- PR_SUMMARY_START -->');
     const end = content.lastIndexOf('<!-- PR_SUMMARY_END -->');
     if (start !== -1 && end !== -1 && end > start) {
-      const raw = content.slice(
-        start + '<!-- PR_SUMMARY_START -->'.length,
-        end,
-      ).trim();
-
-      // Strip the instructions template — look for the first real heading/content
-      // after removing placeholder lines like "- [Brief description...]"
-      const cleaned = raw
-        .replace(/^[-*] \[Brief description.*$\n?/gm, '')
-        .replace(/^[-*] \[What breaks\?.*$\n?/gm, '')
-        .replace(/^# Step [12]: \[Description\]\n\[command\]\n?/gm, '')
-        .replace(/^\[EXACT command.*$\n?/gm, '')
-        .replace(/^\[Assertion-based result.*$\n?/gm, '')
-        .replace(/^\[FULL output.*$\n?/gm, '')
-        .replace(/^\[FULL test runner output\]\n?/gm, '')
-        .replace(/^\[FULL response.*$\n?/gm, '')
-        .replace(/^\[For each component.*$\n?/gm, '')
-        .replace(/^\*\*\[Component Name\]\*\*.*$\n?/gm, '')
-        .replace(/^!\[Component.*$\n?/gm, '')
-        .replace(/^[-*] Empty required fields.*$\n?/gm, '')
-        .replace(/^[-*] Invalid input.*$\n?/gm, '')
-        .replace(/^[-*] Wrong credentials.*$\n?/gm, '')
-        .replace(/^[-*] Server error state.*$\n?/gm, '')
-        .replace(/^\[Use the screenshot skill.*$\n?/gm, '')
-        .replace(/^[-*] \[Any issues found.*$\n?/gm, '')
-        .replace(/^# Duration shown by.*$\n?/gm, '')
-        .replace(/^\[EXACT SQL query.*$\n?/gm, '')
-        .replace(/^\[FULL query output.*$\n?/gm, '')
-        .replace(/^\`\`\`bash\n\[command\]\n\`\`\`\n?/gm, '')
-        .replace(/^\`\`\`\n\[FULL output.*\n\`\`\`\n?/gm, '')
-        .trim();
-
-      // If all that's left is just "### AC-1: [Short description...]" or similar unfilled templates, return fallback
-      const hasRealContent = /[a-zA-Z]{20,}/.test(cleaned.replace(/^#+ .*$/gm, '').replace(/^\*\*What this tests:\*\*.*$/gm, '').replace(/^\*\*Setup:\*\*$/gm, '').replace(/^\*\*Test:\*\*$/gm, '').replace(/^\*\*Result:\*\*$/gm, '').replace(/^\*\*Database at rest:\*\*$/gm, ''));
-
-      if (hasRealContent && cleaned.length > 30) {
-        return `<!-- PR_SUMMARY_START -->\n${cleaned}\n<!-- PR_SUMMARY_END -->`;
-      }
+      const raw = content.slice(start + '<!-- PR_SUMMARY_START -->'.length, end).trim();
+      if (raw.length > 50) return raw;
     }
-  } catch { /* fall through to template */ }
+  } catch { /* fall through */ }
 
-  // Fallback: use a minimal template with the ticket description
-  return `## ${ticket.title}\n\nCloses ${ticket.identifier}\n\n**Note:** PR summary markers not found in agent output.`;
+  return `## ${ticket.title}\n\nCloses ${ticket.identifier}\n\n**Note:** No PR body found in agent output.`;
 }
 
 /** Find an existing PR for a branch and update its body. */
