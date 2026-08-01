@@ -1,6 +1,9 @@
 <template>
   <div class="resume-builder">
     <AnonymousBanner v-if="!isAuthenticated" />
+    <header class="resume-builder__toolbar">
+      <PdfExportButton />
+    </header>
     <div class="resume-builder__grid">
       <!-- Left sidebar: LayoutPicker + SectionToggles -->
       <aside class="resume-builder__sidebar">
@@ -46,6 +49,7 @@ import LayoutPicker from '@/features/builder/components/LayoutPicker.vue'
 import SectionToggles from '@/features/builder/components/SectionToggles.vue'
 import AnonymousBanner from '@/features/builder/components/AnonymousBanner.vue'
 import LivePreview from '@/features/builder/components/LivePreview.vue'
+import PdfExportButton from '@/features/builder/components/PdfExportButton.vue'
 import type { SectionType } from '@/features/builder/types/resume'
 
 const store = useResumeStore()
@@ -79,6 +83,14 @@ onUnmounted(() => {
   overflow: hidden;
   padding: 1rem;
   box-sizing: border-box;
+}
+
+.resume-builder__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: 0.75rem;
+  flex-shrink: 0;
 }
 
 .resume-builder__grid {
