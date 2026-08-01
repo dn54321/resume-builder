@@ -143,14 +143,6 @@ async function assignWork(node: GraphNode): Promise<boolean> {
     }
   } catch { /* best effort */ }
 
-  // Remove .pi from worktree — it duplicates the main repo and isn't needed
-  try {
-    const piDir = path.join(worktreePath, '.pi');
-    if (fs.existsSync(piDir)) {
-      fs.rmSync(piDir, { recursive: true, force: true });
-    }
-  } catch { /* best effort */ }
-
   // Build the prompt
   const deps = node.ticket.refs.length > 0 ? node.ticket.refs.join(', ') : 'none';
   const prompt = [
