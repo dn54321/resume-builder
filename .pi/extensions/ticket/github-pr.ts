@@ -277,6 +277,28 @@ export async function isPRClean(ticketId: string): Promise<boolean> {
   }
 }
 
+/** Check if a ticket's PR has been merged. */
+export async function isPRMerged(ticketId: string): Promise<boolean> {
+  const { owner, repo } = getRepo();
+  const branch = `ticket/${ticketId.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
+  const resp = await ghApi<any[]>(
+    `/repos/${owner}/${repo}/pulls?head=${owner}:${branch}&state=closed&per_page=5`,
+  );
+  if (!resp || resp.length === 0) return false;
+  return resp[0].merged_at != null;
+}
+
+/** Check if a PR was closed without merging (needs remake). */
+export async function isPRClosed(ticketId: string): Promise<boolean> {
+  const { owner, repo } = getRepo();
+  const branch = `ticket/${ticketId.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
+  const resp = await ghApi<any[]>(
+    `/repos/${owner}/${repo}/pulls?head=${owner}:${branch}&state=closed&per_page=5`,
+  );
+  if (!resp || resp.length === 0) return false;
+  return resp[0].merged_at == null;
+}
+
 // ─── Webhook Registration ───────────────────────────────────────────
 
 /** Register a GitHub webhook for the repo at the given base URL. */

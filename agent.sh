@@ -1,237 +1,161 @@
-#!/bin/bash
-# agent.sh — Pick a Linear epic/ticket and launch the agent TUI.
+#!/usr/bin/env bash
+# agent.sh — Launch the ticket agent system.
 #
-# Usage: ./agent.sh
+# Layout (MAX_AGENTS=3):
+#   ┌──────────┬──────────────┐
+#   │ Server   │  agent-1     │
+#   │ log      ├──────────────┤
+#   │          │  agent-2     │
+#   ├──────────┤              │
+#   │ Boss     │  agent-3     │
+#   └──────────┴──────────────┘
 #
-# Lists all active epics and top-level tickets from Linear,
-# lets you pick one interactively, and launches the CLI dashboard.
-
-# Ensure we run under bash (not fish, zsh, etc.)
-if [ -z "${BASH_VERSION:-}" ]; then
-  exec /bin/bash "$0" "$@"
-fi
+# No tmux send-keys — pi panes run pi directly as the pane command.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-CLI_PATH="$SCRIPT_DIR/.pi/extensions/ticket/cli.ts"
-REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || echo "$SCRIPT_DIR")"
 
-# ─── Find Linear API key ─────────────────────────────────────────────
-
-find_api_key() {
-  if [ -n "${LINEAR_API_KEY:-}" ]; then
-    echo "$LINEAR_API_KEY"
-    return
-  fi
-
-  local cred_file="$HOME/.pi/agent/extensions/linear/credentials.json"
-  if [ -f "$cred_file" ]; then
-    node -e "
-      try {
-        const c = require('$cred_file');
-        const a = c.activeWorkspace;
-        if (a && c.workspaces && c.workspaces[a]) {
-          process.stdout.write(c.workspaces[a].apiKey || '');
-        } else {
-          const first = Object.keys(c.workspaces || {})[0];
-          process.stdout.write(first ? (c.workspaces[first].apiKey || '') : '');
-        }
-      } catch(_) { process.stdout.write(''); }
-    " 2>/dev/null
-  fi
-}
-
-API_KEY="$(find_api_key)"
-if [ -z "$API_KEY" ]; then
-  echo "Error: No LINEAR_API_KEY found."
-  echo "  Set the LINEAR_API_KEY environment variable, or"
-  echo "  run /linear-auth inside pi to configure credentials."
-  exit 1
-fi
-
-# ─── Fetch issues from Linear ────────────────────────────────────────
-
-echo "Fetching active epics and tickets from Linear..." >&2
-
-ISSUES_JSON=$(node -e "
-const https = require('https');
-
-const query = \`query {
-  issues(
-    first: 100
-    filter: {
-      state: { type: { nin: [\"completed\", \"canceled\"] } }
-      parent: { null: true }
-    }
-    orderBy: updatedAt
-  ) {
-    nodes {
-      identifier
-      title
-      state { name type }
-      priority
-      children { nodes { id } }
-      assignee { name }
-    }
-  }
-}\`;
-
-const body = JSON.stringify({ query });
-
-const req = https.request({
-  hostname: 'api.linear.app',
-  path: '/graphql',
-  method: 'POST',
-  headers: {
-    'Authorization': '$API_KEY',
-    'Content-Type': 'application/json',
-    'Content-Length': Buffer.byteLength(body),
-  },
-}, res => {
-  let data = '';
-  res.on('data', chunk => data += chunk);
-  res.on('end', () => {
-    try {
-      const json = JSON.parse(data);
-      if (json.errors) {
-        process.stderr.write('Linear API error: ' + JSON.stringify(json.errors) + '\\n');
-        process.exit(1);
-      }
-      const issues = json.data?.issues?.nodes ?? [];
-
-      // Sort: epics (with children) first by priority, then standalone
-      const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
-      issues.sort((a, b) => {
-        const aChild = a.children.nodes.length > 0 ? 0 : 1;
-        const bChild = b.children.nodes.length > 0 ? 0 : 1;
-        if (aChild !== bChild) return aChild - bChild;
-        const aP = priorityOrder[a.priority] ?? 4;
-        const bP = priorityOrder[b.priority] ?? 4;
-        return aP - bP;
-      });
-
-      // Output as TSV: identifier<TAB>type<TAB>priority<TAB>children<TAB>assignee<TAB>title
-      for (const i of issues) {
-        const childCount = i.children.nodes.length;
-        const type = childCount > 0 ? 'EPIC' : 'TICKET';
-        const assignee = i.assignee?.name || 'unassigned';
-        const priority = (i.priority || 'none').toUpperCase();
-        process.stdout.write(
-          i.identifier + '\\t' +
-          type + '\\t' +
-          priority + '\\t' +
-          (childCount > 0 ? childCount + ' sub-issues' : '—') + '\\t' +
-          assignee + '\\t' +
-          i.title + '\\n'
-        );
-      }
-    } catch(e) {
-      process.stderr.write('Failed to parse response: ' + e.message + '\\n');
-      process.exit(1);
-    }
-  });
-});
-
-req.on('error', e => {
-  process.stderr.write('Network error: ' + e.message + '\\n');
-  process.exit(1);
-});
-
-req.write(body);
-req.end();
-" 2>/dev/null)
-
-if [ -z "$ISSUES_JSON" ]; then
-  echo "Error: No active issues returned from Linear." >&2
-  exit 1
-fi
-
-# ─── Interactive picker ──────────────────────────────────────────────
-
-if command -v fzf &>/dev/null; then
-  # ── fzf picker (rich interactive UI) ──────────────────────────
-
-  SELECTED=$(echo "$ISSUES_JSON" | SHELL=/bin/bash fzf \
-    --delimiter='\t' \
-    --with-nth='1,2,3,4,5' \
-    --header='↑↓:navigate  Enter:select  ESC:quit   (epics sorted first)' \
-    --preview='
-      id={1}; type={2}; pri={3}; children={4}; who={5}
-      echo -e "ID:        $id"
-      echo -e "Type:      $type"
-      echo -e "Priority:  $pri"
-      echo -e "Children:  $children"
-      echo -e "Assignee:  $who"
-    ' \
-    --preview-window='right:35%' \
-    --bind='ctrl-c:abort' \
-    --height=30 \
-    --layout=reverse \
-    --border=rounded \
-    --prompt='Pick an epic or ticket > ')
-
-  if [ -z "$SELECTED" ]; then
-    echo "No selection made. Exiting." >&2
-    exit 0
-  fi
-
-  TICKET_ID=$(echo "$SELECTED" | cut -f1)
-
+if command -v git &>/dev/null && git -C "$SCRIPT_DIR" rev-parse --show-toplevel &>/dev/null; then
+  REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel)"
 else
-  # ── Fallback: numbered list ───────────────────────────────────
-
-  echo ""
-  echo "Active epics and tickets:"
-  echo "-------------------------"
-
-  # Read into array for indexed access
-  IFS=$'\n' read -d '' -ra LINES <<< "$ISSUES_JSON" || true
-
-  for i in "${!LINES[@]}"; do
-    IFS=$'\t' read -ra FIELDS <<< "${LINES[$i]}"
-    printf "  %2d) %-10s %-6s %-10s %-12s %s\n" \
-      $((i + 1)) \
-      "${FIELDS[0]}" \
-      "${FIELDS[1]}" \
-      "${FIELDS[2]}" \
-      "${FIELDS[3]}" \
-      "${FIELDS[5]}"
-  done
-
-  echo ""
-  read -rp "Pick a number (1-${#LINES[@]}, or Enter to quit): " choice
-
-  if [ -z "$choice" ]; then
-    echo "No selection made. Exiting." >&2
-    exit 0
-  fi
-
-  if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "${#LINES[@]}" ]; then
-    echo "Invalid selection: $choice" >&2
-    exit 1
-  fi
-
-  IFS=$'\t' read -ra FIELDS <<< "${LINES[$((choice - 1))]}"
-  TICKET_ID="${FIELDS[0]}"
+  REPO_ROOT="$SCRIPT_DIR"
 fi
-
-echo "" >&2
-echo "Launching agent TUI for $TICKET_ID..." >&2
-
-# ─── Launch CLI ──────────────────────────────────────────────────────
-
-export LINEAR_API_KEY="$API_KEY"
 cd "$REPO_ROOT"
 
-# Find tsx (try local, then global, then npx)
-TSX=""
-if [ -x "$REPO_ROOT/node_modules/.bin/tsx" ]; then
-  TSX="$REPO_ROOT/node_modules/.bin/tsx"
-elif [ -x "$HOME/projects/node_modules/.pnpm/node_modules/.bin/tsx" ]; then
-  TSX="$HOME/projects/node_modules/.pnpm/node_modules/.bin/tsx"
-else
-  TSX="npx tsx"
+SESSION_NAME="ticket-agents"
+
+# ─── Config ──────────────────────────────────────────────────────────
+
+MAX_AGENTS=3
+if [ -f "$REPO_ROOT/.env.agent" ]; then
+  val=$(grep MAX_SPAWN_AGENTS "$REPO_ROOT/.env.agent" 2>/dev/null | cut -d= -f2- | tr -d ' ')
+  [ -n "$val" ] && MAX_AGENTS="$val"
 fi
 
-exec $TSX "$CLI_PATH" "$TICKET_ID"
+# ─── Find pi ────────────────────────────────────────────────────────
+
+PI_BIN=""
+for p in "$HOME/.local/share/pnpm/bin/pi" "$HOME/.local/bin/pi" /usr/local/bin/pi pi; do
+  if command -v "$p" &>/dev/null || [ -x "$p" ]; then PI_BIN="$p"; break; fi
+done
+[ -z "$PI_BIN" ] && { echo "Error: pi not found"; exit 1; }
+
+TSX_BIN=""
+for p in "$REPO_ROOT/.pi/npm/node_modules/.bin/tsx" \
+         "$REPO_ROOT/backend/node_modules/.bin/tsx" \
+         "$REPO_ROOT/node_modules/.bin/tsx"; do
+  [ -x "$p" ] && { TSX_BIN="$p"; break; }
+done
+[ -z "$TSX_BIN" ] && TSX_BIN="npx tsx"
+
+# ─── Load env ────────────────────────────────────────────────────────
+
+[ -f "$REPO_ROOT/.env.agent" ] && { set -a; source "$REPO_ROOT/.env.agent"; set +a; }
+
+# ─── Clean slate ─────────────────────────────────────────────────────
+
+pkill -f "tsx.*server-daemon" 2>/dev/null || true
+tmux kill-session -t "$SESSION_NAME" 2>/dev/null || true
+sleep 1
+rm -f "$REPO_ROOT/.pi/tickets/state.json" 2>/dev/null || true
+unset TMUX
+
+# ─── Start server daemon ─────────────────────────────────────────────
+
+echo "Starting server daemon..."
+SERVER_LOG="$REPO_ROOT/.pi/tickets/server.log"
+mkdir -p "$(dirname "$SERVER_LOG")"
+> "$SERVER_LOG"
+$TSX_BIN "$REPO_ROOT/.pi/extensions/ticket/server-daemon.ts" >> "$SERVER_LOG" 2>&1 &
+SERVER_PID=$!
+echo "Server PID: $SERVER_PID"
+sleep 2
+
+# ─── Prompt templates ────────────────────────────────────────────────
+
+BOSS_PROMPT='You are the BOSS. Oversee the system, fix anything that breaks.
+
+On startup: /name boss
+
+CAPABILITIES:
+- Read and edit any project file to fix bugs
+- Run bash commands to restart the server or check processes
+- Command workers: intercom({ action: "send", to: "agent-2", message: "TASK: do X" })
+- Redirect server: intercom({ action: "send", to: "server", message: "EPIC RES-13" })
+- Also: TICKET <ID>, STOP, STATUS commands work the same way
+- Stop a specific worker: intercom({ action: "send", to: "server", message: "STOP agent-2" })
+- Manually assign a ticket to a worker: intercom({ action: "send", to: "server", message: "ASSIGN agent-1 RES-15" })
+- Create bespoke tickets via linear tools and assign them to workers
+- Close irrelevant tickets: intercom({ action: "send", to: "server", message: "CLOSE RES-11" })
+- Use linear tools to find epics, check statuses, create follow-up tickets
+- Answer worker questions when they ask you
+
+If server crashes: pkill -f server-daemon; npx tsx .pi/extensions/ticket/server-daemon.ts &
+If a PR closed without merging, tell the server so it re-queues the ticket.
+If priorities shift, redirect the server to a different epic.
+
+Be proactive. Monitor the server log. Fix problems before they escalate.'
+
+WORKER_PROMPT='You are agent-N, a ticket worker.
+
+On startup:
+1. /name agent-N
+2. Register with server: intercom({ action: "send", to: "server", message: "REGISTER: agent-N" })
+3. Announce idle: intercom({ action: "send", to: "server", message: "IDLE" })
+4. Wait for a TASK: message from the server with a ticket to work on
+
+While working:
+- Send STATUS updates to the boss: intercom({ action: "send", to: "boss", message: "STATUS: doing X" })
+- Ask boss if stuck: intercom({ action: "ask", to: "boss", message: "Question: ..." })
+- Write the PR description to pr-body.md in the worktree root
+
+When done, use the create-pr skill:
+- The skill commits, pushes, creates the PR, writes pr-url.txt
+- Read .agents/skills/create-pr/SKILL.md for details
+- Do NOT use gh pr create directly — use the create-pr skill
+- Then: intercom({ action: "send", to: "boss", message: "DONE: <pr-url>" })
+- Then: intercom({ action: "send", to: "server", message: "IDLE" })'
+
+# ─── Create tmux layout — pi runs directly as pane commands ──────────
+
+echo "Creating tmux layout..."
+
+# Pane 0: server log (left column, full height)
+tmux new-session -d -s "$SESSION_NAME" -c "$REPO_ROOT" \
+  "echo '── Server Log ──'; tail -n 100 -f '$SERVER_LOG'"
+tmux rename-window -t "$SESSION_NAME:0" 'agents'
+
+# Pane 1: worker 1 (split right, runs pi directly)
+AGENT1="${WORKER_PROMPT//agent-N/agent-1}"
+tmux split-window -h -t "$SESSION_NAME:0" -c "$REPO_ROOT" \
+  "$PI_BIN --append-system-prompt '$AGENT1' Go"
+
+# Panes 2..N: additional workers (stacked in right column)
+for i in $(seq 2 "$MAX_AGENTS"); do
+  AGENT="${WORKER_PROMPT//agent-N/agent-$i}"
+  tmux split-window -v -t "$SESSION_NAME:0.$((i-1))" -c "$REPO_ROOT" \
+    "$PI_BIN --append-system-prompt '$AGENT' Go"
+done
+
+# Boss pane (bottom-left, 8 lines)
+BOSS_IDX=$((MAX_AGENTS + 1))
+tmux split-window -v -t "$SESSION_NAME:0.0" -c "$REPO_ROOT" -l 8 \
+  "$PI_BIN --append-system-prompt '$BOSS_PROMPT' Start"
+
+echo "Panes:"
+tmux list-panes -t "$SESSION_NAME:0" -F "  #{pane_index}: #{pane_current_command}"
+
+# ─── Done ────────────────────────────────────────────────────────────
+
+echo "All panes running. Attaching tmux..."
+tmux select-pane -t "$SESSION_NAME:0.0"
+
+cleanup() {
+  kill "$SERVER_PID" 2>/dev/null || true
+  tmux kill-session -t "$SESSION_NAME" 2>/dev/null || true
+}
+trap cleanup EXIT
+
+tmux attach-session -t "$SESSION_NAME"
+wait "$SERVER_PID" 2>/dev/null || true
