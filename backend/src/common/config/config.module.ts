@@ -10,7 +10,7 @@ import { configValidationSchema } from './config.schema';
       cache: true,
       validationSchema: configValidationSchema,
       validationOptions: {
-        allowUnknown: false,
+        allowUnknown: true,
         abortEarly: true,
       },
     }),

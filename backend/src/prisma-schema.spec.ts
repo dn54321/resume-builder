@@ -15,7 +15,7 @@ describe('Prisma Schema and Seed', () => {
   });
 
   describe('table structure', () => {
-    it('has all 6 tables', async () => {
+    it('has all 7 tables', async () => {
       const result = await client.execute(
         `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE '_prisma_%' AND name NOT LIKE 'sqlite_%' ORDER BY name`,
       );
@@ -27,6 +27,7 @@ describe('Prisma Schema and Seed', () => {
         'Section',
         'SectionEntry',
         'SectionField',
+        'Session',
         'User',
       ]);
     });
@@ -34,6 +35,13 @@ describe('Prisma Schema and Seed', () => {
     it('has unique index on User.email', async () => {
       const result = await client.execute(
         `SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='User' AND name='User_email_key'`,
+      );
+      expect(result.rows).toHaveLength(1);
+    });
+
+    it('has unique index on Session.token', async () => {
+      const result = await client.execute(
+        `SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='Session' AND name='Session_token_key'`,
       );
       expect(result.rows).toHaveLength(1);
     });
@@ -142,6 +150,52 @@ describe('Prisma Schema and Seed', () => {
       );
       const count = Number(result.rows[0]?.[0]);
       expect(count).toBe(0);
+    });
+
+    it('enforces cascade delete from User to Session', async () => {
+      const sessionUserId = 'test-cascade-session-user';
+      const sessionId = 'test-cascade-session';
+
+      await client.execute(
+        "INSERT OR IGNORE INTO User (id, email, password, createdAt) VALUES (?, ?, ?, datetime('now'))",
+        [sessionUserId, 'session-cascade@test.com', 'pw'],
+      );
+      await client.execute(
+        "INSERT OR IGNORE INTO Session (id, userId, token, createdAt) VALUES (?, ?, ?, datetime('now'))",
+        [sessionId, sessionUserId, 'unique-token-hash'],
+      );
+
+      await client.execute('DELETE FROM User WHERE id = ?', [sessionUserId]);
+
+      const result = await client.execute(
+        'SELECT COUNT(*) as count FROM Session WHERE id = ?',
+        [sessionId],
+      );
+      const count = Number(result.rows[0]?.[0]);
+      expect(count).toBe(0);
+    });
+
+    it('enforces unique constraint on Session.token', async () => {
+      const tokenUserId = 'test-unique-token-user';
+
+      await client.execute(
+        "INSERT OR IGNORE INTO User (id, email, password, createdAt) VALUES (?, ?, ?, datetime('now'))",
+        [tokenUserId, 'unique-token@test.com', 'pw'],
+      );
+      await client.execute(
+        "INSERT OR IGNORE INTO Session (id, userId, token, createdAt) VALUES (?, ?, ?, datetime('now'))",
+        ['sess-unique-1', tokenUserId, 'duplicate-token'],
+      );
+
+      await expect(
+        client.execute(
+          "INSERT INTO Session (id, userId, token, createdAt) VALUES (?, ?, ?, datetime('now'))",
+          ['sess-unique-2', tokenUserId, 'duplicate-token'],
+        ),
+      ).rejects.toThrow();
+
+      // Cleanup
+      await client.execute('DELETE FROM User WHERE id = ?', [tokenUserId]);
     });
 
     it('enforces SET NULL on SectionEntry parent delete', async () => {
