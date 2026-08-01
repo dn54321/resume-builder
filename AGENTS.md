@@ -1,5 +1,28 @@
 # AGENTS.md — Project conventions for coding agents
 
+## Testing
+
+### Coverage minimum: 90%
+
+Both backend and frontend enforce a **90% minimum coverage threshold** across
+all metrics: branches, functions, lines, and statements. The build fails if
+coverage drops below this threshold.
+
+```bash
+# Backend (Jest)
+cd backend && npm run test:cov
+
+# Frontend (Vitest)
+cd frontend && npm run test:cov
+```
+
+**Rules:**
+- Every new feature must include tests that maintain or improve coverage
+- Never disable or lower the threshold to bypass a failing build
+- Use `test:cov` (not bare `test`) in CI and pre-push to enforce the threshold
+- Excluded from coverage: config/bootstrap files (`main.ts`, `router/index.ts`),
+  type declaration files, and `__tests__` directories themselves
+
 ## Security
 
 ### Encryption key separation
