@@ -55,23 +55,44 @@ const hobbyEntries = computed<HobbyRow[]>(() =>
     })),
 )
 
+/**
+ *
+ */
 function addHobby() {
   editor.addEntry([{ key: 'name', value: '' }])
 }
 
+/**
+ *
+ * @param id
+ * @param value
+ */
 function onUpdate(id: string, value: string) {
   editor.updateField(id, 'name', value)
 }
 
+/**
+ *
+ * @param id
+ */
 function onRemove(id: string) {
   if (window.confirm('Delete this hobby?')) {
     editor.removeEntry(id)
   }
 }
 
+/**
+ *
+ * @param event
+ * @param index
+ */
 function onDragStart(event: MouseEvent, index: number) {
   dragIndex.value = index
 
+  /**
+   *
+   * @param e
+   */
   function onMouseUp(e: MouseEvent) {
     document.removeEventListener('mouseup', onMouseUp)
     if (dragIndex.value === null) return

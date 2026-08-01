@@ -16,6 +16,9 @@ class ApiRequestError extends Error {
   }
 }
 
+/**
+ *
+ */
 function getBaseUrl(): string {
   const base = import.meta.env.VITE_API_BASE_URL
   if (!base) {
@@ -24,10 +27,18 @@ function getBaseUrl(): string {
   return base.replace(/\/+$/, '')
 }
 
+/**
+ *
+ */
 function getToken(): string | null {
   return localStorage.getItem('auth_token')
 }
 
+/**
+ *
+ * @param path
+ * @param options
+ */
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const baseUrl = getBaseUrl()
   const url = `${baseUrl}${path}`
@@ -69,6 +80,9 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return response.json() as Promise<T>
 }
 
+/**
+ *
+ */
 export function useApi() {
   return {
     get<T>(path: string, init?: RequestInit): Promise<T> {

@@ -13,16 +13,27 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isAuthenticated = computed(() => !!token.value && !!user.value)
 
+  /**
+   *
+   * @param t
+   */
   function persistToken(t: string) {
     token.value = t
     localStorage.setItem('auth_token', t)
   }
 
+  /**
+   *
+   */
   function clearToken() {
     token.value = null
     localStorage.removeItem('auth_token')
   }
 
+  /**
+   *
+   * @param api
+   */
   async function importAndClearLocalResume(api: ReturnType<typeof useApi>) {
     const RESUME_KEY = 'resume_data'
     const raw = localStorage.getItem(RESUME_KEY)
@@ -42,6 +53,9 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  /**
+   *
+   */
   async function checkSession() {
     if (!token.value) return
 
@@ -57,6 +71,11 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  /**
+   *
+   * @param email
+   * @param password
+   */
   async function login(email: string, password: string) {
     const api = useApi()
     const response = await api.post<{ user: User; token: string }>(
@@ -71,6 +90,11 @@ export const useAuthStore = defineStore('auth', () => {
     await importAndClearLocalResume(api)
   }
 
+  /**
+   *
+   * @param email
+   * @param password
+   */
   async function signup(email: string, password: string) {
     const api = useApi()
     const response = await api.post<{ user: User; token: string }>(
@@ -85,6 +109,9 @@ export const useAuthStore = defineStore('auth', () => {
     await importAndClearLocalResume(api)
   }
 
+  /**
+   *
+   */
   async function logout() {
     if (token.value) {
       const api = useApi()
@@ -98,6 +125,9 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
   }
 
+  /**
+   *
+   */
   function getToken(): string | null {
     return token.value
   }

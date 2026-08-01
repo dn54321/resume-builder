@@ -24,6 +24,9 @@ router.replace = mockReplace
 
 let pinia: ReturnType<typeof createPinia>
 
+/**
+ *
+ */
 function mountSignup() {
   return mount(SignupView, {
     global: {

@@ -5,6 +5,9 @@ import { useApi, ApiRequestError } from '@/shared/composables/useApi'
 
 const LOCAL_STORAGE_KEY = 'resume_data'
 
+/**
+ *
+ */
 function readFromLocalStorage(): unknown {
   const raw = localStorage.getItem(LOCAL_STORAGE_KEY)
   if (!raw) return null
@@ -16,6 +19,10 @@ function readFromLocalStorage(): unknown {
   }
 }
 
+/**
+ *
+ * @param data
+ */
 function writeToLocalStorage(data: unknown) {
   try {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data))
@@ -26,13 +33,19 @@ function writeToLocalStorage(data: unknown) {
 
 let autoSaveWatch: (() => void) | null = null
 
+/**
+ *
+ */
 export function useResumeData() {
   const store = useResumeStore()
   const { isAuthenticated } = useAuth()
   const api = useApi()
 
+  /**
+   *
+   */
   async function loadResume() {
-    if (isAuthenticated.value) {
+    if (isAuthenticated) {
       try {
         const data = await api.get<{ id: string; layout: string; name: string; sections: unknown[] }>(
           '/api/v1/resumes',
@@ -72,10 +85,13 @@ export function useResumeData() {
     store.initializeDefaults()
   }
 
+  /**
+   *
+   */
   async function saveResume() {
     const payload = store.toPayload()
 
-    if (isAuthenticated.value) {
+    if (isAuthenticated) {
       try {
         await api.put('/api/v1/resumes', payload)
       } catch (err) {
@@ -91,12 +107,18 @@ export function useResumeData() {
     }
   }
 
+  /**
+   *
+   */
   async function saveResumeDebounced(): Promise<void> {
     // Simple debounce: clears any pending save and schedules a new one
     // This is called from the watcher; the watch already provides debounce
     return saveResume()
   }
 
+  /**
+   *
+   */
   function setupAutoSave() {
     if (autoSaveWatch) {
       autoSaveWatch()
@@ -118,6 +140,9 @@ export function useResumeData() {
     )
   }
 
+  /**
+   *
+   */
   function teardownAutoSave() {
     if (autoSaveWatch) {
       autoSaveWatch()

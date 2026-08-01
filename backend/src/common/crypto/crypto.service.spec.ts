@@ -1,22 +1,41 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
-import { ConfigModule } from '../config/config.module';
 import { CryptoService } from './crypto.service';
+
+const validFieldKey =
+  'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6';
+const validSessionKey =
+  'b1c2d3e4f5a6b7c6d9e0f1a2b3c4d5e6b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6';
+
+/**
+ *
+ * @param overrides
+ */
+function mockConfigService(
+  overrides: Partial<Record<string, string>> = {},
+): ConfigService {
+  return {
+    getOrThrow: (key: string) => {
+      if (key === 'SESSION_ENCRYPTION_KEY') {
+        return overrides.SESSION_ENCRYPTION_KEY ?? validSessionKey;
+      }
+      if (key === 'RESUME_FIELD_ENCRYPTION_KEY') {
+        return overrides.RESUME_FIELD_ENCRYPTION_KEY ?? validFieldKey;
+      }
+      throw new Error(`Unknown key: ${key}`);
+    },
+  } as unknown as ConfigService;
+}
 
 describe('CryptoService', () => {
   let service: CryptoService;
 
-  const validFieldKey =
-    'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6';
-  const validSessionKey =
-    'b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6';
-
   beforeAll(async () => {
-    process.env.RESUME_FIELD_ENCRYPTION_KEY = validFieldKey;
-    process.env.SESSION_ENCRYPTION_KEY = validSessionKey;
     const module: TestingModule = await Test.createTestingModule({
-      imports: [ConfigModule],
-      providers: [CryptoService],
+      providers: [
+        CryptoService,
+        { provide: ConfigService, useValue: mockConfigService() },
+      ],
     }).compile();
     service = module.get<CryptoService>(CryptoService);
   });
@@ -73,48 +92,38 @@ describe('CryptoService', () => {
 
   describe('key validation', () => {
     it('should throw if field key is not exactly 64 hex chars', async () => {
-      const mod = await Test.createTestingModule({
-        providers: [
-          CryptoService,
-          {
-            provide: ConfigService,
-            useValue: {
-              getOrThrow: (key: string) => {
-                if (key === 'SESSION_ENCRYPTION_KEY') return validSessionKey;
-                if (key === 'RESUME_FIELD_ENCRYPTION_KEY') return 'tooshort';
-                throw new Error(`Unknown key: ${key}`);
-              },
+      await expect(
+        Test.createTestingModule({
+          providers: [
+            CryptoService,
+            {
+              provide: ConfigService,
+              useValue: mockConfigService({
+                RESUME_FIELD_ENCRYPTION_KEY: 'tooshort',
+              }),
             },
-          },
-        ],
-      }).compile();
-      const svc = mod.get<CryptoService>(CryptoService);
-      expect(() => svc.encryptField('test')).toThrow(
+          ],
+        }).compile(),
+      ).rejects.toThrow(
         /RESUME_FIELD_ENCRYPTION_KEY must be a 64-character hex string/,
       );
     });
 
     it('should throw if key contains non-hex chars', async () => {
-      const mod = await Test.createTestingModule({
-        providers: [
-          CryptoService,
-          {
-            provide: ConfigService,
-            useValue: {
-              getOrThrow: (key: string) => {
-                if (key === 'SESSION_ENCRYPTION_KEY') return validSessionKey;
-                if (key === 'RESUME_FIELD_ENCRYPTION_KEY')
-                  return 'g'.repeat(64);
-                throw new Error(`Unknown key: ${key}`);
-              },
+      await expect(
+        Test.createTestingModule({
+          providers: [
+            CryptoService,
+            {
+              provide: ConfigService,
+              useValue: mockConfigService({
+                RESUME_FIELD_ENCRYPTION_KEY: 'g'.repeat(64),
+              }),
             },
-          },
-        ],
-      }).compile();
-      const svc = mod.get<CryptoService>(CryptoService);
-      // Non-hex chars cause Buffer.from('hex') to produce fewer than 32 bytes
-      expect(() => svc.encryptField('test')).toThrow(
-        /RESUME_FIELD_ENCRYPTION_KEY/,
+          ],
+        }).compile(),
+      ).rejects.toThrow(
+        /RESUME_FIELD_ENCRYPTION_KEY must be a 64-character hex string/,
       );
     });
   });

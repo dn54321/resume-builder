@@ -7,6 +7,9 @@ import type {
   ResumeSectionState,
 } from '@/features/builder/types/resume'
 
+/**
+ *
+ */
 function generateId(): string {
   return crypto.randomUUID()
 }
@@ -14,6 +17,7 @@ function generateId(): string {
 /**
  * Shared logic for section editors.
  * All mutations go through the resume store.
+ * @param sectionType
  */
 export function useSectionEditor(sectionType: SectionType) {
   const store = useResumeStore()
@@ -28,21 +32,39 @@ export function useSectionEditor(sectionType: SectionType) {
 
   // ─── Entry helpers ───
 
+  /**
+   *
+   * @param entryId
+   */
   function getEntry(entryId: string): SectionEntryState | undefined {
     return entries.value.find((e) => e.id === entryId)
   }
 
+  /**
+   *
+   * @param entryId
+   * @param key
+   */
   function getField(entryId: string, key: string): SectionFieldState | undefined {
     const entry = getEntry(entryId)
     return entry?.fields.find((f) => f.key === key)
   }
 
+  /**
+   *
+   * @param entryId
+   * @param key
+   */
   function getFieldValue(entryId: string, key: string): string {
     return getField(entryId, key)?.value ?? ''
   }
 
   // ─── Entry mutations ───
 
+  /**
+   *
+   * @param defaultFields
+   */
   function addEntry(defaultFields: { key: string; value: string }[] = []): string {
     if (!section.value) return ''
     const entryId = generateId()
@@ -61,6 +83,10 @@ export function useSectionEditor(sectionType: SectionType) {
     return entryId
   }
 
+  /**
+   *
+   * @param entryId
+   */
   function removeEntry(entryId: string): void {
     if (!section.value) return
     section.value.entries = section.value.entries.filter((e) => e.id !== entryId)
@@ -73,6 +99,8 @@ export function useSectionEditor(sectionType: SectionType) {
   /**
    * Reorder top-level entries (entries without parentId).
    * Indices are relative to the top-level filtered list.
+   * @param fromIndex
+   * @param toIndex
    */
   function reorderEntries(fromIndex: number, toIndex: number): void {
     if (!section.value) return
@@ -102,6 +130,12 @@ export function useSectionEditor(sectionType: SectionType) {
 
   // ─── Field mutations ───
 
+  /**
+   *
+   * @param entryId
+   * @param key
+   * @param value
+   */
   function updateField(entryId: string, key: string, value: string): void {
     const entry = getEntry(entryId)
     if (!entry) return
@@ -119,10 +153,18 @@ export function useSectionEditor(sectionType: SectionType) {
 
   // ─── Bullet point mutations (children of an entry) ───
 
+  /**
+   *
+   * @param parentId
+   */
   function getChildren(parentId: string): SectionEntryState[] {
     return entries.value.filter((e) => e.parentId === parentId)
   }
 
+  /**
+   *
+   * @param parentId
+   */
   function addBullet(parentId: string): string | null {
     if (!section.value) return null
     const bulletId = generateId()
@@ -136,6 +178,10 @@ export function useSectionEditor(sectionType: SectionType) {
     return bulletId
   }
 
+  /**
+   *
+   * @param bulletId
+   */
   function removeBullet(bulletId: string): void {
     if (!section.value) return
     section.value.entries = section.value.entries.filter((e) => e.id !== bulletId)
@@ -156,6 +202,11 @@ export function useSectionEditor(sectionType: SectionType) {
     }
   }
 
+  /**
+   *
+   * @param bulletId
+   * @param value
+   */
   function updateBullet(bulletId: string, value: string): void {
     const bullet = getEntry(bulletId)
     if (!bullet) return
@@ -167,6 +218,12 @@ export function useSectionEditor(sectionType: SectionType) {
     }
   }
 
+  /**
+   *
+   * @param parentId
+   * @param fromIndex
+   * @param toIndex
+   */
   function reorderBullets(parentId: string, fromIndex: number, toIndex: number): void {
     if (!section.value) return
     const allEntries = section.value.entries

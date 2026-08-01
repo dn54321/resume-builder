@@ -96,9 +96,18 @@ const orderedSections = computed<OrderedSection[]>(() => {
   return [...enabled, ...disabled]
 })
 
+/**
+ *
+ * @param event
+ * @param sectionType
+ */
 function onDragStart(event: MouseEvent, sectionType: SectionType) {
   dragType.value = sectionType
 
+  /**
+   *
+   * @param e
+   */
   function onMouseUp(e: MouseEvent) {
     document.removeEventListener('mouseup', onMouseUp)
     if (!dragType.value) return

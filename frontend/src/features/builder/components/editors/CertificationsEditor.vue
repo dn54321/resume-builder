@@ -54,10 +54,19 @@ const editor = useSectionEditor('certifications')
 
 const CERT_FIELDS = ['name', 'issuer', 'date']
 
+/**
+ *
+ */
 function addCertification() {
   editor.addEntry(CERT_FIELDS.map((k) => ({ key: k, value: '' })))
 }
 
+/**
+ *
+ * @param entry
+ * @param entry.id
+ * @param entry.order
+ */
 function entryTitle(entry: { id: string; order: number }): string {
   return editor.getFieldValue(entry.id, 'name') || '(New Certification)'
 }

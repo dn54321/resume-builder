@@ -21,6 +21,9 @@ onMounted(() => {
   }
 })
 
+/**
+ *
+ */
 function validate(): boolean {
   errors.value = []
 
@@ -39,6 +42,9 @@ function validate(): boolean {
   return errors.value.length === 0
 }
 
+/**
+ *
+ */
 async function handleSubmit() {
   if (!validate()) return
 

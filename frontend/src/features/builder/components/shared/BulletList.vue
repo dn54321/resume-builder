@@ -55,9 +55,18 @@ const emit = defineEmits<{
 
 const dragIndex = ref<number | null>(null)
 
+/**
+ *
+ * @param event
+ * @param index
+ */
 function onDragStart(event: MouseEvent, index: number) {
   dragIndex.value = index
 
+  /**
+   *
+   * @param e
+   */
   function onMouseUp(e: MouseEvent) {
     document.removeEventListener('mouseup', onMouseUp)
     if (dragIndex.value === null) return
@@ -79,10 +88,19 @@ function onDragStart(event: MouseEvent, index: number) {
   document.addEventListener('mouseup', onMouseUp)
 }
 
+/**
+ *
+ * @param index
+ * @param value
+ */
 function onUpdate(index: number, value: string) {
   emit('update', index, value)
 }
 
+/**
+ *
+ * @param id
+ */
 function onRemove(id: string) {
   if (window.confirm('Delete this bullet point?')) {
     emit('remove', id)

@@ -9,6 +9,11 @@ import { SECTION_TYPES } from '@/features/builder/types/resume'
 const mockFetch = vi.fn<typeof fetch>()
 vi.stubGlobal('fetch', mockFetch)
 
+/**
+ *
+ * @param data
+ * @param status
+ */
 function createFetchResponse(data: unknown, status = 200): Response {
   return {
     ok: status >= 200 && status < 300,

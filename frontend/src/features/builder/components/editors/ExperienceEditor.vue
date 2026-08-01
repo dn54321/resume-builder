@@ -96,10 +96,17 @@ const editor = useSectionEditor('experience')
 
 const JOB_FIELDS = ['company', 'title', 'startDate', 'endDate', 'location', 'isCurrent']
 
+/**
+ *
+ */
 function addJob() {
   editor.addEntry(JOB_FIELDS.map((k) => ({ key: k, value: '' })))
 }
 
+/**
+ *
+ * @param id
+ */
 function onRemoveJob(id: string) {
   // Also remove child bullets
   const bullets = editor.getChildren(id)
@@ -109,16 +116,30 @@ function onRemoveJob(id: string) {
   editor.removeEntry(id)
 }
 
+/**
+ *
+ * @param entry
+ * @param entry.id
+ * @param entry.order
+ */
 function entryTitle(entry: { id: string; order: number }): string {
   const company = editor.getFieldValue(entry.id, 'company') || '(New Position)'
   const title = editor.getFieldValue(entry.id, 'title')
   return title ? `${title} at ${company}` : company
 }
 
+/**
+ *
+ * @param entryId
+ */
 function isCurrentJob(entryId: string): boolean {
   return editor.getFieldValue(entryId, 'isCurrent') === 'true'
 }
 
+/**
+ *
+ * @param entryId
+ */
 function toggleCurrentJob(entryId: string) {
   const current = isCurrentJob(entryId)
   editor.updateField(entryId, 'isCurrent', current ? 'false' : 'true')
@@ -127,6 +148,10 @@ function toggleCurrentJob(entryId: string) {
   }
 }
 
+/**
+ *
+ * @param parentId
+ */
 function bulletStates(parentId: string): BulletState[] {
   return editor.getChildren(parentId)
     .sort((a, b) => a.order - b.order)
@@ -136,6 +161,12 @@ function bulletStates(parentId: string): BulletState[] {
     }))
 }
 
+/**
+ *
+ * @param parentId
+ * @param index
+ * @param value
+ */
 function onBulletUpdate(parentId: string, index: number, value: string) {
   const bullets = editor.getChildren(parentId).sort((a, b) => a.order - b.order)
   if (index < bullets.length) {

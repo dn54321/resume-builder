@@ -3,6 +3,9 @@ import { mount } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import AnonymousBanner from '@/features/builder/components/AnonymousBanner.vue'
 
+/**
+ *
+ */
 function createTestRouter() {
   const router = createRouter({
     history: createMemoryHistory(),
@@ -21,6 +24,9 @@ describe('AnonymousBanner', () => {
     sessionStorage.clear()
   })
 
+  /**
+   *
+   */
   async function mountBanner() {
     const router = createTestRouter()
     await router.push('/')
@@ -41,8 +47,8 @@ describe('AnonymousBanner', () => {
     const wrapper = await mountBanner()
     const links = wrapper.findAll('a')
     expect(links).toHaveLength(2)
-    expect(links[0].text()).toContain('Sign Up')
-    expect(links[1].text()).toContain('Log In')
+    expect(links[0]!.text()).toContain('Sign Up')
+    expect(links[1]!.text()).toContain('Log In')
   })
 
   it('is visible by default', async () => {

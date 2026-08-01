@@ -53,10 +53,18 @@ const emit = defineEmits<{
 
 const expandedIds = ref<Set<string>>(new Set())
 
+/**
+ *
+ * @param id
+ */
 function isExpanded(id: string): boolean {
   return expandedIds.value.has(id)
 }
 
+/**
+ *
+ * @param id
+ */
 function toggleEntry(id: string) {
   const next = new Set(expandedIds.value)
   if (next.has(id)) {
@@ -69,9 +77,18 @@ function toggleEntry(id: string) {
 
 const dragIndex = ref<number | null>(null)
 
+/**
+ *
+ * @param event
+ * @param index
+ */
 function onDragStart(event: MouseEvent, index: number) {
   dragIndex.value = index
 
+  /**
+   *
+   * @param e
+   */
   function onMouseUp(e: MouseEvent) {
     document.removeEventListener('mouseup', onMouseUp)
     if (dragIndex.value === null) return
@@ -93,6 +110,10 @@ function onDragStart(event: MouseEvent, index: number) {
   document.addEventListener('mouseup', onMouseUp)
 }
 
+/**
+ *
+ * @param id
+ */
 function onRemove(id: string) {
   if (window.confirm('Are you sure you want to delete this entry?')) {
     emit('remove', id)

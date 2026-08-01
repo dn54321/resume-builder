@@ -28,6 +28,9 @@ const SESSION_KEY = 'anonymous_banner_dismissed'
 
 const visible = ref(sessionStorage.getItem(SESSION_KEY) !== '1')
 
+/**
+ *
+ */
 function dismiss() {
   visible.value = false
   sessionStorage.setItem(SESSION_KEY, '1')

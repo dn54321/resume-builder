@@ -6,6 +6,11 @@ import { useAuthStore } from '@/features/auth/stores/auth'
 const mockFetch = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>()
 global.fetch = mockFetch
 
+/**
+ *
+ * @param data
+ * @param status
+ */
 function mockJsonResponse(data: unknown, status = 200): Response {
   return {
     ok: status >= 200 && status < 300,

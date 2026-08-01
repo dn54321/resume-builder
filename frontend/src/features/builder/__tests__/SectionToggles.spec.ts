@@ -44,7 +44,7 @@ describe('SectionToggles', () => {
   })
 
   it('shows checkboxes unchecked for disabled sections', () => {
-    const enabled: SectionType[] = ['contact', 'summary']
+    const enabled: SectionType[] = ['name_contact', 'summary']
     const wrapper = mount(SectionToggles, {
       props: {
         layout: 'standard',
@@ -73,7 +73,7 @@ describe('SectionToggles', () => {
       },
     })
 
-    // Toggle off "contact" — find its checkbox
+    // Toggle off "name_contact" — find its checkbox
     const contactItem = wrapper.findAll('.section-toggles__item').find((item) =>
       item.text().includes('Contact'),
     )
@@ -81,7 +81,7 @@ describe('SectionToggles', () => {
     await checkbox.setValue(false)
 
     expect(wrapper.emitted('toggle')).toBeTruthy()
-    expect(wrapper.emitted('toggle')![0]).toEqual(['contact' as SectionType])
+    expect(wrapper.emitted('toggle')![0]).toEqual(['name_contact' as SectionType])
   })
 
   it('shows column select only for 2:1 layout with enabled sections', () => {
@@ -111,7 +111,7 @@ describe('SectionToggles', () => {
   })
 
   it('hides column select for disabled sections even in 2:1 layout', () => {
-    const enabled: SectionType[] = ['contact']
+    const enabled: SectionType[] = ['name_contact']
     const wrapper = mount(SectionToggles, {
       props: {
         layout: 'column2-1',
@@ -140,11 +140,11 @@ describe('SectionToggles', () => {
     await select.setValue('left')
 
     expect(wrapper.emitted('setColumn')).toBeTruthy()
-    expect(wrapper.emitted('setColumn')![0]).toEqual(['contact' as SectionType, 'left'])
+    expect(wrapper.emitted('setColumn')![0]).toEqual(['name_contact' as SectionType, 'left'])
   })
 
   it('shows move buttons for enabled sections', () => {
-    const enabled: SectionType[] = ['contact', 'summary', 'experience']
+    const enabled: SectionType[] = ['name_contact', 'summary', 'experience']
     const wrapper = mount(SectionToggles, {
       props: {
         layout: 'standard',
@@ -158,7 +158,7 @@ describe('SectionToggles', () => {
   })
 
   it('hides move buttons for disabled sections', () => {
-    const enabled: SectionType[] = ['contact']
+    const enabled: SectionType[] = ['name_contact']
     const wrapper = mount(SectionToggles, {
       props: {
         layout: 'standard',
@@ -172,7 +172,7 @@ describe('SectionToggles', () => {
   })
 
   it('shows enabled sections first, then disabled', () => {
-    const enabled: SectionType[] = ['experience', 'contact']
+    const enabled: SectionType[] = ['experience', 'name_contact']
     const wrapper = mount(SectionToggles, {
       props: {
         layout: 'standard',
@@ -186,7 +186,7 @@ describe('SectionToggles', () => {
 
     // First two should be the enabled ones (contact, experience in their natural order)
     // Actually, the orderedSections computed puts enabled first maintaining SECTION_TYPES order
-    expect(labelTexts[0]).toBe('Contact')
+    expect(labelTexts[0]).toBe('Name & Contact')
     expect(labelTexts[1]).toBe('Experience')
     // Then disabled follow
     expect(labelTexts[2]).toBe('Summary')

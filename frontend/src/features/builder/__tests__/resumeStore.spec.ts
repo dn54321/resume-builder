@@ -25,7 +25,7 @@ describe('useResumeStore', () => {
 
       // Defaults: right column, order matches index
       for (let i = 0; i < store.sections.length; i++) {
-        const s = store.sections[i]
+        const s = store.sections[i]!
         expect(s.column).toBe('right')
         expect(s.order).toBe(i)
         expect(s.entries).toEqual([])
@@ -70,23 +70,23 @@ describe('useResumeStore', () => {
     it('removes an enabled section when toggled off', () => {
       const store = useResumeStore()
       store.initializeDefaults()
-      expect(store.isSectionEnabled('contact')).toBe(true)
+      expect(store.isSectionEnabled('name_contact')).toBe(true)
 
-      store.toggleSection('contact')
-      expect(store.isSectionEnabled('contact')).toBe(false)
+      store.toggleSection('name_contact')
+      expect(store.isSectionEnabled('name_contact')).toBe(false)
       expect(store.sections).toHaveLength(9)
     })
 
     it('adds a disabled section back with defaults when toggled on', () => {
       const store = useResumeStore()
       store.initializeDefaults()
-      store.toggleSection('contact') // remove
+      store.toggleSection('name_contact') // remove
 
-      store.toggleSection('contact') // add back
+      store.toggleSection('name_contact') // add back
 
-      expect(store.isSectionEnabled('contact')).toBe(true)
+      expect(store.isSectionEnabled('name_contact')).toBe(true)
       expect(store.sections).toHaveLength(10)
-      const added = store.sections.find((s) => s.sectionType === 'contact')
+      const added = store.sections.find((s) => s.sectionType === 'name_contact')
       expect(added).toBeDefined()
       expect(added!.column).toBe('right')
       expect(added!.entries).toEqual([])
@@ -107,8 +107,8 @@ describe('useResumeStore', () => {
       store.initializeDefaults()
       store.setLayout('column2-1')
 
-      store.setSectionColumn('contact', 'left')
-      const contact = store.sections.find((s) => s.sectionType === 'contact')
+      store.setSectionColumn('name_contact', 'left')
+      const contact = store.sections.find((s) => s.sectionType === 'name_contact')
       expect(contact!.column).toBe('left')
     })
 
@@ -126,10 +126,10 @@ describe('useResumeStore', () => {
       const store = useResumeStore()
       store.initializeDefaults()
       // Disable some
-      store.toggleSection('contact')
-      store.toggleSection('references')
+      store.toggleSection('name_contact')
+      store.toggleSection('hobbies')
 
-      const newOrder: SectionType[] = ['experience', 'education', 'skills', 'summary', 'projects', 'certifications', 'languages', 'volunteer']
+      const newOrder: SectionType[] = ['experience', 'education', 'hard_skills', 'summary', 'projects', 'certifications', 'languages', 'soft_skills']
       store.reorderSections(newOrder)
 
       const ordered = store.sections.map((s) => s.sectionType)
@@ -137,7 +137,7 @@ describe('useResumeStore', () => {
 
       // Orders updated
       for (let i = 0; i < store.sections.length; i++) {
-        expect(store.sections[i].order).toBe(i)
+        expect(store.sections[i]!.order).toBe(i)
       }
     })
 
@@ -145,11 +145,11 @@ describe('useResumeStore', () => {
       const store = useResumeStore()
       store.initializeDefaults()
 
-      store.reorderSections(['skills', 'projects'])
+      store.reorderSections(['hard_skills', 'projects'])
 
       expect(store.sections).toHaveLength(2)
-      expect(store.sections[0].sectionType).toBe('skills')
-      expect(store.sections[1].sectionType).toBe('projects')
+      expect(store.sections[0]!.sectionType).toBe('hard_skills')
+      expect(store.sections[1]!.sectionType).toBe('projects')
     })
   })
 
@@ -157,23 +157,23 @@ describe('useResumeStore', () => {
     it('enabledSections returns section types of all active sections', () => {
       const store = useResumeStore()
       store.initializeDefaults()
-      store.toggleSection('references')
+      store.toggleSection('hobbies')
 
       expect(store.enabledSections).toHaveLength(9)
-      expect(store.enabledSections).not.toContain('references' as SectionType)
+      expect(store.enabledSections).not.toContain('hobbies' as SectionType)
     })
 
     it('leftColumnSections / rightColumnSections filter by column', () => {
       const store = useResumeStore()
       store.initializeDefaults()
       store.setLayout('column2-1')
-      store.setSectionColumn('contact', 'left')
+      store.setSectionColumn('name_contact', 'left')
       store.setSectionColumn('summary', 'left')
 
       expect(store.leftColumnSections).toHaveLength(2)
-      expect(store.leftColumnSections.map((s) => s.sectionType)).toEqual(['contact', 'summary'])
+      expect(store.leftColumnSections.map((s) => s.sectionType)).toEqual(['name_contact', 'summary'])
       expect(store.rightColumnSections).toHaveLength(8)
-      expect(store.rightColumnSections[0].sectionType).toBe('experience')
+      expect(store.rightColumnSections[0]!.sectionType).toBe('experience')
     })
   })
 
@@ -186,7 +186,7 @@ describe('useResumeStore', () => {
         name: 'My Resume',
         sections: [
           {
-            sectionId: 'contact',
+            sectionId: 'name_contact',
             column: 'left' as const,
             order: 0,
             entries: [
@@ -229,12 +229,12 @@ describe('useResumeStore', () => {
       expect(store.name).toBe('My Resume')
       expect(store.sections).toHaveLength(2)
 
-      const contactSection = store.sections.find((s) => s.sectionType === 'contact')
+      const contactSection = store.sections.find((s) => s.sectionType === 'name_contact')
       expect(contactSection).toBeDefined()
       expect(contactSection!.column).toBe('left')
       expect(contactSection!.entries).toHaveLength(1)
-      expect(contactSection!.entries[0].fields).toHaveLength(2)
-      expect(contactSection!.entries[0].fields[0].value).toBe('John')
+      expect(contactSection!.entries[0]!.fields).toHaveLength(2)
+      expect(contactSection!.entries[0]!.fields[0]!.value).toBe('John')
 
       const experienceSection = store.sections.find((s) => s.sectionType === 'experience')
       expect(experienceSection).toBeDefined()
@@ -245,9 +245,9 @@ describe('useResumeStore', () => {
       expect(output.layout).toBe('column2-1')
       expect(output.name).toBe('My Resume')
       expect(output.sections).toHaveLength(2)
-      expect(output.sections[0].sectionId).toBe('contact')
-      expect(output.sections[0].entries[0].fields[0].value).toBe('John')
-      expect(output.sections[1].sectionId).toBe('experience')
+      expect(output.sections[0]!.sectionId).toBe('name_contact')
+      expect(output.sections[0]!.entries[0]!.fields[0]!.value).toBe('John')
+      expect(output.sections[1]!.sectionId).toBe('experience')
     })
   })
 
@@ -263,13 +263,13 @@ describe('useResumeStore', () => {
     it('excludes fields not in sections', () => {
       const store = useResumeStore()
       store.initializeDefaults()
-      store.toggleSection('contact')
-      store.toggleSection('references')
+      store.toggleSection('name_contact')
+      store.toggleSection('hobbies')
 
       const payload = store.toPayload()
       expect(payload.sections).toHaveLength(8)
-      expect(payload.sections.map((s) => s.sectionId)).not.toContain('contact')
-      expect(payload.sections.map((s) => s.sectionId)).not.toContain('references')
+      expect(payload.sections.map((s) => s.sectionId)).not.toContain('name_contact')
+      expect(payload.sections.map((s) => s.sectionId)).not.toContain('hobbies')
     })
   })
 })

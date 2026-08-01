@@ -1,15 +1,15 @@
-// The 10 resume section types
+// The 10 resume section types (must match backend Section seed)
 export const SECTION_TYPES = [
-  'contact',
+  'name_contact',
   'summary',
   'experience',
   'education',
-  'skills',
+  'hard_skills',
+  'soft_skills',
   'projects',
   'certifications',
   'languages',
-  'volunteer',
-  'references',
+  'hobbies',
 ] as const
 
 export type SectionType = (typeof SECTION_TYPES)[number]
@@ -56,16 +56,16 @@ export interface ResumePayload {
 
 // Section IDs from the backend Section table
 export const SECTION_LABELS: Record<SectionType, string> = {
-  contact: 'Contact',
+  name_contact: 'Name & Contact',
   summary: 'Summary',
   experience: 'Experience',
   education: 'Education',
-  skills: 'Skills',
+  hard_skills: 'Hard Skills',
+  soft_skills: 'Soft Skills',
   projects: 'Projects',
   certifications: 'Certifications',
   languages: 'Languages',
-  volunteer: 'Volunteer',
-  references: 'References',
+  hobbies: 'Hobbies',
 }
 
 export type LayoutType = 'standard' | 'column2-1'

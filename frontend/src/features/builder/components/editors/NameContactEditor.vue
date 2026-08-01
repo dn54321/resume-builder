@@ -88,12 +88,21 @@ onMounted(() => {
   }
 })
 
+/**
+ *
+ * @param key
+ */
 function fieldValue(key: string): string {
   const entry = editor.entries.value[0]
   if (!entry) return ''
   return editor.getFieldValue(entry.id, key)
 }
 
+/**
+ *
+ * @param key
+ * @param value
+ */
 function update(key: string, value: string) {
   const entry = editor.entries.value[0]
   if (!entry) return

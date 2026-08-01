@@ -9,6 +9,11 @@ import { useAuthStore } from '@/features/auth/stores/auth';
 const mockFetch = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>();
 globalThis.fetch = mockFetch;
 
+/**
+ *
+ * @param data
+ * @param status
+ */
 function mockJsonResponse(data: unknown, status = 200): Response {
   return {
     ok: status >= 200 && status < 300,
@@ -27,6 +32,9 @@ const router = createRouter({
   ],
 });
 
+/**
+ *
+ */
 function createAuthenticatedStore() {
   const store = useAuthStore();
   store.user = { id: 'user-1', email: 'test@example.com' };

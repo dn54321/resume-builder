@@ -8,10 +8,18 @@ import {
   SECTION_TYPES,
 } from '@/features/builder/types/resume'
 
+/**
+ *
+ */
 function generateId(): string {
   return crypto.randomUUID()
 }
 
+/**
+ *
+ * @param sectionType
+ * @param order
+ */
 function createDefaultSection(sectionType: SectionType, order: number): ResumeSectionState {
   return {
     sectionId: sectionType, // temporary client-side id matching the Section.label slug
@@ -43,6 +51,9 @@ export const useResumeStore = defineStore('resume', () => {
     sections.value.filter((s) => s.column === 'right'),
   )
 
+  /**
+   *
+   */
   function initializeDefaults() {
     id.value = generateId()
     layout.value = 'standard'
@@ -50,6 +61,10 @@ export const useResumeStore = defineStore('resume', () => {
     sections.value = SECTION_TYPES.map((type, i) => createDefaultSection(type, i))
   }
 
+  /**
+   *
+   * @param newLayout
+   */
   function setLayout(newLayout: LayoutType) {
     layout.value = newLayout
     // When switching to standard, all sections go to right column
@@ -60,6 +75,10 @@ export const useResumeStore = defineStore('resume', () => {
     }
   }
 
+  /**
+   *
+   * @param sectionType
+   */
   function toggleSection(sectionType: SectionType) {
     const existing = sections.value.find((s) => s.sectionType === sectionType)
     if (existing) {
@@ -72,6 +91,11 @@ export const useResumeStore = defineStore('resume', () => {
     }
   }
 
+  /**
+   *
+   * @param sectionType
+   * @param column
+   */
   function setSectionColumn(sectionType: SectionType, column: 'left' | 'right') {
     const section = sections.value.find((s) => s.sectionType === sectionType)
     if (section) {
@@ -79,6 +103,10 @@ export const useResumeStore = defineStore('resume', () => {
     }
   }
 
+  /**
+   *
+   * @param orderedTypes
+   */
   function reorderSections(orderedTypes: SectionType[]) {
     const newSections: ResumeSectionState[] = []
     for (let i = 0; i < orderedTypes.length; i++) {
@@ -91,10 +119,18 @@ export const useResumeStore = defineStore('resume', () => {
     sections.value = newSections
   }
 
+  /**
+   *
+   * @param sectionType
+   */
   function isSectionEnabled(sectionType: SectionType): boolean {
     return sections.value.some((s) => s.sectionType === sectionType)
   }
 
+  /**
+   *
+   * @param payload
+   */
   function loadFromPayload(payload: ResumePayload) {
     layout.value = payload.layout
     name.value = payload.name
@@ -119,6 +155,9 @@ export const useResumeStore = defineStore('resume', () => {
     })
   }
 
+  /**
+   *
+   */
   function toPayload(): ResumePayload {
     return {
       layout: layout.value,

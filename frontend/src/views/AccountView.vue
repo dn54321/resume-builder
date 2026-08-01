@@ -16,6 +16,9 @@ const changePasswordError = ref('');
 const changePasswordSuccess = ref(false);
 const isChangingPassword = ref(false);
 
+/**
+ *
+ */
 async function handleChangePassword(): Promise<void> {
   changePasswordError.value = '';
   changePasswordSuccess.value = false;
@@ -67,6 +70,9 @@ const isDeleting = ref(false);
 
 const deleteConfirmationText = computed(() => 'delete my account');
 
+/**
+ *
+ */
 async function handleDeleteAccount(): Promise<void> {
   deleteError.value = '';
 

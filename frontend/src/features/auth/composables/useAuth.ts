@@ -1,5 +1,8 @@
 import { useAuthStore } from '@/features/auth/stores/auth'
 
+/**
+ *
+ */
 export function useAuth() {
   const store = useAuthStore()
 

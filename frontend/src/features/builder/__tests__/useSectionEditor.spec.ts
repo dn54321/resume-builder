@@ -13,6 +13,10 @@ describe('useSectionEditor', () => {
     store.initializeDefaults()
   })
 
+  /**
+   *
+   * @param sectionType
+   */
   function getEditor(sectionType: SectionType) {
     return useSectionEditor(sectionType)
   }

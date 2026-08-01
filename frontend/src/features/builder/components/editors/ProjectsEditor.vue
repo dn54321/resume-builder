@@ -86,10 +86,17 @@ const editor = useSectionEditor('projects')
 
 const PROJ_FIELDS = ['name', 'description', 'url', 'startDate', 'endDate']
 
+/**
+ *
+ */
 function addProject() {
   editor.addEntry(PROJ_FIELDS.map((k) => ({ key: k, value: '' })))
 }
 
+/**
+ *
+ * @param id
+ */
 function onRemoveProject(id: string) {
   const bullets = editor.getChildren(id)
   for (const b of bullets) {
@@ -98,10 +105,20 @@ function onRemoveProject(id: string) {
   editor.removeEntry(id)
 }
 
+/**
+ *
+ * @param entry
+ * @param entry.id
+ * @param entry.order
+ */
 function entryTitle(entry: { id: string; order: number }): string {
   return editor.getFieldValue(entry.id, 'name') || '(New Project)'
 }
 
+/**
+ *
+ * @param parentId
+ */
 function bulletStates(parentId: string): BulletState[] {
   return editor.getChildren(parentId)
     .sort((a, b) => a.order - b.order)
@@ -111,6 +128,12 @@ function bulletStates(parentId: string): BulletState[] {
     }))
 }
 
+/**
+ *
+ * @param parentId
+ * @param index
+ * @param value
+ */
 function onBulletUpdate(parentId: string, index: number, value: string) {
   const bullets = editor.getChildren(parentId).sort((a, b) => a.order - b.order)
   if (index < bullets.length) {

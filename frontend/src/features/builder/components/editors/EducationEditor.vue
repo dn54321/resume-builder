@@ -75,10 +75,19 @@ const editor = useSectionEditor('education')
 
 const EDU_FIELDS = ['school', 'degree', 'fieldOfStudy', 'startDate', 'endDate']
 
+/**
+ *
+ */
 function addEducation() {
   editor.addEntry(EDU_FIELDS.map((k) => ({ key: k, value: '' })))
 }
 
+/**
+ *
+ * @param entry
+ * @param entry.id
+ * @param entry.order
+ */
 function entryTitle(entry: { id: string; order: number }): string {
   const school = editor.getFieldValue(entry.id, 'school') || '(New Education)'
   const degree = editor.getFieldValue(entry.id, 'degree')

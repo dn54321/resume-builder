@@ -15,12 +15,31 @@ export class CryptoService {
 
   constructor(@Inject(ConfigService) config: ConfigService<EnvConfig>) {
     const sessionHexKey: string = config.getOrThrow('SESSION_ENCRYPTION_KEY');
-    this.sessionEncryptionKey = Buffer.from(sessionHexKey, 'hex');
+    this.sessionEncryptionKey = this._validateAndParseKey(
+      sessionHexKey,
+      'SESSION_ENCRYPTION_KEY',
+    );
 
     const fieldHexKey: string = config.getOrThrow(
       'RESUME_FIELD_ENCRYPTION_KEY',
     );
-    this.resumeFieldEncryptionKey = Buffer.from(fieldHexKey, 'hex');
+    this.resumeFieldEncryptionKey = this._validateAndParseKey(
+      fieldHexKey,
+      'RESUME_FIELD_ENCRYPTION_KEY',
+    );
+  }
+
+  /**
+   * Validate a hex-encoded encryption key and return it as a 32-byte Buffer.
+   * Throws if the key is not exactly 64 hex characters.
+   * @param hexKey
+   * @param keyName
+   */
+  private _validateAndParseKey(hexKey: string, keyName: string): Buffer {
+    if (!/^[0-9a-fA-F]{64}$/.test(hexKey)) {
+      throw new Error(`${keyName} must be a 64-character hex string`);
+    }
+    return Buffer.from(hexKey, 'hex');
   }
 
   generateSessionToken(): string {

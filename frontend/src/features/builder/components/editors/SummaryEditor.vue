@@ -35,6 +35,10 @@ const summaryText = computed(() => {
 
 const characterCount = computed(() => summaryText.value.length)
 
+/**
+ *
+ * @param value
+ */
 function update(value: string) {
   const entry = editor.entries.value[0]
   if (!entry) return
