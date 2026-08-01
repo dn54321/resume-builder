@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../LoginView.vue'
+import { useAuthStore } from '../stores/auth'
 
 const mockPush = vi.fn<(...args: unknown[]) => Promise<void>>()
 const mockReplace = vi.fn<(...args: unknown[]) => Promise<void>>()
@@ -20,10 +22,12 @@ const router = createRouter({
 router.push = mockPush
 router.replace = mockReplace
 
+let pinia: ReturnType<typeof createPinia>
+
 function mountLogin() {
   return mount(LoginView, {
     global: {
-      plugins: [createPinia(), router],
+      plugins: [pinia, router],
       stubs: {
         RouterLink: true,
       },
@@ -34,7 +38,8 @@ function mountLogin() {
 
 describe('LoginView', () => {
   beforeEach(() => {
-    setActivePinia(createPinia())
+    pinia = createPinia()
+    setActivePinia(pinia)
     localStorage.clear()
     vi.clearAllMocks()
   })
@@ -59,5 +64,24 @@ describe('LoginView', () => {
   it('shows link to signup page', () => {
     const wrapper = mountLogin()
     expect(wrapper.text()).toContain("Don't have an account?")
+  })
+
+  it('redirects to /builder when already authenticated', async () => {
+    // Simulate authenticated state by setting user and token
+    const store = useAuthStore()
+    store.token = 'existing-token'
+    store.user = { id: '1', email: 'test@test.com' }
+
+    mountLogin()
+    await nextTick()
+
+    expect(mockReplace).toHaveBeenCalledWith('/builder')
+  })
+
+  it('does not redirect when not authenticated', async () => {
+    mountLogin()
+    await nextTick()
+
+    expect(mockReplace).not.toHaveBeenCalled()
   })
 })
