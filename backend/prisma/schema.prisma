@@ -75,10 +75,12 @@ model SectionEntry {
 }
 
 model SectionField {
-  id             String @id @default(uuid())
+  id             String  @id @default(uuid())
   sectionEntryId String
   key            String
   value          String
+  iv             String
+  authTag        String
   order          Int
 
   sectionEntry SectionEntry @relation(fields: [sectionEntryId], references: [id], onDelete: Cascade)
