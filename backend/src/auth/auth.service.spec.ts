@@ -125,6 +125,21 @@ describe('AuthService', () => {
         authService.login('wrong@example.com', 'password123'),
       ).rejects.toThrow(UnauthorizedException);
     });
+
+    it('throws UnauthorizedException for wrong password', async () => {
+      const mockedCompare = compare as jest.Mock;
+      mockedCompare.mockResolvedValue(false);
+
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 'user-1',
+        email: 'test@example.com',
+        password: 'hashed-password',
+      });
+
+      await expect(
+        authService.login('test@example.com', 'wrong-password'),
+      ).rejects.toThrow(UnauthorizedException);
+    });
   });
 
   describe('validateSession', () => {

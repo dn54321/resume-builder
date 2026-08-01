@@ -44,6 +44,38 @@ describe('CryptoService', () => {
     expect(service).toBeDefined();
   });
 
+  describe('generateSessionToken', () => {
+    it('should return a 64-character hex string', () => {
+      const token = service.generateSessionToken();
+      expect(token).toMatch(/^[0-9a-f]{64}$/);
+    });
+
+    it('should produce unique tokens', () => {
+      const t1 = service.generateSessionToken();
+      const t2 = service.generateSessionToken();
+      expect(t1).not.toBe(t2);
+    });
+  });
+
+  describe('hashToken', () => {
+    it('should return a 64-character hex string', () => {
+      const hash = service.hashToken('test-token');
+      expect(hash).toMatch(/^[0-9a-f]{64}$/);
+    });
+
+    it('should be deterministic', () => {
+      const h1 = service.hashToken('same-token');
+      const h2 = service.hashToken('same-token');
+      expect(h1).toBe(h2);
+    });
+
+    it('should produce different hashes for different inputs', () => {
+      const h1 = service.hashToken('token-a');
+      const h2 = service.hashToken('token-b');
+      expect(h1).not.toBe(h2);
+    });
+  });
+
   describe('encryptField', () => {
     it('should return a hex-encoded object not containing the plaintext', () => {
       const result = service.encryptField('hello');

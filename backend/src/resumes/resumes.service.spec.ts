@@ -266,6 +266,72 @@ describe('ResumesService', () => {
       );
     });
 
+    it('decrypts nested children entries', async () => {
+      const dbResume = makeResumeResponse({
+        sections: [
+          {
+            id: 'rs-1',
+            resumeId,
+            sectionId: 'summary',
+            column: 'right',
+            order: 0,
+            entries: [
+              {
+                id: 'parent-1',
+                resumeSectionId: 'rs-1',
+                order: 0,
+                parentId: null,
+                fields: [
+                  {
+                    id: 'f-1',
+                    sectionEntryId: 'parent-1',
+                    key: 'company',
+                    value: 'enc_Parent',
+                    iv: 'iv_Parent',
+                    authTag: 'tag_Parent',
+                    order: 0,
+                  },
+                ],
+                children: [
+                  {
+                    id: 'child-1',
+                    resumeSectionId: 'rs-1',
+                    order: 0,
+                    parentId: 'parent-1',
+                    fields: [
+                      {
+                        id: 'f-child',
+                        sectionEntryId: 'child-1',
+                        key: 'detail',
+                        value: 'enc_Child',
+                        iv: 'iv_Child',
+                        authTag: 'tag_Child',
+                        order: 0,
+                      },
+                    ],
+                    children: [],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      });
+      mockPrisma.resume.findUnique.mockResolvedValue(dbResume);
+      mockCrypto.decryptField.mockImplementation(
+        (encrypted: string, _iv: string, _authTag: string) =>
+          encrypted.replace('enc_', ''),
+      );
+
+      const result = await service.findOne(resumeId, userId);
+
+      expect(result.sections[0].entries[0].fields[0].value).toBe('Parent');
+      expect(result.sections[0].entries[0].children).toHaveLength(1);
+      expect(result.sections[0].entries[0].children[0].fields[0].value).toBe(
+        'Child',
+      );
+    });
+
     it("throws NotFoundException for another user's resume", async () => {
       const dbResume = makeResumeResponse({ userId: otherUserId });
       mockPrisma.resume.findUnique.mockResolvedValue(dbResume);
