@@ -1,13 +1,100 @@
-import {
-  Inject,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/database/prisma.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { CreateResumeDto } from './dto/create-resume.dto';
 import { UpdateResumeDto } from './dto/update-resume.dto';
+import type { Prisma } from '../generated/prisma/client';
+
+// ─── Transaction client type (subset used by createEntries) ────────
+
+interface TxClient {
+  resume: {
+    create: (args: {
+      data: Prisma.ResumeCreateInput;
+    }) => Promise<{ id: string }>;
+    findUnique: (args: {
+      where: { id: string };
+      include: typeof fullResumeInclude;
+    }) => Promise<ResumeTree | null>;
+    update: (args: {
+      where: { id: string };
+      data: Prisma.ResumeUpdateInput;
+    }) => Promise<unknown>;
+  };
+  resumeSection: {
+    create: (args: {
+      data: Prisma.ResumeSectionCreateInput;
+    }) => Promise<{ id: string }>;
+    findMany: (args: {
+      where: { resumeId: string };
+      select: { id: boolean };
+    }) => Promise<Array<{ id: string }>>;
+    deleteMany: (args: { where: { resumeId: string } }) => Promise<unknown>;
+  };
+  sectionEntry: {
+    create: (args: {
+      data: Prisma.SectionEntryCreateInput;
+    }) => Promise<{ id: string }>;
+    deleteMany: (args: {
+      where: { resumeSectionId: string };
+    }) => Promise<unknown>;
+  };
+  sectionField: {
+    create: (args: {
+      data: Prisma.SectionFieldCreateInput;
+    }) => Promise<unknown>;
+  };
+}
+
+// ─── Resume tree types for decryption ──────────────────────────────
+
+interface SectionField {
+  id: string;
+  key: string;
+  value: string;
+  iv: string;
+  authTag: string;
+  order: number;
+}
+
+interface SectionEntry {
+  id: string;
+  fields: SectionField[];
+  children: SectionEntry[];
+}
+
+interface ResumeSection {
+  id: string;
+  entries: SectionEntry[];
+}
+
+interface ResumeTree {
+  id: string;
+  userId: string;
+  layout: string;
+  name: string | null;
+  sections: ResumeSection[];
+  [key: string]: unknown;
+}
+
+// ─── Include object ────────────────────────────────────────────────
+
+const fullResumeInclude = {
+  sections: {
+    include: {
+      entries: {
+        include: {
+          fields: true,
+          children: {
+            include: {
+              fields: true,
+            },
+          },
+        },
+      },
+    },
+  },
+} as const;
 
 @Injectable()
 export class ResumesService {
@@ -32,25 +119,10 @@ export class ResumesService {
     });
   }
 
-  async findOne(id: string, userId: string) {
+  async findOne(id: string, userId: string): Promise<ResumeTree> {
     const resume = await this.prisma.resume.findUnique({
       where: { id },
-      include: {
-        sections: {
-          include: {
-            entries: {
-              include: {
-                fields: true,
-                children: {
-                  include: {
-                    fields: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
+      include: fullResumeInclude,
     });
 
     if (!resume || resume.userId !== userId) {
@@ -60,7 +132,7 @@ export class ResumesService {
     return this.decryptResumeFields(resume);
   }
 
-  async create(userId: string, dto: CreateResumeDto) {
+  async create(userId: string, dto: CreateResumeDto): Promise<ResumeTree> {
     return this.prisma.$transaction(async (tx) => {
       const resume = await tx.resume.create({
         data: {
@@ -84,22 +156,25 @@ export class ResumesService {
       }
 
       return this.decryptResumeFields(
-        await tx.resume.findUnique({
+        (await tx.resume.findUnique({
           where: { id: resume.id },
-          include: this.fullResumeInclude,
-        }),
+          include: fullResumeInclude,
+        }))!,
       );
     });
   }
 
-  async update(id: string, userId: string, dto: UpdateResumeDto) {
+  async update(
+    id: string,
+    userId: string,
+    dto: UpdateResumeDto,
+  ): Promise<ResumeTree> {
     return this.prisma.$transaction(async (tx) => {
       const existing = await tx.resume.findUnique({ where: { id } });
       if (!existing || existing.userId !== userId) {
         throw new NotFoundException('Resume not found');
       }
 
-      // Update layout and name if provided
       if (dto.layout !== undefined || dto.name !== undefined) {
         await tx.resume.update({
           where: { id },
@@ -110,21 +185,20 @@ export class ResumesService {
         });
       }
 
-      // Replace sections entirely
       if (dto.sections !== undefined) {
-        // Delete all entries first (fields cascade), then sections
         const existingSections = await tx.resumeSection.findMany({
           where: { resumeId: id },
           select: { id: true },
         });
 
         for (const s of existingSections) {
-          await tx.sectionEntry.deleteMany({ where: { resumeSectionId: s.id } });
+          await tx.sectionEntry.deleteMany({
+            where: { resumeSectionId: s.id },
+          });
         }
 
         await tx.resumeSection.deleteMany({ where: { resumeId: id } });
 
-        // Create new sections
         for (const sectionDto of dto.sections) {
           const section = await tx.resumeSection.create({
             data: {
@@ -140,39 +214,20 @@ export class ResumesService {
       }
 
       return this.decryptResumeFields(
-        await tx.resume.findUnique({
+        (await tx.resume.findUnique({
           where: { id },
-          include: this.fullResumeInclude,
-        }),
+          include: fullResumeInclude,
+        }))!,
       );
     });
   }
 
-  private get fullResumeInclude() {
-    return {
-      sections: {
-        include: {
-          entries: {
-            include: {
-              fields: true,
-              children: {
-                include: {
-                  fields: true,
-                },
-              },
-            },
-          },
-        },
-      },
-    } as const;
-  }
-
   private async createEntries(
-    tx: any,
+    tx: TxClient,
     resumeSectionId: string,
     entries: CreateResumeDto['sections'][number]['entries'],
     parentId?: string,
-  ) {
+  ): Promise<void> {
     for (const entryDto of entries) {
       const entry = await tx.sectionEntry.create({
         data: {
@@ -183,8 +238,9 @@ export class ResumesService {
       });
 
       for (const fieldDto of entryDto.fields) {
-        const { encrypted, iv, authTag } =
-          this.crypto.encryptField(fieldDto.value);
+        const { encrypted, iv, authTag } = this.crypto.encryptField(
+          fieldDto.value,
+        );
         await tx.sectionField.create({
           data: {
             sectionEntryId: entry.id,
@@ -208,13 +264,13 @@ export class ResumesService {
     }
   }
 
-  private decryptResumeFields(resume: any): any {
-    const decrypted = { ...resume };
+  private decryptResumeFields(resume: ResumeTree): ResumeTree {
+    const decrypted: ResumeTree = { ...resume };
 
     if (decrypted.sections) {
-      decrypted.sections = decrypted.sections.map((section: any) => ({
+      decrypted.sections = decrypted.sections.map((section: ResumeSection) => ({
         ...section,
-        entries: section.entries.map((entry: any) =>
+        entries: section.entries.map((entry: SectionEntry) =>
           this.decryptEntry(entry),
         ),
       }));
@@ -223,22 +279,18 @@ export class ResumesService {
     return decrypted;
   }
 
-  private decryptEntry(entry: any): any {
-    const decrypted = { ...entry };
+  private decryptEntry(entry: SectionEntry): SectionEntry {
+    const decrypted: SectionEntry = { ...entry, fields: [], children: [] };
 
-    if (decrypted.fields) {
-      decrypted.fields = decrypted.fields.map((field: any) => ({
+    if (entry.fields) {
+      decrypted.fields = entry.fields.map((field: SectionField) => ({
         ...field,
-        value: this.crypto.decryptField(
-          field.value,
-          field.iv,
-          field.authTag,
-        ),
+        value: this.crypto.decryptField(field.value, field.iv, field.authTag),
       }));
     }
 
-    if (decrypted.children) {
-      decrypted.children = decrypted.children.map((child: any) =>
+    if (entry.children) {
+      decrypted.children = entry.children.map((child: SectionEntry) =>
         this.decryptEntry(child),
       );
     }

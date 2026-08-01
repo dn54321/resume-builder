@@ -10,16 +10,102 @@ import { CryptoService } from '../common/crypto/crypto.service';
 import { CreateResumeDto } from './dto/create-resume.dto';
 import { UpdateResumeDto } from './dto/update-resume.dto';
 
+// ─── Helper types for test data ────────────────────────────────────
+
+interface EncryptedFieldResult {
+  encrypted: string;
+  iv: string;
+  authTag: string;
+}
+
+interface ResumeRow {
+  id: string;
+  userId: string;
+  layout: string;
+  name: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface SectionFieldRow {
+  id: string;
+  sectionEntryId: string;
+  key: string;
+  value: string;
+  iv: string;
+  authTag: string;
+  order: number;
+}
+
+interface SectionEntryRow {
+  id: string;
+  resumeSectionId: string;
+  order: number;
+  parentId: string | null;
+  fields: SectionFieldRow[];
+  children: SectionEntryRow[];
+}
+
+interface ResumeSectionRow {
+  id: string;
+  resumeId: string;
+  sectionId: string;
+  column: string;
+  order: number;
+  entries: SectionEntryRow[];
+}
+
+interface ResumeTreeRow {
+  id: string;
+  userId: string;
+  layout: string;
+  name: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  sections: ResumeSectionRow[];
+}
+
+// ─── Mock transaction callback type ────────────────────────────────
+
+type TransactionCallback<R> = (tx: Record<string, unknown>) => R | Promise<R>;
+
+interface MockPrisma {
+  resume: {
+    findMany: jest.Mock;
+    findUnique: jest.Mock;
+    create: jest.Mock;
+    update: jest.Mock;
+  };
+  resumeSection: {
+    create: jest.Mock;
+    findMany: jest.Mock;
+    deleteMany: jest.Mock;
+  };
+  sectionEntry: {
+    create: jest.Mock;
+    deleteMany: jest.Mock;
+  };
+  sectionField: {
+    create: jest.Mock;
+  };
+  $transaction: jest.Mock;
+}
+
+interface MockCrypto {
+  encryptField: jest.Mock<EncryptedFieldResult, [string]>;
+  decryptField: jest.Mock<string, [string, string, string]>;
+}
+
 describe('ResumesService', () => {
   let service: ResumesService;
-  let mockPrisma: any;
-  let mockCrypto: any;
+  let mockPrisma: MockPrisma;
+  let mockCrypto: MockCrypto;
 
   const userId = 'user-1';
   const otherUserId = 'user-2';
   const resumeId = 'resume-1';
 
-  function makeEncryptedField(value: string) {
+  function makeEncryptedField(value: string): EncryptedFieldResult {
     return {
       encrypted: `enc_${value}`,
       iv: `iv_${value}`,
@@ -27,7 +113,9 @@ describe('ResumesService', () => {
     };
   }
 
-  function makeResumeResponse(overrides: Partial<any> = {}) {
+  function makeResumeResponse(
+    overrides: Partial<ResumeTreeRow> = {},
+  ): ResumeTreeRow {
     return {
       id: resumeId,
       userId,
@@ -92,8 +180,8 @@ describe('ResumesService', () => {
     };
 
     mockCrypto = {
-      encryptField: jest.fn(),
-      decryptField: jest.fn(),
+      encryptField: jest.fn() as jest.Mock<EncryptedFieldResult, [string]>,
+      decryptField: jest.fn() as jest.Mock<string, [string, string, string]>,
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -109,10 +197,23 @@ describe('ResumesService', () => {
 
   describe('findAll', () => {
     it('returns resume summaries for the authenticated user', async () => {
-      mockPrisma.resume.findMany.mockResolvedValue([
-        { id: 'r1', layout: 'standard', name: 'My Resume', createdAt: new Date(), updatedAt: new Date() },
-        { id: 'r2', layout: 'compact', name: null, createdAt: new Date(), updatedAt: new Date() },
-      ]);
+      const rows: ResumeRow[] = [
+        {
+          id: 'r1',
+          layout: 'standard',
+          name: 'My Resume',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: 'r2',
+          layout: 'compact',
+          name: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ];
+      mockPrisma.resume.findMany.mockResolvedValue(rows);
 
       const result = await service.findAll(userId);
 
@@ -155,7 +256,7 @@ describe('ResumesService', () => {
       );
     });
 
-    it('throws NotFoundException for another user\'s resume', async () => {
+    it("throws NotFoundException for another user's resume", async () => {
       const dbResume = makeResumeResponse({ userId: otherUserId });
       mockPrisma.resume.findUnique.mockResolvedValue(dbResume);
 
@@ -203,32 +304,56 @@ describe('ResumesService', () => {
     };
 
     it('creates entire tree in one transaction and returns decrypted values', async () => {
-      const createdResume = { id: resumeId, userId, layout: 'standard', name: 'My Resume' };
-      const createdSection = { id: 'rs-1', resumeId, sectionId: 'summary', column: 'right', order: 0 };
-      const createdEntry = { id: 'entry-1', resumeSectionId: 'rs-1', order: 0, parentId: null };
-      const createdChild = { id: 'child-1', resumeSectionId: 'rs-1', order: 0, parentId: 'entry-1' };
+      const createdResume = {
+        id: resumeId,
+        userId,
+        layout: 'standard',
+        name: 'My Resume',
+      };
+      const createdSection = {
+        id: 'rs-1',
+        resumeId,
+        sectionId: 'summary',
+        column: 'right',
+        order: 0,
+      };
+      const createdEntry = {
+        id: 'entry-1',
+        resumeSectionId: 'rs-1',
+        order: 0,
+        parentId: null,
+      };
+      const createdChild = {
+        id: 'child-1',
+        resumeSectionId: 'rs-1',
+        order: 0,
+        parentId: 'entry-1',
+      };
 
-      mockPrisma.$transaction.mockImplementation(async (cb: Function) => {
-        const tx = {
-          resume: {
-            create: jest.fn().mockResolvedValue(createdResume),
-            findUnique: jest.fn().mockResolvedValue(makeResumeResponse()),
-          },
-          resumeSection: {
-            create: jest.fn().mockResolvedValue(createdSection),
-          },
-          sectionEntry: {
-            create: jest
-              .fn()
-              .mockResolvedValueOnce(createdEntry)
-              .mockResolvedValueOnce(createdChild),
-          },
-          sectionField: {
-            create: jest.fn().mockResolvedValue({}),
-          },
-        };
-        return cb(tx);
-      });
+      mockPrisma.$transaction.mockImplementation(
+        async (cb: TransactionCallback<ResumeTreeRow>) => {
+          const tx = {
+            resume: {
+              create: jest.fn().mockResolvedValue(createdResume),
+              findUnique: jest.fn().mockResolvedValue(makeResumeResponse()),
+            },
+            resumeSection: {
+              create: jest.fn().mockResolvedValue(createdSection),
+            },
+            sectionEntry: {
+              create: jest
+                .fn()
+                .mockResolvedValueOnce(createdEntry)
+                .mockResolvedValueOnce(createdChild),
+            },
+            sectionField: {
+              create: jest.fn().mockResolvedValue({}),
+            },
+          };
+          const result = cb(tx);
+          return result instanceof Promise ? result : Promise.resolve(result);
+        },
+      );
 
       mockCrypto.encryptField.mockImplementation((value: string) =>
         makeEncryptedField(value),
@@ -240,47 +365,64 @@ describe('ResumesService', () => {
 
       const result = await service.create(userId, dto);
 
-      // Verify encryption was called for all field values
       expect(mockCrypto.encryptField).toHaveBeenCalledWith('Software Engineer');
       expect(mockCrypto.encryptField).toHaveBeenCalledWith('Experienced dev');
       expect(mockCrypto.encryptField).toHaveBeenCalledWith('child value');
       expect(mockCrypto.encryptField).toHaveBeenCalledTimes(3);
 
-      // Verify result has decrypted values
       expect(result.sections).toBeDefined();
     });
   });
 
   describe('update', () => {
     it('updates layout and name when provided', async () => {
-      const existingResume = { id: resumeId, userId, layout: 'standard', name: null };
+      const existingResume: ResumeRow = {
+        id: resumeId,
+        userId,
+        layout: 'standard',
+        name: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
       const existingSections = [{ id: 'rs-1' }];
-      const updatedResume = makeResumeResponse({ layout: 'compact', name: 'Updated' });
-
-      mockPrisma.$transaction.mockImplementation(async (cb: Function) => {
-        const tx = {
-          resume: {
-            findUnique: jest
-              .fn()
-              .mockResolvedValueOnce(existingResume) // first call: check existence
-              .mockResolvedValueOnce(updatedResume), // second call: final fetch
-            update: jest.fn().mockResolvedValue({}),
-          },
-          resumeSection: {
-            findMany: jest.fn().mockResolvedValue(existingSections),
-            deleteMany: jest.fn().mockResolvedValue({}),
-            create: jest.fn().mockResolvedValue({ id: 'rs-2', resumeId, sectionId: 'summary', column: 'left', order: 0 }),
-          },
-          sectionEntry: {
-            deleteMany: jest.fn().mockResolvedValue({}),
-            create: jest.fn().mockResolvedValue({}),
-          },
-          sectionField: {
-            create: jest.fn().mockResolvedValue({}),
-          },
-        };
-        return cb(tx);
+      const updatedResume = makeResumeResponse({
+        layout: 'compact',
+        name: 'Updated',
       });
+
+      mockPrisma.$transaction.mockImplementation(
+        async (cb: TransactionCallback<ResumeTreeRow>) => {
+          const tx = {
+            resume: {
+              findUnique: jest
+                .fn()
+                .mockResolvedValueOnce(existingResume)
+                .mockResolvedValueOnce(updatedResume),
+              update: jest.fn().mockResolvedValue({}),
+            },
+            resumeSection: {
+              findMany: jest.fn().mockResolvedValue(existingSections),
+              deleteMany: jest.fn().mockResolvedValue({}),
+              create: jest.fn().mockResolvedValue({
+                id: 'rs-2',
+                resumeId,
+                sectionId: 'summary',
+                column: 'left',
+                order: 0,
+              }),
+            },
+            sectionEntry: {
+              deleteMany: jest.fn().mockResolvedValue({}),
+              create: jest.fn().mockResolvedValue({}),
+            },
+            sectionField: {
+              create: jest.fn().mockResolvedValue({}),
+            },
+          };
+          const result = cb(tx);
+          return result instanceof Promise ? result : Promise.resolve(result);
+        },
+      );
 
       mockCrypto.encryptField.mockImplementation((value: string) =>
         makeEncryptedField(value),
@@ -303,43 +445,59 @@ describe('ResumesService', () => {
     });
 
     it('replaces all sections atomically when sections provided', async () => {
-      const existingResume = { id: resumeId, userId, layout: 'standard', name: null };
+      const existingResume: ResumeRow = {
+        id: resumeId,
+        userId,
+        layout: 'standard',
+        name: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
       const existingSections = [{ id: 'rs-old-1' }, { id: 'rs-old-2' }];
       const updatedResume = makeResumeResponse();
 
       let sectionCreateCallCount = 0;
       let entryDeleteCallCount = 0;
 
-      mockPrisma.$transaction.mockImplementation(async (cb: Function) => {
-        const tx = {
-          resume: {
-            findUnique: jest
-              .fn()
-              .mockResolvedValueOnce(existingResume)
-              .mockResolvedValueOnce(updatedResume),
-            update: jest.fn().mockResolvedValue({}),
-          },
-          resumeSection: {
-            findMany: jest.fn().mockResolvedValue(existingSections),
-            deleteMany: jest.fn().mockResolvedValue({}),
-            create: jest.fn().mockImplementation(() => {
-              sectionCreateCallCount++;
-              return { id: `rs-new-${sectionCreateCallCount}`, resumeId, sectionId: 'summary', column: 'right', order: 0 };
-            }),
-          },
-          sectionEntry: {
-            deleteMany: jest.fn().mockImplementation(() => {
-              entryDeleteCallCount++;
-              return {};
-            }),
-            create: jest.fn().mockResolvedValue({}),
-          },
-          sectionField: {
-            create: jest.fn().mockResolvedValue({}),
-          },
-        };
-        return cb(tx);
-      });
+      mockPrisma.$transaction.mockImplementation(
+        async (cb: TransactionCallback<ResumeTreeRow>) => {
+          const tx = {
+            resume: {
+              findUnique: jest
+                .fn()
+                .mockResolvedValueOnce(existingResume)
+                .mockResolvedValueOnce(updatedResume),
+              update: jest.fn().mockResolvedValue({}),
+            },
+            resumeSection: {
+              findMany: jest.fn().mockResolvedValue(existingSections),
+              deleteMany: jest.fn().mockResolvedValue({}),
+              create: jest.fn().mockImplementation(() => {
+                sectionCreateCallCount++;
+                return {
+                  id: `rs-new-${sectionCreateCallCount}`,
+                  resumeId,
+                  sectionId: 'summary',
+                  column: 'right',
+                  order: 0,
+                };
+              }),
+            },
+            sectionEntry: {
+              deleteMany: jest.fn().mockImplementation(() => {
+                entryDeleteCallCount++;
+                return {};
+              }),
+              create: jest.fn().mockResolvedValue({}),
+            },
+            sectionField: {
+              create: jest.fn().mockResolvedValue({}),
+            },
+          };
+          const result = cb(tx);
+          return result instanceof Promise ? result : Promise.resolve(result);
+        },
+      );
 
       mockCrypto.decryptField.mockImplementation(
         (encrypted: string, _iv: string, _authTag: string) =>
@@ -351,45 +509,47 @@ describe('ResumesService', () => {
           {
             sectionId: 'summary',
             order: 0,
-            entries: [
-              { order: 0, fields: [], children: [] },
-            ],
+            entries: [{ order: 0, fields: [], children: [] }],
           },
         ],
       };
 
       await service.update(resumeId, userId, dto);
 
-      // Should delete entries for each old section
       expect(entryDeleteCallCount).toBe(2);
-      // Should delete all old sections
       expect(mockPrisma.$transaction).toHaveBeenCalled();
     });
 
     it('throws NotFoundException when updating non-existent resume', async () => {
-      mockPrisma.$transaction.mockImplementation(async (cb: Function) => {
-        const tx = {
-          resume: {
-            findUnique: jest.fn().mockResolvedValue(null),
-          },
-        };
-        return cb(tx);
-      });
+      mockPrisma.$transaction.mockImplementation(
+        async (cb: TransactionCallback<ResumeTreeRow>) => {
+          const tx = {
+            resume: {
+              findUnique: jest.fn().mockResolvedValue(null),
+            },
+          };
+          await cb(tx);
+        },
+      );
 
       await expect(
         service.update('nonexistent', userId, { name: 'Test' }),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('throws NotFoundException when updating another user\'s resume', async () => {
-      mockPrisma.$transaction.mockImplementation(async (cb: Function) => {
-        const tx = {
-          resume: {
-            findUnique: jest.fn().mockResolvedValue({ id: resumeId, userId: otherUserId }),
-          },
-        };
-        return cb(tx);
-      });
+    it("throws NotFoundException when updating another user's resume", async () => {
+      mockPrisma.$transaction.mockImplementation(
+        async (cb: TransactionCallback<ResumeTreeRow>) => {
+          const tx = {
+            resume: {
+              findUnique: jest
+                .fn()
+                .mockResolvedValue({ id: resumeId, userId: otherUserId }),
+            },
+          };
+          await cb(tx);
+        },
+      );
 
       await expect(
         service.update(resumeId, userId, { name: 'Test' }),

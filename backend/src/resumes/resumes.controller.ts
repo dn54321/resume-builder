@@ -14,6 +14,22 @@ import { ResumesService } from './resumes.service';
 import { CreateResumeDto } from './dto/create-resume.dto';
 import { UpdateResumeDto } from './dto/update-resume.dto';
 
+interface ResumeSummary {
+  id: string;
+  layout: string;
+  name: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface ResumeFull {
+  id: string;
+  userId: string;
+  layout: string;
+  name: string | null;
+  sections: unknown[];
+}
+
 interface AuthenticatedRequest {
   user: { id: string; email: string };
 }
@@ -26,7 +42,7 @@ export class ResumesController {
   ) {}
 
   @Get()
-  async findAll(@Req() req: AuthenticatedRequest) {
+  async findAll(@Req() req: AuthenticatedRequest): Promise<ResumeSummary[]> {
     return this.resumesService.findAll(req.user.id);
   }
 
@@ -34,7 +50,7 @@ export class ResumesController {
   async findOne(
     @Param('id') id: string,
     @Req() req: AuthenticatedRequest,
-  ) {
+  ): Promise<ResumeFull> {
     return this.resumesService.findOne(id, req.user.id);
   }
 
@@ -42,7 +58,7 @@ export class ResumesController {
   async create(
     @Body() dto: CreateResumeDto,
     @Req() req: AuthenticatedRequest,
-  ) {
+  ): Promise<ResumeFull> {
     return this.resumesService.create(req.user.id, dto);
   }
 
@@ -51,7 +67,7 @@ export class ResumesController {
     @Param('id') id: string,
     @Body() dto: UpdateResumeDto,
     @Req() req: AuthenticatedRequest,
-  ) {
+  ): Promise<ResumeFull> {
     return this.resumesService.update(id, req.user.id, dto);
   }
 }

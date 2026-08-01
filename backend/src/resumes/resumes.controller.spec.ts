@@ -8,12 +8,38 @@ import {
   ValidationPipe,
   UnauthorizedException,
   NotFoundException,
+  CanActivate,
+  ExecutionContext,
 } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { ResumesController } from './resumes.controller';
 import { ResumesService } from './resumes.service';
 import { AuthGuard } from '../common/guards/auth.guard';
+
+interface ResumeBody {
+  id: string;
+  layout: string;
+  name: string | null;
+  sections?: SectionBody[];
+}
+
+interface SectionBody {
+  id: string;
+  entries: EntryBody[];
+}
+
+interface EntryBody {
+  id: string;
+  fields: FieldBody[];
+  children: EntryBody[];
+}
+
+interface FieldBody {
+  id: string;
+  key: string;
+  value: string;
+}
 
 describe('ResumesController', () => {
   let app: INestApplication<App>;
@@ -23,7 +49,7 @@ describe('ResumesController', () => {
     create: jest.Mock;
     update: jest.Mock;
   };
-  let mockAuthGuard: any;
+  let mockAuthGuard: CanActivate;
 
   const authenticatedUserId = 'user-1';
 
@@ -36,8 +62,10 @@ describe('ResumesController', () => {
     };
 
     mockAuthGuard = {
-      canActivate: jest.fn().mockImplementation((context: any) => {
-        const req = context.switchToHttp().getRequest();
+      canActivate: jest.fn().mockImplementation((context: ExecutionContext) => {
+        const req = context
+          .switchToHttp()
+          .getRequest<{ user?: { id: string; email: string } }>();
         req.user = { id: authenticatedUserId, email: 'test@example.com' };
         return true;
       }),
@@ -45,9 +73,7 @@ describe('ResumesController', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ResumesController],
-      providers: [
-        { provide: ResumesService, useValue: mockResumesService },
-      ],
+      providers: [{ provide: ResumesService, useValue: mockResumesService }],
     })
       .overrideGuard(AuthGuard)
       .useValue(mockAuthGuard)
@@ -70,7 +96,7 @@ describe('ResumesController', () => {
   });
 
   function denyAuth() {
-    mockAuthGuard.canActivate.mockImplementation(() => {
+    jest.spyOn(mockAuthGuard, 'canActivate').mockImplementation(() => {
       throw new UnauthorizedException('Authentication required');
     });
   }
@@ -85,25 +111,23 @@ describe('ResumesController', () => {
         .get('/api/v1/resumes')
         .expect(200);
 
-      expect(response.body).toHaveLength(1);
-      expect(response.body[0].id).toBe('r1');
+      const body = response.body as ResumeBody[];
+      expect(body).toHaveLength(1);
+      expect(body[0].id).toBe('r1');
       expect(mockResumesService.findAll).toHaveBeenCalledWith('user-1');
     });
 
     it('returns 401 when not authenticated', async () => {
       denyAuth();
 
-      await request(app.getHttpServer())
-        .get('/api/v1/resumes')
-        .expect(401);
+      await request(app.getHttpServer()).get('/api/v1/resumes').expect(401);
     });
   });
 
   describe('GET /api/v1/resumes/:id', () => {
     it('returns full tree with decrypted field values', async () => {
-      const resume = {
+      const resume: ResumeBody = {
         id: 'r1',
-        userId: 'user-1',
         layout: 'standard',
         name: 'My Resume',
         sections: [
@@ -112,7 +136,9 @@ describe('ResumesController', () => {
             entries: [
               {
                 id: 'entry-1',
-                fields: [{ id: 'f-1', key: 'title', value: 'Software Engineer' }],
+                fields: [
+                  { id: 'f-1', key: 'title', value: 'Software Engineer' },
+                ],
                 children: [],
               },
             ],
@@ -125,7 +151,8 @@ describe('ResumesController', () => {
         .get('/api/v1/resumes/r1')
         .expect(200);
 
-      expect(response.body.sections[0].entries[0].fields[0].value).toBe(
+      const body = response.body as ResumeBody;
+      expect(body.sections![0].entries[0].fields[0].value).toBe(
         'Software Engineer',
       );
       expect(mockResumesService.findOne).toHaveBeenCalledWith('r1', 'user-1');
@@ -144,9 +171,7 @@ describe('ResumesController', () => {
     it('returns 401 when not authenticated', async () => {
       denyAuth();
 
-      await request(app.getHttpServer())
-        .get('/api/v1/resumes/r1')
-        .expect(401);
+      await request(app.getHttpServer()).get('/api/v1/resumes/r1').expect(401);
     });
   });
 
@@ -171,15 +196,19 @@ describe('ResumesController', () => {
     };
 
     it('creates resume and returns decrypted values', async () => {
-      const created = {
+      const created: ResumeBody = {
         id: 'new-resume',
         layout: 'standard',
         name: 'My Resume',
         sections: [
           {
+            id: 'rs-1',
             entries: [
               {
-                fields: [{ key: 'title', value: 'Software Engineer' }],
+                id: 'entry-1',
+                fields: [
+                  { id: 'f-1', key: 'title', value: 'Software Engineer' },
+                ],
                 children: [],
               },
             ],
@@ -193,7 +222,8 @@ describe('ResumesController', () => {
         .send(validDto)
         .expect(201);
 
-      expect(response.body.id).toBe('new-resume');
+      const body = response.body as ResumeBody;
+      expect(body.id).toBe('new-resume');
       expect(mockResumesService.create).toHaveBeenCalledWith(
         'user-1',
         expect.any(Object),
@@ -233,7 +263,7 @@ describe('ResumesController', () => {
 
   describe('PUT /api/v1/resumes/:id', () => {
     it('updates resume and returns updated tree', async () => {
-      const updated = {
+      const updated: ResumeBody = {
         id: 'r1',
         layout: 'compact',
         name: 'Updated Resume',
@@ -246,7 +276,8 @@ describe('ResumesController', () => {
         .send({ layout: 'compact', name: 'Updated Resume' })
         .expect(200);
 
-      expect(response.body.layout).toBe('compact');
+      const body = response.body as ResumeBody;
+      expect(body.layout).toBe('compact');
       expect(mockResumesService.update).toHaveBeenCalledWith(
         'r1',
         'user-1',
