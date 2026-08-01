@@ -316,12 +316,30 @@ function launchReady(): void {
         }
       });
     } else {
-      log(`launchReady: no intercom agents, spawning worker for ${node.ticket.identifier}`);
+      // Assign a unique agent name for the spawned worker
+      let agentName = '';
+      for (let i = 1; i <= config.maxAgents + 1; i++) {
+        const candidate = `agent-${i}`;
+        if (!agentSessionMap.has(candidate) && !idleAgents.has(candidate)) {
+          agentName = candidate;
+          break;
+        }
+      }
+      if (!agentName) {
+        log(`launchReady: no available agent names for ${node.ticket.identifier}`);
+        continue;
+      }
+      log(`launchReady: no intercom agents, spawning worker for ${node.ticket.identifier} as ${agentName}`);
       try {
-        const proc = spawnWorker(node);
+        const proc = spawnWorker(node, undefined, undefined, agentName);
         workers.set(node.ticket.identifier, proc);
+        node.state.workerName = agentName;
+        workerAssignment.set(agentName, node.ticket.identifier);
         proc.on('close', (code) => {
           workers.delete(node.ticket.identifier);
+          workerAssignment.delete(agentName);
+          idleAgents.delete(agentName);
+          agentSessionMap.delete(agentName);
           log(`Worker for ${node.ticket.identifier} exited (code ${code})`);
           saveAllState();
           launchReady();

@@ -275,6 +275,7 @@ export function spawnWorker(
   node: GraphNode,
   extraInstructions?: string,
   perWorkerInstructions?: string,
+  agentName?: string,
 ): cp.ChildProcess {
   const identifier = node.ticket.identifier;
   const repoRoot = getRepoRoot();
@@ -318,7 +319,12 @@ export function spawnWorker(
   node.state.retryCount += 1;
 
   // Build the worker prompt
-  const prompt = buildWorkerPrompt(node, assignedPort, config, extraInstructions, perWorkerInstructions) + retryContext;
+  let prompt = buildWorkerPrompt(node, assignedPort, config, extraInstructions, perWorkerInstructions) + retryContext;
+  if (agentName) {
+    prompt = `You are ${agentName}. /name ${agentName}. Use the worker-intercom skill.
+
+` + prompt;
+  }
 
   // Spawn pi process. cwd is set via cp.spawn options, not a CLI flag.
   const piArgs: string[] = [
