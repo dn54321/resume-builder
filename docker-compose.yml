@@ -1,0 +1,93 @@
+# ─── Resume Builder — Docker Compose (Development) ──────────────────────
+#
+# Usage:
+#   docker compose up --build          # builds images, starts both services
+#   docker compose up --build -d        # detached mode
+#   docker compose down                 # stops and removes containers
+#
+# Ports are set via environment variables or .env:
+#   BACKEND_PORT=3000                   # backend dev server port
+#   FRONTEND_PORT=5173                  # frontend dev server port
+#
+# Hot Module Reloading:
+#   - Frontend: Vite HMR via WebSocket (auto)
+#   - Backend:  NestJS --watch with filesystem events
+#               Set WATCH_POLLING=true for polling (macOS/Windows hosts)
+
+services:
+  # ─── Backend (NestJS) ────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.dev
+    container_name: resume-backend
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=3000
+      - DATABASE_URL=${DATABASE_URL:-file:./dev.db}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:${FRONTEND_PORT:-5173}}
+      - RESUME_FIELD_ENCRYPTION_KEY=${RESUME_FIELD_ENCRYPTION_KEY:-}
+    volumes:
+      # Mount source for HMR (exclude node_modules)
+      - ./backend/src:/app/src:delegated
+      - ./backend/prisma:/app/prisma:delegated
+      - ./backend/test:/app/test:delegated
+      - ./backend/nest-cli.json:/app/nest-cli.json:ro
+      - ./backend/tsconfig.json:/app/tsconfig.json:ro
+      - ./backend/tsconfig.build.json:/app/tsconfig.build.json:ro
+      # Anonymous volume to prevent host node_modules from overwriting container's
+      - /app/node_modules
+      # Database persistence
+      - backend-db:/app/prisma
+    networks:
+      - resume-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Frontend (Vue 3 + Vite) ─────────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile.dev
+    container_name: resume-frontend
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    environment:
+      - VITE_API_URL=http://backend:3000
+    volumes:
+      # Mount source for HMR (exclude node_modules)
+      - ./frontend/src:/app/src:delegated
+      - ./frontend/public:/app/public:delegated
+      - ./frontend/index.html:/app/index.html:ro
+      - ./frontend/vite.config.ts:/app/vite.config.ts:ro
+      - ./frontend/tsconfig.json:/app/tsconfig.json:ro
+      - ./frontend/tsconfig.app.json:/app/tsconfig.app.json:ro
+      - ./frontend/tsconfig.node.json:/app/tsconfig.node.json:ro
+      - ./frontend/env.d.ts:/app/env.d.ts:ro
+      # Anonymous volume to prevent host node_modules from overwriting container's
+      - /app/node_modules
+    networks:
+      - resume-net
+    depends_on:
+      backend:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5173"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  backend-db:
+    driver: local
+
+networks:
+  resume-net:
+    driver: bridge

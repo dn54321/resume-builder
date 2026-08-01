@@ -13,7 +13,17 @@ model User {
   password  String
   createdAt DateTime @default(now())
 
-  resumes Resume[]
+  resumes  Resume[]
+  sessions Session[]
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Resume {

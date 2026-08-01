@@ -22,4 +22,4 @@ export const configValidationSchema = Joi.object({
   BULLET_CAP: Joi.number().integer().min(1).max(20).default(5),
 
   ENCRYPTION_KEY: Joi.string().hex().length(64).required(),
-});
+}).unknown(true);

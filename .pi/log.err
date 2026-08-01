@@ -1,0 +1,11 @@
+[2026-08-01T02:03:31.448Z] /ticket RES-6: Failed to create worktree at /home/dn54321/projects/resume-v3/.pi/tickets/worktrees/RES-6: fatal: invalid reference: ticket/res-6
+Error: Failed to create worktree at /home/dn54321/projects/resume-v3/.pi/tickets/worktrees/RES-6: fatal: invalid reference: ticket/res-6
+    at ensureWorktree (/home/dn54321/projects/resume-v3/.pi/extensions/ticket/git.ts:88:11)
+    at spawnWorker (/home/dn54321/projects/resume-v3/.pi/extensions/ticket/orchestrator.ts:241:61)
+    at launchReadyWorkers (/home/dn54321/projects/resume-v3/.pi/extensions/ticket/index.ts:383:50)
+    at Object.handler (/home/dn54321/projects/resume-v3/.pi/extensions/ticket/index.ts:476:9)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async AgentSession._tryExecuteExtensionCommand (file:///home/dn54321/.local/share/pnpm/store/v11/links/@mariozechner/pi-coding-agent/0.73.1/6445ecc9a2d6825e860997222c4e54fbdc84d6a0d973267956694ed9931b34f7/node_modules/@mariozechner/pi-coding-agent/dist/core/agent-session.js:825:13)
+    at async AgentSession.prompt (file:///home/dn54321/.local/share/pnpm/store/v11/links/@mariozechner/pi-coding-agent/0.73.1/6445ecc9a2d6825e860997222c4e54fbdc84d6a0d973267956694ed9931b34f7/node_modules/@mariozechner/pi-coding-agent/dist/core/agent-session.js:698:33)
+    at async InteractiveMode.run (file:///home/dn54321/.local/share/pnpm/store/v11/links/@mariozechner/pi-coding-agent/0.73.1/6445ecc9a2d6825e860997222c4e54fbdc84d6a0d973267956694ed9931b34f7/node_modules/@mariozechner/pi-coding-agent/dist/modes/interactive/interactive-mode.js:545:17)
+    at async main (file:///home/dn54321/.local/share/pnpm/store/v11/links/@mariozechner/pi-coding-agent/0.73.1/6445ecc9a2d6825e860997222c4e54fbdc84d6a0d973267956694ed9931b34f7/node_modules/@mariozechner/pi-coding-agent/dist/main.js:565:9)
