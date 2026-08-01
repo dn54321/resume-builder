@@ -22,11 +22,9 @@
         </div>
       </main>
 
-      <!-- Right: Live preview (placeholder) -->
+      <!-- Right: Live preview -->
       <aside class="resume-builder__preview">
-        <div class="resume-builder__placeholder">
-          <p>Live preview &mdash; coming in a future update</p>
-        </div>
+        <LivePreview />
       </aside>
     </div>
 
@@ -47,6 +45,7 @@ import { useAuth } from '@/features/auth/composables/useAuth'
 import LayoutPicker from '@/features/builder/components/LayoutPicker.vue'
 import SectionToggles from '@/features/builder/components/SectionToggles.vue'
 import AnonymousBanner from '@/features/builder/components/AnonymousBanner.vue'
+import LivePreview from '@/features/builder/components/LivePreview.vue'
 import type { SectionType } from '@/features/builder/types/resume'
 
 const store = useResumeStore()
@@ -107,8 +106,7 @@ onUnmounted(() => {
 }
 
 .resume-builder__preview {
-  overflow-y: auto;
-  padding: 1rem;
+  overflow: hidden;
   border: 1px solid var(--color-border, #d1d5db);
   border-radius: 0.5rem;
   background: var(--color-background, #fff);
