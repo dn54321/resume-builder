@@ -15,7 +15,7 @@ export const configValidationSchema = Joi.object({
     .valid('keyword', 'llm', 'hybrid')
     .default('keyword'),
 
-  LLM_API_KEY: Joi.string().optional(),
+  LLM_API_KEY: Joi.string().allow('').optional(),
 
   LLM_MODEL: Joi.string().default('gpt-4o-mini'),
 
