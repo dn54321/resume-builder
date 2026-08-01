@@ -82,6 +82,7 @@ const workers = new Map<string, cp.ChildProcess>(); // ticketId → process
 const workerAssignment = new Map<string, string>();  // agentName → ticketId
 const agentSessionMap = new Map<string, { id: string; name: string }>();  // agentName → sessionInfo
 const idleAgents = new Set<string>();                // agent names waiting for work
+const inFlightAssignments = new Set<string>();       // ticket identifiers currently being assigned (prevents double-assign race)
 
 let currentNodes: Map<string, GraphNode> | null = null;
 
@@ -105,6 +106,18 @@ async function assignWork(node: GraphNode): Promise<boolean> {
   // Find an idle agent
   const agentName = [...idleAgents][0];
   if (!agentName) return false;
+
+  // Prevent double-assignment: if this ticket is already being assigned or has a worker, skip
+  if (inFlightAssignments.has(node.ticket.identifier)) {
+    log(`assignWork: ${node.ticket.identifier} already being assigned — skipping ${agentName}`);
+    return false;
+  }
+  const alreadyAssigned = [...workerAssignment.values()].includes(node.ticket.identifier);
+  if (alreadyAssigned) {
+    log(`assignWork: ${node.ticket.identifier} already has a worker — skipping ${agentName}`);
+    return false;
+  }
+  inFlightAssignments.add(node.ticket.identifier);
 
   // Verify agent is actually connected via session map
   if (!intercom) { log(`assignWork: intercom not initialized`); return false; }
@@ -184,10 +197,12 @@ async function assignWork(node: GraphNode): Promise<boolean> {
     // Transition Linear ticket
     transitionTicket(node.ticket.id, 'In Progress').catch(() => {});
     await tellBoss(`Assigned ${node.ticket.identifier} to ${agentName}`);
+    inFlightAssignments.delete(node.ticket.identifier);
     return true;
   } catch {
     // Send failed — agent may be gone, put it back
     idleAgents.add(agentName);
+    inFlightAssignments.delete(node.ticket.identifier);
     return false;
   }
 }
