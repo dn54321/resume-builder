@@ -1,0 +1,10 @@
+{
+  "name": "ticket",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@types/blessed": "^0.1.27",
+    "blessed": "^0.1.81",
+    "ngrok": "^5.0.0-beta.2"
+  }
+}

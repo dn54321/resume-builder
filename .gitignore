@@ -1,3 +1,6 @@
-.env.agent
+.env*
+!*.template
+
 node_modules
 agent-status.txt
+.pi/tickets/

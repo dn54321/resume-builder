@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -8,4 +5,62 @@ generator client {
 
 datasource db {
   provider = "sqlite"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  resumes   Resume[]
+}
+
+model Resume {
+  id        String          @id @default(uuid())
+  userId    String
+  layout    String          @default("standard")
+  name      String?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sections  ResumeSection[]
+}
+
+model Section {
+  id      String          @id
+  label   String
+  resumes ResumeSection[]
+}
+
+model ResumeSection {
+  id        String         @id @default(uuid())
+  resumeId  String
+  sectionId String
+  column    String         @default("right")
+  order     Int            @default(0)
+  resume    Resume         @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  section   Section        @relation(fields: [sectionId], references: [id])
+  entries   SectionEntry[]
+
+  @@unique([resumeId, sectionId])
+}
+
+model SectionEntry {
+  id              String         @id @default(uuid())
+  resumeSectionId String
+  order           Int
+  parentId        String?
+  resumeSection   ResumeSection  @relation(fields: [resumeSectionId], references: [id], onDelete: Cascade)
+  parent          SectionEntry?  @relation("EntryChildren", fields: [parentId], references: [id], onDelete: SetNull)
+  children        SectionEntry[] @relation("EntryChildren")
+  fields          SectionField[]
+}
+
+model SectionField {
+  id             String       @id @default(uuid())
+  sectionEntryId String
+  key            String
+  value          String
+  order          Int
+  sectionEntry   SectionEntry @relation(fields: [sectionEntryId], references: [id], onDelete: Cascade)
 }
