@@ -23,25 +23,6 @@ cd frontend && npm run test:cov
 - Excluded from coverage: config/bootstrap files (`main.ts`, `router/index.ts`),
   type declaration files, and `__tests__` directories themselves
 
-### Pre-push hook
-
-A git pre-push hook runs lint, type-check, and tests before every push.
-Failures abort the push.
-
-**One-time setup** (after clone):
-```bash
-git config core.hooksPath .githooks
-```
-
-**Checks performed:**
-| Step | Backend | Frontend |
-|------|---------|----------|
-| Lint | `npm run lint` (eslint) | `npm run lint` (oxlint + eslint) |
-| Types | `npm run type-check` (tsc --noEmit) | `npm run type-check` (vue-tsc) |
-| Tests | `npm run test:cov` (Jest, 90% threshold) | `npm run test:cov` (Vitest, 90% threshold) |
-
-To bypass the hook in emergencies: `git push --no-verify`
-
 ## Security
 
 ### Encryption key separation
