@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# pre-push — Run lint, type-check, and tests before pushing.
+# Fails fast: stops at the first failure.
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+FAILED=0
+
+run_step() {
+  local label="$1"
+  shift
+  printf "${CYAN}[pre-push]${NC} %s ... " "$label"
+  if "$@" > /dev/null 2>&1; then
+    printf "${GREEN}OK${NC}\n"
+  else
+    printf "${RED}FAILED${NC}\n"
+    # Re-run with visible output so the dev can see the errors
+    echo ""
+    echo "── $label (full output) ──"
+    "$@" 2>&1 || true
+    echo ""
+    FAILED=1
+  fi
+}
+
+# ─── Backend ──────────────────────────────────────────────────────────
+
+echo ""
+echo "${CYAN}═══ Backend ═══${NC}"
+
+run_step "lint"            npm --prefix backend run lint
+run_step "type-check"      npm --prefix backend run type-check
+run_step "test:cov"        npm --prefix backend run test:cov
+
+# ─── Frontend ─────────────────────────────────────────────────────────
+
+echo ""
+echo "${CYAN}═══ Frontend ═══${NC}"
+
+run_step "lint"            npm --prefix frontend run lint
+run_step "type-check"      npm --prefix frontend run type-check
+run_step "test:cov"        npm --prefix frontend run test:cov
+
+# ─── Result ───────────────────────────────────────────────────────────
+
+echo ""
+if [ "$FAILED" -eq 0 ]; then
+  printf "${GREEN}[pre-push] All checks passed — pushing.${NC}\n"
+  exit 0
+else
+  printf "${RED}[pre-push] Checks failed — push aborted.${NC}\n"
+  exit 1
+fi

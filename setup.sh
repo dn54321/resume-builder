@@ -284,3 +284,13 @@ fi
 
 echo ""
 echo "Done."
+
+# ─── Git hooks ─────────────────────────────────────────────────────
+
+echo ""
+echo "Installing git hooks..."
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
+git config core.hooksPath .githooks
+echo "  Pre-push hook: active (lint → type-check → test:cov)"
+echo "  Bypass with: git push --no-verify"
