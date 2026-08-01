@@ -4,7 +4,7 @@ import { RouterLink, RouterView } from 'vue-router'
 import HelloWorld from '@/components/HelloWorld.vue'
 import { useAuth } from '@/features/auth/composables/useAuth'
 
-const { checkSession } = useAuth()
+const { isAuthenticated, user, checkSession, logout } = useAuth()
 
 onMounted(() => {
   checkSession()
@@ -21,6 +21,16 @@ onMounted(() => {
       <nav>
         <RouterLink to="/">Home</RouterLink>
         <RouterLink to="/about">About</RouterLink>
+        <template v-if="isAuthenticated">
+          <span class="user-email">{{ user?.email }}</span>
+          <button class="logout-button" @click="logout()">
+            Log out
+          </button>
+        </template>
+        <template v-else>
+          <RouterLink to="/login">Log in</RouterLink>
+          <RouterLink to="/signup">Sign up</RouterLink>
+        </template>
       </nav>
     </div>
   </header>
@@ -62,6 +72,25 @@ nav a {
 
 nav a:first-of-type {
   border: 0;
+}
+
+.user-email {
+  display: inline-block;
+  padding: 0 1rem;
+  border-left: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+.logout-button {
+  display: inline-block;
+  padding: 0 1rem;
+  border: none;
+  border-left: 1px solid var(--color-border);
+  background: none;
+  color: var(--color-text);
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
 }
 
 @media (min-width: 1024px) {

@@ -1,26 +1,23 @@
 import { NestFactory } from '@nestjs/core';
+import { ValidationPipe } from '@nestjs/common';
 import { Logger } from 'nestjs-pino';
 import { ConfigService } from '@nestjs/config';
-import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
+import type { EnvConfig } from './common/config/env.interface';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
 
   app.useLogger(app.get(Logger));
 
-  app.setGlobalPrefix('api/v1');
+  const config = app.get<ConfigService<EnvConfig>>(ConfigService);
+  const frontendUrl = config.get('FRONTEND_URL', 'http://localhost:5173');
 
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  );
+  app.enableCors({ origin: frontendUrl, credentials: true });
 
-  const config = app.get(ConfigService);
-  const port = config.get<number>('PORT', 3000);
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+
+  const port = config.get('PORT', 3000);
 
   await app.listen(port);
 

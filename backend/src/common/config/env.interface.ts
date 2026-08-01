@@ -8,4 +8,5 @@ export interface EnvConfig {
   LLM_MODEL?: string;
   BULLET_CAP: number;
   ENCRYPTION_KEY: string;
+  SESSION_ENCRYPTION_KEY: string;
 }
