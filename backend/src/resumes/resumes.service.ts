@@ -88,10 +88,10 @@ export class ResumesService {
       }
 
       return this.decryptResumeFields(
-        (await tx.resume.findUnique({
+        await tx.resume.findUnique({
           where: { id: resume.id },
           include: fullResumeInclude,
-        }))!,
+        }),
       );
     });
   }
@@ -146,10 +146,10 @@ export class ResumesService {
       }
 
       return this.decryptResumeFields(
-        (await tx.resume.findUnique({
+        await tx.resume.findUnique({
           where: { id },
           include: fullResumeInclude,
-        }))!,
+        }),
       );
     });
   }

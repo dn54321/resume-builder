@@ -1,6 +1,14 @@
 <template>
   <div class="projects-editor">
-    <h3 class="projects-editor__title">Projects</h3>
+    <h3 class="projects-editor__title">
+      Projects
+      <span
+        v-if="store.isFiltered"
+        class="projects-editor__filter-info"
+      >
+        &mdash; Showing {{ filteredCount.visible }} of {{ filteredCount.total }} bullets
+      </span>
+    </h3>
     <EntryList
       :entries="editor.entries.value.filter((e) => !e.parentId)"
       add-label="Add Project"
@@ -9,7 +17,7 @@
       @remove="onRemoveProject"
       @reorder="editor.reorderEntries"
     >
-      <template #fields="{ entry }">
+      <template #fields="{ entry, index: entryIndex }">
         <div class="projects-editor__fields">
           <div class="projects-editor__field">
             <label class="projects-editor__label">Name</label>
@@ -64,12 +72,26 @@
           <div class="projects-editor__bullets">
             <label class="projects-editor__label">Bullet Points</label>
             <BulletList
-              :bullets="bulletStates(entry.id)"
+              :bullets="bulletStates(entry.id, entryIndex)"
               @add="editor.addBullet(entry.id)"
               @remove="editor.removeBullet"
               @update="(idx: number, val: string) => onBulletUpdate(entry.id, idx, val)"
               @reorder="(from: number, to: number) => editor.reorderBullets(entry.id, from, to)"
-            />
+            >
+              <template #bullet="{ index: bulletIndex }">
+                <span
+                  v-if="store.isFiltered"
+                  class="projects-editor__relevance"
+                  :class="{
+                    'projects-editor__relevance--yes': store.isBulletRelevant('projects', entryIndex, bulletIndex),
+                    'projects-editor__relevance--no': !store.isBulletRelevant('projects', entryIndex, bulletIndex),
+                  }"
+                  :title="store.isBulletRelevant('projects', entryIndex, bulletIndex) ? 'Relevant' : 'Filtered out'"
+                >
+                  {{ store.isBulletRelevant('projects', entryIndex, bulletIndex) ? '&#10003;' : '&#10005;' }}
+                </span>
+              </template>
+            </BulletList>
           </div>
         </div>
       </template>
@@ -78,13 +100,18 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useResumeStore } from '@/features/builder/stores/resume'
 import { useSectionEditor } from '@/features/builder/composables/useSectionEditor'
 import EntryList from '@/features/builder/components/shared/EntryList.vue'
 import BulletList, { type BulletState } from '@/features/builder/components/shared/BulletList.vue'
 
 const editor = useSectionEditor('projects')
+const store = useResumeStore()
 
 const PROJ_FIELDS = ['name', 'description', 'url', 'startDate', 'endDate']
+
+const filteredCount = computed(() => store.getFilteredBulletCount('projects'))
 
 /**
  *
@@ -118,13 +145,15 @@ function entryTitle(entry: { id: string; order: number }): string {
 /**
  *
  * @param parentId
+ * @param entryIndex
  */
-function bulletStates(parentId: string): BulletState[] {
+function bulletStates(parentId: string, entryIndex: number): BulletState[] {
   return editor.getChildren(parentId)
     .sort((a, b) => a.order - b.order)
-    .map((b) => ({
+    .map((b, i) => ({
       id: b.id,
       value: b.fields.find((f) => f.key === 'text')?.value ?? '',
+      dimmed: store.isFiltered && !store.isBulletRelevant('projects', entryIndex, i),
     }))
 }
 
@@ -152,6 +181,12 @@ function onBulletUpdate(parentId: string, index: number, value: string) {
   font-weight: 600;
   margin: 0 0 1rem;
   color: var(--color-text, #111827);
+}
+
+.projects-editor__filter-info {
+  font-weight: 400;
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #6b7280);
 }
 
 .projects-editor__fields {
@@ -218,5 +253,21 @@ function onBulletUpdate(parentId: string, index: number, value: string) {
   margin-top: 0.5rem;
   padding-top: 0.5rem;
   border-top: 1px solid var(--color-border, #e5e7eb);
+}
+
+.projects-editor__relevance {
+  font-size: 0.6875rem;
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+  cursor: default;
+}
+
+.projects-editor__relevance--yes {
+  color: var(--color-success, #16a34a);
+}
+
+.projects-editor__relevance--no {
+  color: var(--color-text-muted, #d1d5db);
 }
 </style>

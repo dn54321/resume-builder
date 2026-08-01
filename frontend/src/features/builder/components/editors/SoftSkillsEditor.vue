@@ -1,22 +1,43 @@
 <template>
   <div class="skills-editor">
-    <h3 class="skills-editor__title">Soft Skills</h3>
+    <h3 class="skills-editor__title">
+      Soft Skills
+      <span
+        v-if="store.isFiltered"
+        class="skills-editor__filter-info"
+      >
+        &mdash; Showing {{ visibleCount }} of {{ totalCount }} skills
+      </span>
+    </h3>
     <div class="skills-editor__list">
       <div
         v-for="(entry, index) in skillEntries"
         :key="entry.id"
         class="skills-editor__row"
+        :class="{ 'skills-editor__row--dimmed': entry.dimmed }"
       >
         <span
           class="skills-editor__drag-handle"
           @mousedown.prevent="onDragStart($event, index)"
           title="Drag to reorder"
         >&#x2630;</span>
+        <span
+          v-if="store.isFiltered"
+          class="skills-editor__relevance"
+          :class="{
+            'skills-editor__relevance--yes': !entry.dimmed,
+            'skills-editor__relevance--no': entry.dimmed,
+          }"
+          :title="entry.dimmed ? 'Filtered out' : 'Relevant'"
+        >
+          {{ entry.dimmed ? '&#10005;' : '&#10003;' }}
+        </span>
         <input
           type="text"
           :value="entry.value"
           @input="onUpdate(entry.id, ($event.target as HTMLInputElement).value)"
           class="skills-editor__input"
+          :class="{ 'skills-editor__input--dimmed': entry.dimmed }"
           placeholder="e.g. Communication"
         />
         <button
@@ -35,24 +56,38 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useResumeStore } from '@/features/builder/stores/resume'
 import { useSectionEditor } from '@/features/builder/composables/useSectionEditor'
 
 const editor = useSectionEditor('soft_skills')
+const store = useResumeStore()
 const dragIndex = ref<number | null>(null)
 
 interface SkillRow {
   id: string
   value: string
+  dimmed: boolean
 }
 
 const skillEntries = computed<SkillRow[]>(() =>
   editor.entries.value
     .filter((e) => !e.parentId)
     .sort((a, b) => a.order - b.order)
-    .map((e) => ({
-      id: e.id,
-      value: editor.getFieldValue(e.id, 'name'),
-    })),
+    .map((e) => {
+      const value = editor.getFieldValue(e.id, 'name')
+      return {
+        id: e.id,
+        value,
+        dimmed: store.isFiltered && !store.isSkillRelevant('soft_skills', value),
+      }
+    }),
+)
+
+const totalCount = computed(() => skillEntries.value.length)
+const visibleCount = computed(() =>
+  store.isFiltered
+    ? skillEntries.value.filter((s) => !s.dimmed).length
+    : totalCount.value,
 )
 
 /**
@@ -127,6 +162,12 @@ function onDragStart(event: MouseEvent, index: number) {
   color: var(--color-text, #111827);
 }
 
+.skills-editor__filter-info {
+  font-weight: 400;
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #6b7280);
+}
+
 .skills-editor__list {
   display: flex;
   flex-direction: column;
@@ -137,6 +178,11 @@ function onDragStart(event: MouseEvent, index: number) {
   display: flex;
   align-items: center;
   gap: 0.375rem;
+  transition: opacity 0.2s;
+}
+
+.skills-editor__row--dimmed {
+  opacity: 0.45;
 }
 
 .skills-editor__drag-handle {
@@ -148,6 +194,22 @@ function onDragStart(event: MouseEvent, index: number) {
 
 .skills-editor__drag-handle:active {
   cursor: grabbing;
+}
+
+.skills-editor__relevance {
+  font-size: 0.6875rem;
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+  cursor: default;
+}
+
+.skills-editor__relevance--yes {
+  color: var(--color-success, #16a34a);
+}
+
+.skills-editor__relevance--no {
+  color: var(--color-text-muted, #d1d5db);
 }
 
 .skills-editor__input {
@@ -165,6 +227,10 @@ function onDragStart(event: MouseEvent, index: number) {
   outline: none;
   border-color: var(--color-primary, #3b82f6);
   box-shadow: 0 0 0 1px var(--color-primary, #3b82f6);
+}
+
+.skills-editor__input--dimmed {
+  color: var(--color-text-muted, #9ca3af);
 }
 
 .skills-editor__remove-btn {

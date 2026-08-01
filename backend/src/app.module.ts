@@ -5,6 +5,7 @@ import { LoggerModule } from './common/logger/logger.module';
 import { DatabaseModule } from './common/database/database.module';
 import { AuthModule } from './auth/auth.module';
 import { ResumesModule } from './resumes/resumes.module';
+import { TailorModule } from './features/tailor/tailor.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -16,6 +17,7 @@ import { AppService } from './app.service';
     CryptoModule,
     AuthModule,
     ResumesModule,
+    TailorModule,
   ],
   controllers: [AppController],
   providers: [AppService],

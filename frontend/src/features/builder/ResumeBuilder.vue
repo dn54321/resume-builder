@@ -9,17 +9,17 @@
           :layout="store.layout"
           :enabled-sections="store.enabledSections"
           :column-assignments="columnAssignments"
+          :selected-section-id="selectedSectionId"
           @toggle="store.toggleSection"
           @set-column="store.setSectionColumn"
           @reorder="store.reorderSections"
+          @select="selectedSectionId = $event"
         />
       </aside>
 
-      <!-- Center: Section editor (placeholder) -->
+      <!-- Center: Section editor -->
       <main class="resume-builder__editor">
-        <div class="resume-builder__placeholder">
-          <p>Section editor &mdash; coming in a future update</p>
-        </div>
+        <SectionEditor :selected-section-id="selectedSectionId" />
       </main>
 
       <!-- Right: Live preview (placeholder) -->
@@ -30,28 +30,30 @@
       </aside>
     </div>
 
-    <!-- Bottom: JD input area (placeholder) -->
+    <!-- Bottom: JD input area -->
     <footer class="resume-builder__jd-input">
-      <div class="resume-builder__placeholder">
-        <p>Job description input &mdash; coming in a future update</p>
-      </div>
+      <JdInput />
     </footer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useResumeStore } from '@/features/builder/stores/resume'
 import { useResumeData } from '@/features/builder/composables/useResumeData'
 import { useAuth } from '@/features/auth/composables/useAuth'
 import LayoutPicker from '@/features/builder/components/LayoutPicker.vue'
 import SectionToggles from '@/features/builder/components/SectionToggles.vue'
+import SectionEditor from '@/features/builder/components/SectionEditor.vue'
+import JdInput from '@/features/builder/components/JdInput.vue'
 import AnonymousBanner from '@/features/builder/components/AnonymousBanner.vue'
 import type { SectionType } from '@/features/builder/types/resume'
 
 const store = useResumeStore()
 const { isAuthenticated } = useAuth()
 const { loadResume, setupAutoSave, teardownAutoSave } = useResumeData()
+
+const selectedSectionId = ref<string | null>(null)
 
 const columnAssignments = computed(() => {
   const assignments: Record<SectionType, 'left' | 'right'> = {} as Record<SectionType, 'left' | 'right'>
@@ -64,6 +66,10 @@ const columnAssignments = computed(() => {
 onMounted(async () => {
   await loadResume()
   setupAutoSave()
+  // Select the first enabled section by default
+  if (store.sections.length > 0 && !selectedSectionId.value) {
+    selectedSectionId.value = store.sections[0]!.sectionType
+  }
 })
 
 onUnmounted(() => {
@@ -125,12 +131,14 @@ onUnmounted(() => {
 }
 
 .resume-builder__jd-input {
-  padding: 1rem;
+  padding: 0;
   margin-top: 1rem;
   border: 1px solid var(--color-border, #d1d5db);
   border-radius: 0.5rem;
   background: var(--color-background, #fff);
   flex-shrink: 0;
+  max-height: 35vh;
+  overflow-y: auto;
 }
 
 /* Responsive: stack on smaller screens */

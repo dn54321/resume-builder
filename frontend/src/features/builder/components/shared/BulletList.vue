@@ -4,18 +4,21 @@
       v-for="(bullet, index) in bullets"
       :key="bullet.id"
       class="bullet-list__row"
+      :class="{ 'bullet-list__row--dimmed': bullet.dimmed }"
     >
       <span
         class="bullet-list__drag-handle"
         @mousedown.prevent="onDragStart($event, index)"
         title="Drag to reorder"
       >&#x2630;</span>
+      <slot name="bullet" :bullet="bullet" :index="index" />
       <span class="bullet-list__dot">&bull;</span>
       <input
         type="text"
         :value="bullet.value"
         @input="onUpdate(index, ($event.target as HTMLInputElement).value)"
         class="bullet-list__input"
+        :class="{ 'bullet-list__input--dimmed': bullet.dimmed }"
         :placeholder="placeholder"
       />
       <button
@@ -37,6 +40,8 @@ import { ref } from 'vue'
 export interface BulletState {
   id: string
   value: string
+  /** When true, the bullet row is dimmed (filtered out) */
+  dimmed?: boolean
 }
 
 withDefaults(defineProps<{
@@ -119,6 +124,11 @@ function onRemove(id: string) {
   display: flex;
   align-items: center;
   gap: 0.375rem;
+  transition: opacity 0.2s;
+}
+
+.bullet-list__row--dimmed {
+  opacity: 0.45;
 }
 
 .bullet-list__drag-handle {
@@ -152,6 +162,10 @@ function onRemove(id: string) {
   outline: none;
   border-color: var(--color-primary, #3b82f6);
   box-shadow: 0 0 0 1px var(--color-primary, #3b82f6);
+}
+
+.bullet-list__input--dimmed {
+  color: var(--color-text-muted, #9ca3af);
 }
 
 .bullet-list__remove-btn {
