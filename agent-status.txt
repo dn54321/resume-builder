@@ -1,1 +1,1 @@
-Merge conflict resolved - producing final PR summary
+Merge conflict resolved - all validations passing, producing PR summary
