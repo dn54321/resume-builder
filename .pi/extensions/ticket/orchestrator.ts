@@ -220,6 +220,12 @@ export async function buildGraph(
           node.state.pid = null;
           node.state.error = 'Worker process died unexpectedly';
         }
+      } else {
+        // No pid recorded — orphaned assignment, reset to pending
+        node.state.status = 'pending';
+        node.state.pid = null;
+        node.state.workerName = null;
+        node.state.startedAt = null;
       }
     }
     if (node.state.status === 'pending' || node.state.status === 'blocked') {
