@@ -57,7 +57,7 @@ describe('useAuthStore', () => {
       expect(store.isAuthenticated).toBe(true)
     })
 
-    it('posts resume data from localStorage and clears it', async () => {
+    it('posts resume data from localStorage and clears it on success', async () => {
       const resumeData = { layout: 'standard', name: 'My Resume' }
       localStorage.setItem('resume_data', JSON.stringify(resumeData))
 
@@ -73,14 +73,36 @@ describe('useAuthStore', () => {
 
       await store.signup('test@test.com', 'Password1')
 
-      // Should have cleared resume_data
-      expect(localStorage.getItem('resume_data')).toBeNull()
-
       // Should have POSTed resume data
       const resumeCall = mockFetch.mock.calls[1] as [string, RequestInit]
       expect(resumeCall[0]).toContain('/api/v1/resumes')
       expect(resumeCall[1].method).toBe('POST')
       expect(JSON.parse(resumeCall[1].body as string)).toEqual(resumeData)
+
+      // Should clear resume_data only after successful POST
+      expect(localStorage.getItem('resume_data')).toBeNull()
+    })
+
+    it('keeps resume data in localStorage when POST fails', async () => {
+      const resumeData = { layout: 'standard', name: 'My Resume' }
+      localStorage.setItem('resume_data', JSON.stringify(resumeData))
+
+      const store = useAuthStore()
+      mockFetch
+        .mockResolvedValueOnce(
+          mockJsonResponse({
+            user: { id: '1', email: 'test@test.com' },
+            token: 'signup-token',
+          }),
+        )
+        .mockResolvedValueOnce(mockJsonResponse({ message: 'Server error' }, 500))
+
+      // signup should succeed even if resume import fails
+      await store.signup('test@test.com', 'Password1')
+
+      // Should NOT have cleared resume_data on POST failure
+      expect(localStorage.getItem('resume_data')).toBe(JSON.stringify(resumeData))
+      expect(store.isAuthenticated).toBe(true)
     })
   })
 

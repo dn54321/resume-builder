@@ -23,17 +23,22 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('auth_token')
   }
 
-  function importAndClearLocalResume(api: ReturnType<typeof useApi>) {
+  async function importAndClearLocalResume(api: ReturnType<typeof useApi>) {
     const RESUME_KEY = 'resume_data'
     const raw = localStorage.getItem(RESUME_KEY)
-    if (!raw) return Promise.resolve()
+    if (!raw) return
+    let data: unknown
     try {
-      const data = JSON.parse(raw)
-      localStorage.removeItem(RESUME_KEY)
-      return api.post('/api/v1/resumes', data)
+      data = JSON.parse(raw)
     } catch {
       localStorage.removeItem(RESUME_KEY)
-      return Promise.resolve()
+      return
+    }
+    try {
+      await api.post('/api/v1/resumes', data)
+      localStorage.removeItem(RESUME_KEY)
+    } catch {
+      // Keep localStorage data on POST failure so user doesn't lose their resume
     }
   }
 
