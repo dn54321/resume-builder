@@ -13,26 +13,9 @@ import { AuthGuard } from '../common/guards/auth.guard';
 import { ResumesService } from './resumes.service';
 import { CreateResumeDto } from './dto/create-resume.dto';
 import { UpdateResumeDto } from './dto/update-resume.dto';
-
-interface ResumeSummary {
-  id: string;
-  layout: string;
-  name: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-interface ResumeFull {
-  id: string;
-  userId: string;
-  layout: string;
-  name: string | null;
-  sections: unknown[];
-}
-
-interface AuthenticatedRequest {
-  user: { id: string; email: string };
-}
+import type { ResumeSummary } from './models/resume-summary.model';
+import type { ResumeFull } from './models/resume-full.model';
+import type { AuthenticatedRequest } from '../common/models/authenticated-request.model';
 
 @Controller('resumes')
 @UseGuards(AuthGuard)

@@ -23,6 +23,26 @@ cd frontend && npm run test:cov
 - Excluded from coverage: config/bootstrap files (`main.ts`, `router/index.ts`),
   type declaration files, and `__tests__` directories themselves
 
+## NestJS conventions
+
+### Type placement: dto/, models/, entities/
+
+All TypeScript types (interfaces, type aliases) must live inside one of three
+directories within their owning module:
+
+| Directory | Purpose |
+|-----------|---------|
+| `dto/` | Data Transfer Objects — request/response shapes, validated with `class-validator` |
+| `models/` | Domain models — pure interfaces and type aliases for internal use (tree shapes, config types, request extensions like `AuthenticatedRequest`) |
+| `entities/` | Database entities — ORM-mapped classes representing database rows |
+
+**Rules:**
+- Never declare `interface` or `export type` inline in service/controller files — extract them to the appropriate directory
+- Files in these directories must have the `.model.ts` suffix (e.g. `resume-tree.model.ts`)
+- Shared types used across multiple modules (e.g. `AuthenticatedRequest`) go in `common/models/`
+- Module-specific types go in `<module>/models/`
+- Exception: declaration-merged interfaces (e.g. `interface PrismaService extends PrismaClientType`) may stay in their companion class file when TypeScript requires it, but must have an explanatory comment
+
 ## Security
 
 ### Encryption key separation

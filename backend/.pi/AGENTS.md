@@ -84,7 +84,8 @@ backend/
 - **Configuration** should use `@nestjs/config` (ConfigModule) with `.env` files.
 
 ## Coding Conventions
-- Avoid code comments, only writing doc comments in the function and class signature.
+- Use `pnpm` as the package manager — never `npm` or `yarn`.
+- Avoid inline code comments. All function and class signatures must have a docstring.
 - Use verbose variable names.
 - Avoid re-assigning variables once they are assigned.
 - Keep things formal.

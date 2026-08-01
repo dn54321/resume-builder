@@ -95,6 +95,9 @@ describe('ResumesController', () => {
     await app.close();
   });
 
+  /**
+   *
+   */
   function denyAuth() {
     jest.spyOn(mockAuthGuard, 'canActivate').mockImplementation(() => {
       throw new UnauthorizedException('Authentication required');

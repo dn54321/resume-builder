@@ -4,8 +4,11 @@ import { Logger } from 'nestjs-pino';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
-import type { EnvConfig } from './common/config/env.interface';
+import type { EnvConfig } from './common/config/models/env-config.model';
 
+/**
+ *
+ */
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
 

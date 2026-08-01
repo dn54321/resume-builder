@@ -6,7 +6,7 @@ import {
   createCipheriv,
   createDecipheriv,
 } from 'node:crypto';
-import type { EnvConfig } from '../config/env.interface';
+import type { EnvConfig } from '../config/models/env-config.model';
 
 @Injectable()
 export class CryptoService {
@@ -31,19 +31,16 @@ export class CryptoService {
     return createHash('sha256').update(token).digest('hex');
   }
 
-  encryptField(
-    value: string,
-  ): { encrypted: string; iv: string; authTag: string } {
+  encryptField(value: string): {
+    encrypted: string;
+    iv: string;
+    authTag: string;
+  } {
     return this._encrypt(value, this.resumeFieldEncryptionKey);
   }
 
   decryptField(encrypted: string, iv: string, authTag: string): string {
-    return this._decrypt(
-      encrypted,
-      iv,
-      authTag,
-      this.resumeFieldEncryptionKey,
-    );
+    return this._decrypt(encrypted, iv, authTag, this.resumeFieldEncryptionKey);
   }
 
   private _encrypt(

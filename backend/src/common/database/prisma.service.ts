@@ -6,14 +6,14 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { EnvConfig } from '../config/env.interface';
+import type { EnvConfig } from '../config/models/env-config.model';
 import type { PrismaClient as PrismaClientType } from '../../generated/prisma/client';
 
 /**
  * Declaration merging: PrismaService inherits all PrismaClient model delegates
- * (user, session, resume, etc.) at the type level. The underlying client is
- * loaded asynchronously via dynamic import because Prisma 7 generates ESM-only
- * output, but this project compiles to CJS.
+ * (user, session, resume, etc.) at the type level. This interface MUST stay in
+ * this file — TypeScript declaration merging between an interface and a class
+ * only works when both are in the same module scope.
  */
 /* eslint-disable @typescript-eslint/no-empty-object-type, @typescript-eslint/no-unsafe-declaration-merging, @typescript-eslint/no-unsafe-return */
 export interface PrismaService extends PrismaClientType {}

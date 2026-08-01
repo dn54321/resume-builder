@@ -2,7 +2,7 @@ import { Global, Module } from '@nestjs/common';
 import { LoggerModule as PinoLoggerModule } from 'nestjs-pino';
 import { type Request, type Response } from 'express';
 import { ConfigService } from '@nestjs/config';
-import { type EnvConfig } from '../config/env.interface';
+import { type EnvConfig } from '../config/models/env-config.model';
 
 @Global()
 @Module({

@@ -5,7 +5,6 @@
 //
 // The e2e test validates HTTP layer behavior (routing, middleware, etc.)
 // Database connectivity is tested separately in prisma-schema.spec.ts.
-/* eslint-disable @typescript-eslint/no-unused-vars */
 
 class PrismaClient {
   constructor(_options?: any) {

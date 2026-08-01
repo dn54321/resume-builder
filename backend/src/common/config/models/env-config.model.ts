@@ -1,3 +1,6 @@
+/**
+ * Shape of validated environment configuration consumed by ConfigService.
+ */
 export interface EnvConfig {
   NODE_ENV: 'development' | 'production' | 'test';
   PORT: number;

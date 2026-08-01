@@ -105,6 +105,10 @@ describe('ResumesService', () => {
   const otherUserId = 'user-2';
   const resumeId = 'resume-1';
 
+  /**
+   *
+   * @param value
+   */
   function makeEncryptedField(value: string): EncryptedFieldResult {
     return {
       encrypted: `enc_${value}`,
@@ -113,6 +117,10 @@ describe('ResumesService', () => {
     };
   }
 
+  /**
+   *
+   * @param overrides
+   */
   function makeResumeResponse(
     overrides: Partial<ResumeTreeRow> = {},
   ): ResumeTreeRow {
@@ -200,6 +208,7 @@ describe('ResumesService', () => {
       const rows: ResumeRow[] = [
         {
           id: 'r1',
+          userId,
           layout: 'standard',
           name: 'My Resume',
           createdAt: new Date(),
@@ -207,6 +216,7 @@ describe('ResumesService', () => {
         },
         {
           id: 'r2',
+          userId,
           layout: 'compact',
           name: null,
           createdAt: new Date(),

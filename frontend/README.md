@@ -1,73 +1,104 @@
-# frontend
+# Frontend
 
-This template should help get you started developing with Vue 3 in Vite.
+Vue 3 single-page application for the resume-v3 builder.
 
-## Recommended IDE Setup
+## Tech Stack
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+| Layer            | Choice                                  |
+| ---------------- | --------------------------------------- |
+| Framework        | Vue 3.5 (Composition API)               |
+| Language         | TypeScript 6.0                          |
+| Build Tool       | Vite 8                                  |
+| Routing          | Vue Router 5 (history mode)             |
+| State Management | Pinia 4                                 |
+| Linter           | ESLint 10 + oxlint + eslint-plugin-vue  |
+| Formatter        | oxfmt                                   |
+| Unit Testing     | Vitest 4 + @vue/test-utils              |
+| E2E Testing      | Playwright 1.61                         |
+| Type Checking    | vue-tsc                                 |
 
-## Recommended Browser Setup
+## Setup
 
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
-
-## Type Support for `.vue` Imports in TS
-
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
-
-## Customize configuration
-
-See [Vite Configuration Reference](https://vite.dev/config/).
-
-## Project Setup
-
-```sh
+```bash
 pnpm install
+cp .env .env.local   # Edit with your backend URL
 ```
 
-### Compile and Hot-Reload for Development
+## Scripts
 
-```sh
-pnpm dev
+```bash
+pnpm dev              # Start Vite dev server with HMR
+pnpm build            # Type-check + production build
+pnpm preview          # Preview production build locally
+pnpm test:unit        # Run unit tests with Vitest
+pnpm test:e2e         # Run E2E tests with Playwright
+pnpm type-check       # Run vue-tsc type checking
+pnpm lint             # Run oxlint + ESLint with auto-fix
+pnpm format           # Format source with oxfmt
 ```
 
-### Type-Check, Compile and Minify for Production
+## Project Structure
 
-```sh
-pnpm build
+```
+src/
+├── main.ts                 # App entry: createApp, plugins, mount
+├── App.vue                 # Root component
+├── assets/
+│   ├── base.css            # CSS reset / base styles
+│   └── main.css            # Global styles
+├── router/
+│   └── index.ts            # Vue Router config
+├── stores/                 # Pinia stores
+├── components/             # Shared components
+│   └── __tests__/          # Co-located component tests
+├── features/               # Feature modules
+│   └── <feature>/
+│       ├── <View>.vue
+│       ├── components/
+│       ├── composables/
+│       ├── stores/
+│       └── types/
+└── views/                  # Route-level views
 ```
 
-### Run Unit Tests with [Vitest](https://vitest.dev/)
+## Routing
 
-```sh
-pnpm test:unit
+| Route        | View           | Auth       |
+| ------------ | -------------- | ---------- |
+| `/`          | HomeView       | None       |
+| `/builder`   | ResumeBuilder  | Optional   |
+| `/login`     | LoginForm      | No         |
+| `/signup`    | SignupForm     | No         |
+
+Routes use `createWebHistory`. Feature views are lazy-loaded for code splitting.
+
+## Testing
+
+### Unit Tests
+
+```bash
+pnpm test:unit     # Vitest with jsdom
 ```
 
-### Run End-to-End Tests with [Playwright](https://playwright.dev)
+Tests are co-located in `__tests__/` directories. Components are mounted with `@vue/test-utils`, stores tested with `createTestingPinia()`.
 
-```sh
-# Install browsers for the first run
-npx playwright install
+### E2E Tests
 
-# When testing on CI, must build the project first
-pnpm build
-
-# Runs the end-to-end tests
-pnpm test:e2e
-# Runs the tests only on Chromium
-pnpm test:e2e --project=chromium
-# Runs the tests of a specific file
-pnpm test:e2e tests/example.spec.ts
-# Runs the tests in debug mode
-pnpm test:e2e --debug
+```bash
+npx playwright install --with-deps   # First run only
+pnpm test:e2e                        # Playwright across Chromium, Firefox, WebKit
 ```
 
-### Lint with [ESLint](https://eslint.org/)
+Playwright spins its own Vite preview server on port 4173 in CI. Locally it reuses your existing dev server on port 5173.
 
-```sh
-pnpm lint
-```
+## Environment Variables
+
+| Variable              | Purpose                              |
+| --------------------- | ------------------------------------ |
+| `VITE_API_BASE_URL`   | Backend API origin (default: `http://localhost:3000`) |
+
+## Local-First Data Flow
+
+**Anonymous users:** Resume data persists in `localStorage`. A banner prompts sign-up to save permanently. Only backend call is `POST /api/v1/resumes/tailor` for JD filtering.
+
+**Authenticated users:** Resume loaded from and saved to the backend API. On successful auth, `localStorage` data is migrated to the server and cleared locally.

@@ -3,79 +3,11 @@ import { PrismaService } from '../common/database/prisma.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { CreateResumeDto } from './dto/create-resume.dto';
 import { UpdateResumeDto } from './dto/update-resume.dto';
-import type { Prisma } from '../generated/prisma/client';
-
-// ─── Transaction client type (subset used by createEntries) ────────
-
-interface TxClient {
-  resume: {
-    create: (args: {
-      data: Prisma.ResumeCreateInput;
-    }) => Promise<{ id: string }>;
-    findUnique: (args: {
-      where: { id: string };
-      include: typeof fullResumeInclude;
-    }) => Promise<ResumeTree | null>;
-    update: (args: {
-      where: { id: string };
-      data: Prisma.ResumeUpdateInput;
-    }) => Promise<unknown>;
-  };
-  resumeSection: {
-    create: (args: {
-      data: Prisma.ResumeSectionCreateInput;
-    }) => Promise<{ id: string }>;
-    findMany: (args: {
-      where: { resumeId: string };
-      select: { id: boolean };
-    }) => Promise<Array<{ id: string }>>;
-    deleteMany: (args: { where: { resumeId: string } }) => Promise<unknown>;
-  };
-  sectionEntry: {
-    create: (args: {
-      data: Prisma.SectionEntryCreateInput;
-    }) => Promise<{ id: string }>;
-    deleteMany: (args: {
-      where: { resumeSectionId: string };
-    }) => Promise<unknown>;
-  };
-  sectionField: {
-    create: (args: {
-      data: Prisma.SectionFieldCreateInput;
-    }) => Promise<unknown>;
-  };
-}
-
-// ─── Resume tree types for decryption ──────────────────────────────
-
-interface SectionField {
-  id: string;
-  key: string;
-  value: string;
-  iv: string;
-  authTag: string;
-  order: number;
-}
-
-interface SectionEntry {
-  id: string;
-  fields: SectionField[];
-  children: SectionEntry[];
-}
-
-interface ResumeSection {
-  id: string;
-  entries: SectionEntry[];
-}
-
-interface ResumeTree {
-  id: string;
-  userId: string;
-  layout: string;
-  name: string | null;
-  sections: ResumeSection[];
-  [key: string]: unknown;
-}
+import type { TxClient } from './models/tx-client.model';
+import type { SectionField } from './models/section-field.model';
+import type { SectionEntry } from './models/section-entry.model';
+import type { ResumeSection } from './models/resume-section.model';
+import type { ResumeTree } from './models/resume-tree.model';
 
 // ─── Include object ────────────────────────────────────────────────
 
