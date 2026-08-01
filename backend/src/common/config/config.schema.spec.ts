@@ -3,7 +3,7 @@ import type { EnvConfig } from './models/env-config.model';
 
 describe('configValidationSchema', () => {
   // Joi.validate() returns `value: any`; we cast to EnvConfig after validation.
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+
   it('should validate a complete valid config', () => {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const { error, value } = configValidationSchema.validate({

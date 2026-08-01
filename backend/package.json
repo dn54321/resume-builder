@@ -83,7 +83,8 @@
       "^.+\\.(t|j)s$": "ts-jest"
     },
     "moduleNameMapper": {
-      "^../../generated/prisma/client$": "<rootDir>/generated/prisma/__mocks__/client"
+      "^../../generated/prisma/client$": "<rootDir>/generated/prisma/__mocks__/client",
+      "^../../generated/prisma/client\\.js$": "<rootDir>/generated/prisma/__mocks__/client"
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s"
@@ -96,7 +97,7 @@
     "coverageDirectory": "../coverage",
     "coverageThreshold": {
       "global": {
-        "branches": 78,
+        "branches": 80,
         "functions": 90,
         "lines": 90,
         "statements": 90
