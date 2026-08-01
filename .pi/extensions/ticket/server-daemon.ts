@@ -128,7 +128,7 @@ async function assignWork(node: GraphNode): Promise<boolean> {
   // Resolve the agent's intercom session from the registration map
   const sessionInfo = agentSessionMap.get(agentName);
   const agentSession = sessionInfo
-    ? sessions.find((s: any) => s.id === sessionInfo.id || s.name === sessionInfo.name)
+    ? sessions.find((s: any) => s.id === sessionInfo.id || sessionInfo.id.includes(s.id) || s.name === sessionInfo.name)
     : sessions.find((s: any) => s.name === agentName);
   if (!agentSession) {
     // Agent disconnected — remove from idle and try next
@@ -632,10 +632,11 @@ async function checkBossAlive(): Promise<void> {
     }
     // Clean up idleAgents: remove any that aren't actually connected
     const connectedIds = new Set(sessions.map((s: any) => s.id));
+    const connectedNames = new Set(sessions.map((s: any) => s.name));
     for (const name of idleAgents) {
       const info = agentSessionMap.get(name);
       const hasSession = info
-        ? (connectedIds.has(info.id) || connectedIds.has(info.name))
+        ? (connectedIds.has(info.id) || [...connectedIds].some((cid: string) => info.id.includes(cid)) || connectedNames.has(info.name))
         : false;
       if (!hasSession) {
         idleAgents.delete(name);
