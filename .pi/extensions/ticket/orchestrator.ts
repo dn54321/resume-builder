@@ -201,14 +201,6 @@ export async function buildGraph(
   const config = loadAgentConfig();
   for (const [, node] of nodes) {
     // Retry failed tickets that still have attempts left
-    if (node.state.status === 'failed' && node.state.retryCount <= config.maxRetries) {
-      node.state.status = 'pending';
-      node.state.error = null;
-      node.state.pid = null;
-      node.state.finishedAt = null;
-      // retryCount is NOT incremented here — it's incremented in spawnWorker
-      // so we can track per-spawn-attempt, not per-buildGraph-call.
-    }
     if (node.state.status === 'running') {
       // Check if the process is still alive
       if (node.state.pid) {
@@ -227,6 +219,14 @@ export async function buildGraph(
         node.state.workerName = null;
         node.state.startedAt = null;
       }
+    }
+    if (node.state.status === 'failed' && node.state.retryCount <= config.maxRetries) {
+      node.state.status = 'pending';
+      node.state.error = null;
+      node.state.pid = null;
+      node.state.finishedAt = null;
+      // retryCount is NOT incremented here — it's incremented in spawnWorker
+      // so we can track per-spawn-attempt, not per-buildGraph-call.
     }
     if (node.state.status === 'pending' || node.state.status === 'blocked') {
       const allDepsDone = node.dependencies.every(
