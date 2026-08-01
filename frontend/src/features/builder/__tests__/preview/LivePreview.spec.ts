@@ -4,6 +4,9 @@ import { setActivePinia, createPinia } from 'pinia'
 import { useResumeStore } from '@/features/builder/stores/resume'
 import LivePreview from '@/features/builder/components/LivePreview.vue'
 
+/**
+ *
+ */
 function makeStore() {
   setActivePinia(createPinia())
   return useResumeStore()
