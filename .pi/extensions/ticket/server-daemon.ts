@@ -29,6 +29,7 @@ import {
   saveFullState,
   loadState,
   getAgentConfig,
+  spawnWorker,
 } from './orchestrator.js';
 import type { GraphNode, TicketState } from './types.js';
 import { getRepoRoot, ensureWorktree, branchName, removeWorktree } from './git.js';
@@ -221,14 +222,30 @@ function launchReady(): void {
     const config = getAgentConfig();
     if (workers.size >= config.maxAgents) break;
 
-    // Only use intercom assignment — only real registered agents
-    assignWork(node).then((assigned) => {
-      if (assigned) {
-        workers.set(node.ticket.identifier, null as any);
-        saveFullState(currentNodes!);
+    // Try intercom assignment first, fall back to direct spawn
+    if (idleAgents.size > 0) {
+      assignWork(node).then((assigned) => {
+        if (assigned) {
+          workers.set(node.ticket.identifier, null as any);
+          saveFullState(currentNodes!);
+        }
+      });
+    } else {
+      // No intercom agents — spawn worker directly (orchestrator handles completion)
+      log(`launchReady: no intercom agents, spawning worker for ${node.ticket.identifier}`);
+      try {
+        const proc = spawnWorker(node);
+        workers.set(node.ticket.identifier, proc);
+        proc.on('close', (code) => {
+          workers.delete(node.ticket.identifier);
+          log(`Worker for ${node.ticket.identifier} exited (code ${code})`);
+          saveFullState(currentNodes!);
+          launchReady(); // check for next ready ticket
+        });
+      } catch (err: any) {
+        log(`Failed to spawn worker for ${node.ticket.identifier}: ${err.message}`);
       }
-      // If no idle agent available, the ticket stays pending until one frees up
-    });
+    }
   }
 }
 
