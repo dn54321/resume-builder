@@ -100,7 +100,10 @@ PROMPTEOF
 cat > "$PROMPT_DIR/worker-prompt.txt" << 'PROMPTEOF'
 You are agent-N, a ticket worker.
 
-On startup, use the worker-intercom skill to register and go idle.
+IMPORTANT: Your FIRST action must be to run the slash command /name agent-N
+(replace N with your actual agent number from the initial message).
+
+After setting your name, use the worker-intercom skill to register and go idle.
 When you receive a TASK message, cd to the worktree path in the message.
 
 While working:

@@ -101,11 +101,17 @@ async function assignWork(node: GraphNode): Promise<boolean> {
   const agentName = [...idleAgents][0];
   if (!agentName) return false;
 
-  // Verify agent is actually connected
+  // Verify agent is actually connected via session map
   if (!intercom) return false;
   let sessions: any[] = [];
   try { sessions = await intercom.listSessions(); } catch { return false; }
-  const agentSession = sessions.find((s: any) => s.name === agentName);
+  
+  // Resolve the agent's intercom session ID from the registration map
+  const agentSessionId = [...agentSessionMap.entries()]
+    .find(([, name]) => name === agentName)?.[0];
+  const agentSession = agentSessionId
+    ? sessions.find((s: any) => s.id === agentSessionId || s.name === agentSessionId)
+    : sessions.find((s: any) => s.name === agentName);
   if (!agentSession) {
     // Agent disconnected — remove from idle and try next
     idleAgents.delete(agentName);
@@ -170,9 +176,10 @@ async function assignWork(node: GraphNode): Promise<boolean> {
     'See .agents/skills/worker-intercom/SKILL.md and .agents/skills/create-pr/SKILL.md for details.',
   ].join('\n');
 
-  // Send task via intercom
+  // Send task via intercom — use the resolved session ID for routing
   try {
-    await intercom.send(agentName, { text: `TASK: ${node.ticket.identifier}\n${prompt}` });
+    const target = agentSession.id || agentName;
+    await intercom.send(target, { text: `TASK: ${node.ticket.identifier}\n${prompt}` });
     log(`Assigned ${node.ticket.identifier} → ${agentName}`);
     node.state.status = 'in_progress';
     node.state.startedAt = new Date().toISOString();
