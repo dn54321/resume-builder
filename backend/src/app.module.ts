@@ -14,7 +14,7 @@ import { AppService } from './app.service';
     DatabaseModule,
     CryptoModule,
     AuthModule,
-  ]
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

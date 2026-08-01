@@ -1,14 +1,13 @@
 import { Global, Module } from '@nestjs/common';
 import { LoggerModule as PinoLoggerModule } from 'nestjs-pino';
 import { type Request, type Response } from 'express';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigService } from '@nestjs/config';
 import { type EnvConfig } from '../config/env.interface';
 
 @Global()
 @Module({
   imports: [
     PinoLoggerModule.forRootAsync({
-      imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService<EnvConfig>) => ({
         pinoHttp: {
@@ -34,7 +33,7 @@ import { type EnvConfig } from '../config/env.interface';
             paths: [
               'req.headers.authorization',
               'req.headers.cookie',
-              'ENCRYPTION_KEY',
+              'RESUME_FIELD_ENCRYPTION_KEY',
               'SESSION_ENCRYPTION_KEY',
             ],
             censor: '[REDACTED]',

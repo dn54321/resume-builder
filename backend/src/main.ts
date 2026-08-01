@@ -1,8 +1,8 @@
-import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { Logger } from 'nestjs-pino';
 import { ConfigService } from '@nestjs/config';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 import type { EnvConfig } from './common/config/env.interface';
 
@@ -12,14 +12,32 @@ async function bootstrap() {
   app.useLogger(app.get(Logger));
 
   const config = app.get<ConfigService<EnvConfig>>(ConfigService);
-  const frontendUrl: string =
-    config.get('FRONTEND_URL') ?? 'http://localhost:5173';
+  // ConfigService.get return type is `any` by design
 
-  app.enableCors({ origin: frontendUrl, credentials: true });
+  const frontendUrl: string = config.get(
+    'FRONTEND_URL',
+    'http://localhost:5173',
+  );
 
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+  const port: number = config.get('PORT', 3000);
 
-  const port: number = config.get('PORT') ?? 3000;
+  app.setGlobalPrefix('api/v1');
+
+  app.enableCors({
+    origin: frontendUrl,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    credentials: true,
+  });
+
+  app.use(helmet());
+
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
 
   await app.listen(port);
 
@@ -27,4 +45,5 @@ async function bootstrap() {
     .get(Logger)
     .log(`Server running on http://localhost:${port}`, 'Bootstrap');
 }
+
 void bootstrap();

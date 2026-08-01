@@ -9,7 +9,7 @@ describe('AppController (e2e)', () => {
 
   beforeEach(async () => {
     process.env['DATABASE_URL'] = 'file:./prisma/test.db';
-    process.env['ENCRYPTION_KEY'] =
+    process.env['RESUME_FIELD_ENCRYPTION_KEY'] =
       '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
     process.env['SESSION_ENCRYPTION_KEY'] =
       'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2';
@@ -32,7 +32,7 @@ describe('AppController (e2e)', () => {
   afterEach(async () => {
     await app.close();
     delete process.env['DATABASE_URL'];
-    delete process.env['ENCRYPTION_KEY'];
+    delete process.env['RESUME_FIELD_ENCRYPTION_KEY'];
     delete process.env['SESSION_ENCRYPTION_KEY'];
   });
 });
