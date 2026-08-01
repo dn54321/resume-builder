@@ -80,18 +80,23 @@ function log(msg: string): void {
 
 const workers = new Map<string, cp.ChildProcess>(); // ticketId → process
 const workerAssignment = new Map<string, string>();  // agentName → ticketId
-const agentSessionMap = new Map<string, string>();  // intercom session id → agentName
+const agentSessionMap = new Map<string, { id: string; name: string }>();  // agentName → sessionInfo
 const idleAgents = new Set<string>();                // agent names waiting for work
 
 let currentNodes: Map<string, GraphNode> | null = null;
+
+// ─── Boss tracking ─────────────────────────────────────────────────
+
+let bossSessionId: string | null = null;
 
 // ─── Send message to boss ───────────────────────────────────────────
 
 async function tellBoss(msg: string): Promise<void> {
   if (!intercom) return;
+  if (!bossSessionId) return; // boss hasn't registered yet
   try {
-    await intercom.send('boss', { text: msg });
-  } catch { /* boss may not be connected yet */ }
+    await intercom.send(bossSessionId, { text: msg });
+  } catch { /* boss may have disconnected */ }
 }
 
 // ─── Assign work to an idle worker ──────────────────────────────────
@@ -102,20 +107,20 @@ async function assignWork(node: GraphNode): Promise<boolean> {
   if (!agentName) return false;
 
   // Verify agent is actually connected via session map
-  if (!intercom) return false;
+  if (!intercom) { log(`assignWork: intercom not initialized`); return false; }
   let sessions: any[] = [];
-  try { sessions = await intercom.listSessions(); } catch { return false; }
+  try { sessions = await intercom.listSessions(); } catch (err: any) { log(`assignWork: listSessions failed: ${err.message}`); return false; }
   
-  // Resolve the agent's intercom session ID from the registration map
-  const agentSessionId = [...agentSessionMap.entries()]
-    .find(([, name]) => name === agentName)?.[0];
-  const agentSession = agentSessionId
-    ? sessions.find((s: any) => s.id === agentSessionId || s.name === agentSessionId)
+  // Resolve the agent's intercom session from the registration map
+  const sessionInfo = agentSessionMap.get(agentName);
+  const agentSession = sessionInfo
+    ? sessions.find((s: any) => s.id === sessionInfo.id || s.name === sessionInfo.name)
     : sessions.find((s: any) => s.name === agentName);
   if (!agentSession) {
     // Agent disconnected — remove from idle and try next
     idleAgents.delete(agentName);
-    log(`Agent ${agentName} not connected — removed from idle`);
+    const sessionIds = [...sessions.map((s: any) => `${s.name}(${s.id.slice(0,8)})`)].join(', ');
+    log(`Agent ${agentName} not connected — removed from idle. Known sessions: [${sessionIds}]`);
     return assignWork(node); // try next agent
   }
 
@@ -171,6 +176,7 @@ async function assignWork(node: GraphNode): Promise<boolean> {
   // Send task via intercom — use the resolved session ID for routing
   try {
     const target = agentSession.id || agentName;
+    log(`assignWork: sending TASK for ${node.ticket.identifier} to ${agentName} via target "${target}"`);
     await intercom.send(target, { text: `TASK: ${node.ticket.identifier}\n${prompt}` });
     log(`Assigned ${node.ticket.identifier} → ${agentName}`);
     node.state.status = 'in_progress';
@@ -191,6 +197,10 @@ async function assignWork(node: GraphNode): Promise<boolean> {
 function launchReady(): void {
   if (!currentNodes) return;
   const ready = readyTickets(currentNodes);
+  log(`launchReady: ${ready.length} ready tickets, ${idleAgents.size} idle agents`);
+  if (ready.length > 0 && idleAgents.size > 0) {
+    log(`launchReady: ready=[${ready.map(n => n.ticket.identifier).join(',')}], idle=[${[...idleAgents].join(',')}]`);
+  }
   for (const node of ready) {
     if (workers.has(node.ticket.identifier)) continue;
     const config = getAgentConfig();
@@ -218,8 +228,9 @@ async function handleCommand(from: string, text: string): Promise<void> {
     log(`Boss: switch to epic ${ticketId}`);
 
     try {
-      // Fresh start — clear old state so we don't mix tickets
-      const { nodes } = await buildGraph(ticketId, null);
+      // Preserve existing ticket states from saved state
+      const existingState = loadState();
+      const { nodes } = await buildGraph(ticketId, existingState);
       currentNodes = nodes;
       workerAssignment.clear();
       saveFullState(nodes);
@@ -237,7 +248,8 @@ async function handleCommand(from: string, text: string): Promise<void> {
     log(`Boss: switch to ticket ${ticketId}`);
 
     try {
-      const { nodes } = await buildGraph(ticketId, null);
+      const existingState = loadState();
+      const { nodes } = await buildGraph(ticketId, existingState);
       currentNodes = nodes;
       workerAssignment.clear();
       saveFullState(nodes);
@@ -304,7 +316,8 @@ async function handleCommand(from: string, text: string): Promise<void> {
     if (!currentNodes) {
       // Auto-build a single-ticket graph
       try {
-        const { nodes } = await buildGraph(ticketId, null);
+        const existingState = loadState();
+        const { nodes } = await buildGraph(ticketId, existingState);
         currentNodes = nodes;
         saveFullState(nodes);
         await syncLinearStatus();
@@ -427,19 +440,22 @@ async function checkBossAlive(): Promise<void> {
   if (!intercom) return;
   try {
     const sessions = await intercom.listSessions();
-    const bossSession = sessions.find((s: any) => s.name === 'boss');
-    if (!bossSession) {
+    // Boss can register via BOSS: message (tracked by bossSessionId) or by /name boss
+    const bossSession = sessions.find((s: any) => s.name === 'boss' || (bossSessionId && s.id === bossSessionId));
+    if (!bossSession && !bossSessionId) {
       log('Boss not connected');
+    } else if (bossSession && bossSessionId && bossSession.id !== bossSessionId) {
+      // Boss reconnected with a different session — update tracking
+      bossSessionId = bossSession.id;
     }
     // Clean up idleAgents: remove any that aren't actually connected
-    const connectedNames = new Set(sessions.map((s: any) => s.name).filter(Boolean));
     const connectedIds = new Set(sessions.map((s: any) => s.id));
     for (const name of idleAgents) {
-      // Check if any session maps to this agent name
-      const hasSession = [...agentSessionMap.entries()].some(
-        ([key, agentName]) => agentName === name && (connectedNames.has(key) || connectedIds.has(key))
-      );
-      if (!hasSession && !connectedNames.has(name)) {
+      const info = agentSessionMap.get(name);
+      const hasSession = info
+        ? (connectedIds.has(info.id) || connectedIds.has(info.name))
+        : false;
+      if (!hasSession) {
         idleAgents.delete(name);
         log(`Removed stale agent from idle: ${name}`);
       }
@@ -619,7 +635,8 @@ async function autoStart(): Promise<void> {
   if (epicId) {
     log(`Found active epic: ${epicId}. Building graph...`);
     try {
-      const { nodes } = await buildGraph(epicId, null);
+      const existingState = loadState();
+      const { nodes } = await buildGraph(epicId, existingState);
       currentNodes = nodes;
       saveFullState(nodes);
       log(`Loaded ${nodes.size} tickets from ${epicId}.`);
@@ -653,26 +670,41 @@ async function main(): Promise<void> {
     const text: string = (message.content?.text ?? '').trim();
     const senderName: string = from.name || from.id.slice(0, 8);
 
-    if (text.startsWith('EPIC ') || text.startsWith('TICKET ') || text === 'STOP' || text === 'STATUS') {
+    // Boss registration — track their session ID so tellBoss() works
+    if (text.startsWith('BOSS:') || text.startsWith('boss:')) {
+      bossSessionId = from.id;
+      log(`Boss registered: ${senderName} (session: ${from.id.slice(0, 8)})`);
+      await tellBoss('BOSS registered. Server is ready.');
+      return;
+    }
+
+    if (text.startsWith('EPIC ') || text.startsWith('TICKET ') || text === 'STOP' || text === 'STATUS' || text.startsWith('CLOSE ') || text.startsWith('STOP ')) {
       await handleCommand(senderName, text);
       return;
     }
 
-    // Worker registration — map intercom session ID to agent name
+    // Worker registration — map agent name to session info
     if (text.startsWith('REGISTER:')) {
       const agentName = text.slice('REGISTER:'.length).trim();
       log(`Worker registered: ${agentName} (session: ${senderName})`);
-      // Track the mapping so IDLE messages from subagent-chat-* sessions work
-      agentSessionMap.set(from.id, agentName);
-      agentSessionMap.set(senderName, agentName);
+      // Track the mapping so IDLE messages from subagent-chat-* sessions work.
+      // Store by agentName (not session id) so multiple workers can't overwrite each other.
+      agentSessionMap.set(agentName, { id: from.id, name: senderName });
       idleAgents.add(agentName);
       if (currentNodes) launchReady();
     } else if (text === 'IDLE' || text === 'idle') {
       // Resolve agent name from session map (workers have subagent-chat-* intercom names)
-      const resolvedName = agentSessionMap.get(from.id) || agentSessionMap.get(senderName);
+      const resolvedName = [...agentSessionMap.entries()].find(
+        ([, info]) => info.id === from.id || info.name === senderName
+      )?.[0];
       const agentName = resolvedName || senderName;
-      log(`Agent ${agentName} is idle`);
-      idleAgents.add(agentName);
+      // Don't re-add agents that are already assigned to a ticket
+      if (workerAssignment.has(agentName)) {
+        log(`Agent ${agentName} is idle but already assigned — ignoring`);
+      } else {
+        log(`Agent ${agentName} is idle`);
+        idleAgents.add(agentName);
+      }
       if (currentNodes) launchReady();
     }
   });

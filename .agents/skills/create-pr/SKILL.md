@@ -24,6 +24,14 @@ and notifies the orchestrator via intercom.
 Before running this skill, write `pr-body.md` with these sections:
 
 ```markdown
+## Dependencies
+<!-- List ALL PRs this depends on. Get these from the ticket refs in the TASK message. -->
+- [TICKET-ID (#PR-NUM)](https://github.com/OWNER/REPO/pull/N) — one-line description
+
+**Do not merge before:** TICKET-ID (#PR-NUM), ...
+
+---
+
 ## Summary of Changes
 - [Brief description of what was built/changed]
 
@@ -80,7 +88,8 @@ Use the screenshot + imgbb-upload skills to capture both normal AND error states
 ```
 
 Key rules:
-- Show EXACT commands and FULL output — never summarize
+- **ALWAYS include a Dependencies section at the top** — list every PR this depends on from the ticket refs. If there are no dependencies, write "None — can be merged independently."
+- Get dependency PR numbers from the ticket refs (e.g. "ref: RES-10 RES-13") — find their PRs and link them
 - Database queries must show duration (.timer on / time prefix)
 - Screenshots are for frontend only — terminal output goes in code blocks
 - Every verification needs: unique ID, description, setup, command, assertion, output
