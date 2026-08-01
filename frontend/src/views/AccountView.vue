@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { useAuthStore } from '@/stores/auth';
-import { useApi } from '@/composables/useApi';
+import { useAuth } from '@/features/auth/composables/useAuth';
+import { useApi, ApiRequestError } from '@/shared/composables/useApi';
 
 const router = useRouter();
-const authStore = useAuthStore();
-const { apiRequest } = useApi();
+const { user, logout } = useAuth();
+const api = useApi();
 
 // --- Change Password ---
 const currentPassword = ref('');
@@ -33,31 +33,26 @@ async function handleChangePassword(): Promise<void> {
   isChangingPassword.value = true;
 
   try {
-    const { error, status } = await apiRequest('/api/v1/auth/change-password', {
-      method: 'POST',
-      body: {
-        currentPassword: currentPassword.value,
-        newPassword: newPassword.value,
-      },
-      authenticated: true,
+    await api.post('/api/v1/auth/change-password', {
+      currentPassword: currentPassword.value,
+      newPassword: newPassword.value,
     });
 
-    if (error) {
-      changePasswordError.value = error;
-      return;
-    }
+    changePasswordSuccess.value = true;
+    currentPassword.value = '';
+    newPassword.value = '';
+    confirmNewPassword.value = '';
 
-    if (status === 204) {
-      changePasswordSuccess.value = true;
-      currentPassword.value = '';
-      newPassword.value = '';
-      confirmNewPassword.value = '';
-
-      // Session was invalidated — log the user out
-      setTimeout(() => {
-        authStore.clearSession();
-        router.push({ name: 'login' });
-      }, 2000);
+    // Session was invalidated — log the user out
+    setTimeout(() => {
+      logout();
+      router.push({ name: 'login' });
+    }, 2000);
+  } catch (err) {
+    if (err instanceof ApiRequestError) {
+      changePasswordError.value = err.message;
+    } else {
+      changePasswordError.value = 'Something went wrong';
     }
   } finally {
     isChangingPassword.value = false;
@@ -83,20 +78,17 @@ async function handleDeleteAccount(): Promise<void> {
   isDeleting.value = true;
 
   try {
-    const { error, status } = await apiRequest('/api/v1/auth/account', {
-      method: 'DELETE',
-      body: { password: deletePassword.value },
-      authenticated: true,
+    await api.del('/api/v1/auth/account', {
+      password: deletePassword.value,
     });
 
-    if (error) {
-      deleteError.value = error;
-      return;
-    }
-
-    if (status === 204) {
-      authStore.clearSession();
-      router.push({ name: 'home' });
+    logout();
+    router.push({ name: 'home' });
+  } catch (err) {
+    if (err instanceof ApiRequestError) {
+      deleteError.value = err.message;
+    } else {
+      deleteError.value = 'Something went wrong';
     }
   } finally {
     isDeleting.value = false;
@@ -110,7 +102,7 @@ async function handleDeleteAccount(): Promise<void> {
 
     <section class="account-section">
       <h2>Account Info</h2>
-      <p><strong>Email:</strong> {{ authStore.user?.email }}</p>
+      <p><strong>Email:</strong> {{ user?.email }}</p>
     </section>
 
     <section class="account-section">

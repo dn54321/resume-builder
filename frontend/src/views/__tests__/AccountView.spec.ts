@@ -4,7 +4,19 @@ import { mount } from '@vue/test-utils';
 import { setActivePinia, createPinia } from 'pinia';
 import { createRouter, createWebHistory } from 'vue-router';
 import AccountView from '@/views/AccountView.vue';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/features/auth/stores/auth';
+
+const mockFetch = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>();
+globalThis.fetch = mockFetch;
+
+function mockJsonResponse(data: unknown, status = 200): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    json: () => Promise.resolve(data),
+    text: () => Promise.resolve(JSON.stringify(data)),
+  } as Response;
+}
 
 const router = createRouter({
   history: createWebHistory(),
@@ -17,10 +29,9 @@ const router = createRouter({
 
 function createAuthenticatedStore() {
   const store = useAuthStore();
-  store.setSession(
-    { id: 'user-1', email: 'test@example.com' },
-    'valid-token',
-  );
+  store.user = { id: 'user-1', email: 'test@example.com' };
+  store.token = 'valid-token';
+  localStorage.setItem('auth_token', 'valid-token');
   return store;
 }
 
@@ -28,7 +39,7 @@ describe('AccountView', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     localStorage.clear();
-    globalThis.fetch = vi.fn();
+    mockFetch.mockReset();
   });
 
   it('renders account info with email', () => {
@@ -67,7 +78,8 @@ describe('AccountView', () => {
       await wrapper.find('#current-password').setValue('current');
       await wrapper.find('#new-password').setValue('new1234');
       await wrapper.find('#confirm-new-password').setValue('different');
-      await wrapper.find('form').trigger('submit.prevent');
+      // Trigger the first form (change password)
+      await wrapper.findAll('form')[0]!.trigger('submit.prevent');
 
       await wrapper.vm.$nextTick();
 
@@ -86,7 +98,7 @@ describe('AccountView', () => {
       await wrapper.find('#current-password').setValue('current');
       await wrapper.find('#new-password').setValue('short');
       await wrapper.find('#confirm-new-password').setValue('short');
-      await wrapper.find('form').trigger('submit.prevent');
+      await wrapper.findAll('form')[0]!.trigger('submit.prevent');
 
       await wrapper.vm.$nextTick();
 
@@ -97,12 +109,9 @@ describe('AccountView', () => {
 
     it('shows error from server on failed password change', async () => {
       createAuthenticatedStore();
-      (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-        ok: false,
-        status: 401,
-        json: () =>
-          Promise.resolve({ message: 'Current password is incorrect' }),
-      });
+      mockFetch.mockResolvedValueOnce(
+        mockJsonResponse({ message: 'Current password is incorrect' }, 401),
+      );
 
       const wrapper = mount(AccountView, {
         global: { plugins: [router] },
@@ -111,9 +120,10 @@ describe('AccountView', () => {
       await wrapper.find('#current-password').setValue('wrong');
       await wrapper.find('#new-password').setValue('newpassword123');
       await wrapper.find('#confirm-new-password').setValue('newpassword123');
-      await wrapper.find('form').trigger('submit.prevent');
+      await wrapper.findAll('form')[0]!.trigger('submit.prevent');
 
       await wrapper.vm.$nextTick();
+      // Wait for the async fetch to resolve
       await new Promise((resolve) => setTimeout(resolve, 10));
 
       expect(wrapper.find('.error-message').text()).toBe(
@@ -123,11 +133,7 @@ describe('AccountView', () => {
 
     it('shows success message on successful password change', async () => {
       createAuthenticatedStore();
-      (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-        ok: true,
-        status: 204,
-        json: () => Promise.resolve(null),
-      });
+      mockFetch.mockResolvedValueOnce(mockJsonResponse(null, 204));
 
       const wrapper = mount(AccountView, {
         global: { plugins: [router] },
@@ -136,7 +142,7 @@ describe('AccountView', () => {
       await wrapper.find('#current-password').setValue('correct');
       await wrapper.find('#new-password').setValue('newpassword123');
       await wrapper.find('#confirm-new-password').setValue('newpassword123');
-      await wrapper.find('form').trigger('submit.prevent');
+      await wrapper.findAll('form')[0]!.trigger('submit.prevent');
 
       await wrapper.vm.$nextTick();
       await new Promise((resolve) => setTimeout(resolve, 10));
@@ -158,8 +164,8 @@ describe('AccountView', () => {
 
       await wrapper.find('#delete-password').setValue('password');
       await wrapper.find('#delete-confirm').setValue('wrong text');
-      const deleteForm = wrapper.findAll('form')[1]!;
-      await deleteForm.trigger('submit.prevent');
+      // The delete form is the second form on the page
+      await wrapper.findAll('form')[1]!.trigger('submit.prevent');
 
       await wrapper.vm.$nextTick();
 
@@ -169,14 +175,9 @@ describe('AccountView', () => {
     });
 
     it('clears session on successful delete', async () => {
-      const store = createAuthenticatedStore();
-      const clearSessionSpy = vi.spyOn(store, 'clearSession');
+      createAuthenticatedStore();
 
-      (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-        ok: true,
-        status: 204,
-        json: () => Promise.resolve(null),
-      });
+      mockFetch.mockResolvedValueOnce(mockJsonResponse(null, 204));
 
       const wrapper = mount(AccountView, {
         global: { plugins: [router] },
@@ -184,23 +185,23 @@ describe('AccountView', () => {
 
       await wrapper.find('#delete-password').setValue('password');
       await wrapper.find('#delete-confirm').setValue('delete my account');
-      const deleteForm = wrapper.findAll('form')[1]!;
-      await deleteForm.trigger('submit.prevent');
+      await wrapper.findAll('form')[1]!.trigger('submit.prevent');
 
       await wrapper.vm.$nextTick();
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      expect(clearSessionSpy).toHaveBeenCalled();
+      // After logout, token and user should be cleared
+      const store = useAuthStore();
+      expect(store.token).toBeNull();
+      expect(store.user).toBeNull();
+      expect(localStorage.getItem('auth_token')).toBeNull();
     });
 
     it('shows error from server on wrong password', async () => {
       createAuthenticatedStore();
-      (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-        ok: false,
-        status: 401,
-        json: () =>
-          Promise.resolve({ message: 'Password is incorrect' }),
-      });
+      mockFetch.mockResolvedValueOnce(
+        mockJsonResponse({ message: 'Password is incorrect' }, 401),
+      );
 
       const wrapper = mount(AccountView, {
         global: { plugins: [router] },
@@ -208,8 +209,7 @@ describe('AccountView', () => {
 
       await wrapper.find('#delete-password').setValue('wrong-pw');
       await wrapper.find('#delete-confirm').setValue('delete my account');
-      const deleteForm = wrapper.findAll('form')[1]!;
-      await deleteForm.trigger('submit.prevent');
+      await wrapper.findAll('form')[1]!.trigger('submit.prevent');
 
       await wrapper.vm.$nextTick();
       await new Promise((resolve) => setTimeout(resolve, 10));
