@@ -320,7 +320,7 @@ function launchReady(): void {
       let agentName = '';
       for (let i = 1; i <= config.maxAgents + 1; i++) {
         const candidate = `agent-${i}`;
-        if (!agentSessionMap.has(candidate) && !idleAgents.has(candidate)) {
+        if (!agentSessionMap.has(candidate) && !idleAgents.has(candidate) && !workerAssignment.has(candidate)) {
           agentName = candidate;
           break;
         }
