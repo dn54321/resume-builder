@@ -1,0 +1,115 @@
+import { ref, computed } from 'vue'
+import { defineStore } from 'pinia'
+import { useApi, ApiRequestError } from '@/shared/composables/useApi'
+
+interface User {
+  id: string
+  email: string
+}
+
+export const useAuthStore = defineStore('auth', () => {
+  const user = ref<User | null>(null)
+  const token = ref<string | null>(localStorage.getItem('auth_token'))
+
+  const isAuthenticated = computed(() => !!token.value && !!user.value)
+
+  function persistToken(t: string) {
+    token.value = t
+    localStorage.setItem('auth_token', t)
+  }
+
+  function clearToken() {
+    token.value = null
+    localStorage.removeItem('auth_token')
+  }
+
+  async function importAndClearLocalResume(api: ReturnType<typeof useApi>) {
+    const RESUME_KEY = 'resume_data'
+    const raw = localStorage.getItem(RESUME_KEY)
+    if (!raw) return
+    let data: unknown
+    try {
+      data = JSON.parse(raw)
+    } catch {
+      localStorage.removeItem(RESUME_KEY)
+      return
+    }
+    try {
+      await api.post('/api/v1/resumes', data)
+      localStorage.removeItem(RESUME_KEY)
+    } catch {
+      // Keep localStorage data on POST failure so user doesn't lose their resume
+    }
+  }
+
+  async function checkSession() {
+    if (!token.value) return
+
+    const api = useApi()
+    try {
+      const response = await api.get<User>('/api/v1/auth/me')
+      user.value = response
+    } catch (err) {
+      if (err instanceof ApiRequestError && err.status === 401) {
+        clearToken()
+        user.value = null
+      }
+    }
+  }
+
+  async function login(email: string, password: string) {
+    const api = useApi()
+    const response = await api.post<{ user: User; token: string }>(
+      '/api/v1/auth/login',
+      { email, password },
+    )
+
+    persistToken(response.token)
+    user.value = response.user
+
+    // Anonymous-to-authenticated: import resume data
+    await importAndClearLocalResume(api)
+  }
+
+  async function signup(email: string, password: string) {
+    const api = useApi()
+    const response = await api.post<{ user: User; token: string }>(
+      '/api/v1/auth/signup',
+      { email, password },
+    )
+
+    persistToken(response.token)
+    user.value = response.user
+
+    // Anonymous-to-authenticated: import resume data
+    await importAndClearLocalResume(api)
+  }
+
+  async function logout() {
+    if (token.value) {
+      const api = useApi()
+      try {
+        await api.post('/api/v1/auth/logout')
+      } catch {
+        // Logout should always clear locally even if API fails
+      }
+    }
+    clearToken()
+    user.value = null
+  }
+
+  function getToken(): string | null {
+    return token.value
+  }
+
+  return {
+    user,
+    token,
+    isAuthenticated,
+    getToken,
+    signup,
+    login,
+    logout,
+    checkSession,
+  }
+})

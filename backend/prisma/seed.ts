@@ -1,14 +1,16 @@
+import 'dotenv/config';
 import { PrismaClient } from '../src/generated/prisma/client';
 import { PrismaLibSql } from '@prisma/adapter-libsql';
-import dotenv from 'dotenv';
 
-dotenv.config();
+const databaseUrl = process.env['DATABASE_URL'];
+if (!databaseUrl) {
+  throw new Error('DATABASE_URL environment variable is required');
+}
 
-const prisma = new PrismaClient({
-  adapter: new PrismaLibSql({ url: process.env.DATABASE_URL! }),
-});
+const adapter = new PrismaLibSql({ url: databaseUrl });
+const prisma = new PrismaClient({ adapter });
 
-const SECTIONS: { id: string; label: string }[] = [
+const sections = [
   { id: 'name_contact', label: 'Name & Contact' },
   { id: 'summary', label: 'Summary' },
   { id: 'experience', label: 'Experience' },
@@ -21,10 +23,8 @@ const SECTIONS: { id: string; label: string }[] = [
   { id: 'hobbies', label: 'Hobbies' },
 ];
 
-async function main(): Promise<void> {
-  console.log('Seeding Section reference rows...');
-
-  for (const section of SECTIONS) {
+async function main() {
+  for (const section of sections) {
     await prisma.section.upsert({
       where: { id: section.id },
       update: { label: section.label },
@@ -33,21 +33,15 @@ async function main(): Promise<void> {
   }
 
   const count = await prisma.section.count();
-  console.log(`Seeded ${count} Section rows.`);
-
-  // Display all seeded sections
-  const all = await prisma.section.findMany({ orderBy: { id: 'asc' } });
-  for (const s of all) {
-    console.log(`  ${s.id} — ${s.label}`);
-  }
+  console.log(`Seeded ${count} sections`);
 }
 
 main()
   .then(async () => {
     await prisma.$disconnect();
   })
-  .catch(async (e) => {
-    console.error(e);
+  .catch(async (error) => {
+    console.error('Seed failed:', error);
     await prisma.$disconnect();
     process.exit(1);
   });
