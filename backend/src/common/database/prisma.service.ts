@@ -1,11 +1,14 @@
 import {
+  Inject,
   Injectable,
   OnModuleInit,
   OnModuleDestroy,
   Logger,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaLibSql } from '@prisma/adapter-libsql';
+import type { EnvConfig } from '../config/env.interface';
 
 @Injectable()
 export class PrismaService
@@ -14,11 +17,8 @@ export class PrismaService
 {
   private readonly logger = new Logger(PrismaService.name);
 
-  constructor() {
-    const databaseUrl = process.env['DATABASE_URL'];
-    if (!databaseUrl) {
-      throw new Error('DATABASE_URL environment variable is required');
-    }
+  constructor(@Inject(ConfigService) config: ConfigService<EnvConfig>) {
+    const databaseUrl: string = config.getOrThrow('DATABASE_URL');
 
     super({
       adapter: new PrismaLibSql({ url: databaseUrl }),

@@ -46,6 +46,12 @@ describe('Prisma Schema and Seed', () => {
       expect(result.rows).toHaveLength(1);
     });
 
+    it('has updatedAt column on User', async () => {
+      const result = await client.execute('PRAGMA table_info(User)');
+      const columns = result.rows.map((row) => row[1] as string);
+      expect(columns).toContain('updatedAt');
+    });
+
     it('has unique constraint on ResumeSection(resumeId, sectionId)', async () => {
       const result = await client.execute(
         `SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='ResumeSection' AND name='ResumeSection_resumeId_sectionId_key'`,
@@ -55,6 +61,15 @@ describe('Prisma Schema and Seed', () => {
   });
 
   describe('Section seed', () => {
+    beforeAll(() => {
+      execSync('npx tsx prisma/seed.ts', {
+        cwd: process.cwd(),
+        env: { ...process.env },
+        encoding: 'utf-8',
+        stdio: 'pipe',
+      });
+    });
+
     it('inserts exactly 10 Section rows', async () => {
       const result = await client.execute(
         'SELECT COUNT(*) as count FROM Section',
@@ -112,7 +127,7 @@ describe('Prisma Schema and Seed', () => {
 
     beforeAll(async () => {
       await client.execute(
-        "INSERT OR IGNORE INTO User (id, email, password, createdAt) VALUES (?, ?, ?, datetime('now'))",
+        "INSERT OR IGNORE INTO User (id, email, password, createdAt, updatedAt) VALUES (?, ?, ?, datetime('now'), datetime('now'))",
         [userId, 'fk-test@example.com', 'pw'],
       );
       await client.execute(
@@ -134,7 +149,7 @@ describe('Prisma Schema and Seed', () => {
       const cascadeResumeId = 'test-cascade-resume';
 
       await client.execute(
-        "INSERT OR IGNORE INTO User (id, email, password, createdAt) VALUES (?, ?, ?, datetime('now'))",
+        "INSERT OR IGNORE INTO User (id, email, password, createdAt, updatedAt) VALUES (?, ?, ?, datetime('now'), datetime('now'))",
         [cascadeUserId, 'cascade@test.com', 'pw'],
       );
       await client.execute(

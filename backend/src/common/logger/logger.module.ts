@@ -31,7 +31,12 @@ import { type EnvConfig } from '../config/env.interface';
             }),
           },
           redact: {
-            paths: ['req.headers.authorization', 'req.headers.cookie'],
+            paths: [
+              'req.headers.authorization',
+              'req.headers.cookie',
+              'ENCRYPTION_KEY',
+              'SESSION_ENCRYPTION_KEY',
+            ],
             censor: '[REDACTED]',
           },
           customProps: () => ({

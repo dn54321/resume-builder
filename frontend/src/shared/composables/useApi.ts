@@ -90,6 +90,14 @@ export function useApi() {
         body: body !== undefined ? JSON.stringify(body) : undefined,
       })
     },
+
+    del<T>(path: string, body?: unknown, init?: RequestInit): Promise<T> {
+      return request<T>(path, {
+        ...init,
+        method: 'DELETE',
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      })
+    },
   }
 }
 
