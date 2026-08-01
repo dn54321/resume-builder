@@ -22,7 +22,7 @@ onMounted(() => {
         <RouterLink to="/">Home</RouterLink>
         <RouterLink to="/about">About</RouterLink>
         <template v-if="isAuthenticated">
-          <span class="user-email">{{ user?.email }}</span>
+          <RouterLink to="/account" class="user-email">{{ user?.email }}</RouterLink>
           <button class="logout-button" @click="logout()">
             Log out
           </button>

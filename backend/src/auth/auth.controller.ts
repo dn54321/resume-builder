@@ -2,18 +2,23 @@ import {
   Controller,
   Post,
   Get,
+  Delete,
   Body,
   Headers,
   HttpCode,
   HttpStatus,
+  Inject,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { SignupDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { DeleteAccountDto } from './dto/delete-account.dto';
 
 @Controller('api/v1/auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(@Inject(AuthService) private readonly authService: AuthService) {}
 
   @Post('signup')
   async signup(@Body() signupDto: SignupDto): Promise<{
@@ -51,6 +56,53 @@ export class AuthController {
     }
     const result = await this.authService.validateSession(sessionToken);
     return { user: result?.user ?? null };
+  }
+
+  @Post('change-password')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async changePassword(
+    @Headers('authorization') authorization: string,
+    @Body() changePasswordDto: ChangePasswordDto,
+  ): Promise<void> {
+    const sessionToken = this.extractSessionToken(authorization);
+    if (!sessionToken) {
+      throw new UnauthorizedException('Authentication required');
+    }
+
+    const result = await this.authService.validateSession(sessionToken);
+    if (!result) {
+      throw new UnauthorizedException('Invalid or expired session');
+    }
+
+    await this.authService.changePassword(
+      result.user.id,
+      changePasswordDto.currentPassword,
+      changePasswordDto.newPassword,
+    );
+
+    // All sessions are invalidated by changePassword — client must re-authenticate.
+  }
+
+  @Delete('account')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteAccount(
+    @Headers('authorization') authorization: string,
+    @Body() deleteAccountDto: DeleteAccountDto,
+  ): Promise<void> {
+    const sessionToken = this.extractSessionToken(authorization);
+    if (!sessionToken) {
+      throw new UnauthorizedException('Authentication required');
+    }
+
+    const result = await this.authService.validateSession(sessionToken);
+    if (!result) {
+      throw new UnauthorizedException('Invalid or expired session');
+    }
+
+    await this.authService.deleteAccount(
+      result.user.id,
+      deleteAccountDto.password,
+    );
   }
 
   private extractSessionToken(

@@ -1,4 +1,5 @@
 import {
+  Inject,
   Injectable,
   ConflictException,
   UnauthorizedException,
@@ -12,8 +13,8 @@ const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 @Injectable()
 export class AuthService {
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly crypto: CryptoService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(CryptoService) private readonly crypto: CryptoService,
   ) {}
 
   async signup(
@@ -75,6 +76,47 @@ export class AuthService {
     }
 
     return { user: { id: session.user.id, email: session.user.email } };
+  }
+
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const isPasswordValid = await compare(currentPassword, user.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    const hashedPassword = await hash(newPassword, 12);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+    });
+
+    // Invalidate all sessions — user must re-authenticate
+    await this.prisma.session.deleteMany({ where: { userId } });
+  }
+
+  async deleteAccount(userId: string, password: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const isPasswordValid = await compare(password, user.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Password is incorrect');
+    }
+
+    // Cascade delete handles sessions, resumes, and all nested data
+    await this.prisma.user.delete({ where: { id: userId } });
   }
 
   private async createSession(

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   createHash,
@@ -12,7 +12,7 @@ import type { EnvConfig } from '../config/env.interface';
 export class CryptoService {
   private readonly sessionEncryptionKey: Buffer;
 
-  constructor(config: ConfigService<EnvConfig>) {
+  constructor(@Inject(ConfigService) config: ConfigService<EnvConfig>) {
     const hexKey: string = config.getOrThrow('SESSION_ENCRYPTION_KEY');
     this.sessionEncryptionKey = Buffer.from(hexKey, 'hex');
   }

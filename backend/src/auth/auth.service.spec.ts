@@ -20,6 +20,8 @@ describe('AuthService', () => {
     user: {
       findUnique: jest.Mock;
       create: jest.Mock;
+      update: jest.Mock;
+      delete: jest.Mock;
     };
     session: {
       create: jest.Mock;
@@ -37,6 +39,8 @@ describe('AuthService', () => {
       user: {
         findUnique: jest.fn(),
         create: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn(),
       },
       session: {
         create: jest.fn(),
@@ -163,6 +167,106 @@ describe('AuthService', () => {
       expect(mockPrisma.session.deleteMany).toHaveBeenCalledWith({
         where: { token: 'hashed-token' },
       });
+    });
+  });
+
+  describe('changePassword', () => {
+    it('updates the password when current password is valid', async () => {
+      const mockedCompare = compare as jest.Mock;
+      mockedCompare.mockResolvedValue(true);
+
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 'user-1',
+        email: 'test@example.com',
+        password: 'hashed-old-password',
+      });
+      mockPrisma.user.update.mockResolvedValue({
+        id: 'user-1',
+        email: 'test@example.com',
+      });
+
+      await authService.changePassword(
+        'user-1',
+        'old-password',
+        'new-password',
+      );
+
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        data: { password: 'hashed-password' },
+      });
+      expect(mockPrisma.session.deleteMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+      });
+    });
+
+    it('throws UnauthorizedException when current password is wrong', async () => {
+      const mockedCompare = compare as jest.Mock;
+      mockedCompare.mockResolvedValue(false);
+
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 'user-1',
+        email: 'test@example.com',
+        password: 'hashed-old-password',
+      });
+
+      await expect(
+        authService.changePassword('user-1', 'wrong-password', 'new-password'),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('throws UnauthorizedException when user not found', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(
+        authService.changePassword('nonexistent', 'pw', 'new-pw'),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('deleteAccount', () => {
+    it('deletes the user when password is correct', async () => {
+      const mockedCompare = compare as jest.Mock;
+      mockedCompare.mockResolvedValue(true);
+
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 'user-1',
+        email: 'test@example.com',
+        password: 'hashed-password',
+      });
+      mockPrisma.user.delete.mockResolvedValue({
+        id: 'user-1',
+        email: 'test@example.com',
+      });
+
+      await authService.deleteAccount('user-1', 'correct-password');
+
+      expect(mockPrisma.user.delete).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+      });
+    });
+
+    it('throws UnauthorizedException when password is wrong', async () => {
+      const mockedCompare = compare as jest.Mock;
+      mockedCompare.mockResolvedValue(false);
+
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 'user-1',
+        email: 'test@example.com',
+        password: 'hashed-password',
+      });
+
+      await expect(
+        authService.deleteAccount('user-1', 'wrong-password'),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('throws UnauthorizedException when user not found', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(
+        authService.deleteAccount('nonexistent', 'pw'),
+      ).rejects.toThrow(UnauthorizedException);
     });
   });
 });

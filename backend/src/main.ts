@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { Logger } from 'nestjs-pino';
@@ -11,13 +12,14 @@ async function bootstrap() {
   app.useLogger(app.get(Logger));
 
   const config = app.get<ConfigService<EnvConfig>>(ConfigService);
-  const frontendUrl = config.get('FRONTEND_URL', 'http://localhost:5173');
+  const frontendUrl: string =
+    config.get('FRONTEND_URL') ?? 'http://localhost:5173';
 
   app.enableCors({ origin: frontendUrl, credentials: true });
 
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
-  const port = config.get('PORT', 3000);
+  const port: number = config.get('PORT') ?? 3000;
 
   await app.listen(port);
 
