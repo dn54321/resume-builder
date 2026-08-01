@@ -110,6 +110,28 @@ async function assignWork(node: GraphNode): Promise<boolean> {
   node.state.workerName = agentName;
   workerAssignment.set(agentName, node.ticket.identifier);
 
+  // Copy skills to the worktree so workers can find them
+  const skillsSrc = path.join(repoRoot, '.agents', 'skills');
+  const skillsDst = path.join(worktreePath, '.agents', 'skills');
+  try {
+    for (const skill of ['worker-intercom', 'create-pr']) {
+      const src = path.join(skillsSrc, skill, 'SKILL.md');
+      const dst = path.join(skillsDst, skill, 'SKILL.md');
+      if (fs.existsSync(src)) {
+        fs.mkdirSync(path.dirname(dst), { recursive: true });
+        fs.copyFileSync(src, dst);
+      }
+    }
+  } catch { /* best effort */ }
+
+  // Remove .pi from worktree — it duplicates the main repo and isn't needed
+  try {
+    const piDir = path.join(worktreePath, '.pi');
+    if (fs.existsSync(piDir)) {
+      fs.rmSync(piDir, { recursive: true, force: true });
+    }
+  } catch { /* best effort */ }
+
   // Build the prompt
   const deps = node.ticket.refs.length > 0 ? node.ticket.refs.join(', ') : 'none';
   const prompt = [
@@ -125,14 +147,14 @@ async function assignWork(node: GraphNode): Promise<boolean> {
     '',
     '## Instructions',
     '1. cd to the worktree and implement this ticket',
-    '2. Use intercom to send STATUS updates: `intercom({ action: "send", to: "boss", message: "STATUS: <what you are doing>" })`',
-    '3. If stuck, ask the boss: `intercom({ action: "ask", to: "boss", message: "Question: ..." })`',
-    '4. Write PR description to `pr-body.md` in the worktree root',
-    '5. Use the `create-pr` skill to commit, push, create PR, and write `pr-url.txt`',
-    '6. When done: `intercom({ action: "send", to: "boss", message: "DONE: <pr-url>" })`',
-    '7. Then announce idle: `intercom({ action: "send", to: "server", message: "IDLE" })`',
+    '2. Register: intercom({ action: "send", to: "server", message: "REGISTER: agent-N" })',
+    '3. Status: intercom({ action: "send", to: "boss", message: "STATUS: doing X" })',
+    '4. Question: intercom({ action: "ask", to: "boss", message: "Question: ..." })',
+    '5. Write PR to pr-body.md, use create-pr skill, save pr-url.txt',
+    '6. Done: intercom({ action: "send", to: "boss", message: "DONE: <pr-url>" })',
+    '7. Idle: intercom({ action: "send", to: "server", message: "IDLE" })',
     '',
-    'The server and boss are watching — keep them updated.',
+    'See .agents/skills/worker-intercom/SKILL.md and .agents/skills/create-pr/SKILL.md for details.',
   ].join('\n');
 
   // Send task via intercom
@@ -389,15 +411,13 @@ async function syncLinearStatus(): Promise<void> {
 
 // ─── Boss health monitoring ─────────────────────────────────────────
 
-let bossPid: number | null = null;
-
 async function checkBossAlive(): Promise<void> {
   if (!intercom) return;
   try {
     const sessions = await intercom.listSessions();
     const bossSession = sessions.find((s: any) => s.name === 'boss');
     if (!bossSession) {
-      log('Boss intercom session missing — boss may have crashed. Check the boss pane.');
+      log('Boss not connected');
     }
   } catch { /* best effort */ }
 }

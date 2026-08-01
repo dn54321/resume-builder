@@ -72,22 +72,21 @@ SERVER_PID=$!
 echo "Server PID: $SERVER_PID"
 sleep 2
 
-# ─── Prompt templates ────────────────────────────────────────────────
+# ─── Write prompts to files (avoids tmux argument escaping issues) ──
 
-BOSS_PROMPT='You are the BOSS. Oversee the system, fix anything that breaks.
+PROMPT_DIR="$REPO_ROOT/.pi/tickets"
+mkdir -p "$PROMPT_DIR"
+
+cat > "$PROMPT_DIR/boss-prompt.txt" << 'PROMPTEOF'
+You are the BOSS. Oversee the system, fix anything that breaks.
 
 On startup: /name boss
 
 CAPABILITIES:
 - Read and edit any project file to fix bugs
 - Run bash commands to restart the server or check processes
-- Command workers: intercom({ action: "send", to: "agent-2", message: "TASK: do X" })
-- Redirect server: intercom({ action: "send", to: "server", message: "EPIC RES-13" })
-- Also: TICKET <ID>, STOP, STATUS commands work the same way
-- Stop a specific worker: intercom({ action: "send", to: "server", message: "STOP agent-2" })
-- Manually assign a ticket to a worker: intercom({ action: "send", to: "server", message: "ASSIGN agent-1 RES-15" })
-- Create bespoke tickets via linear tools and assign them to workers
-- Close irrelevant tickets: intercom({ action: "send", to: "server", message: "CLOSE RES-11" })
+- Command workers directly via intercom send with TASK messages
+- Redirect server: EPIC, TICKET, STOP, STOP agent-N, ASSIGN, CLOSE, STATUS
 - Use linear tools to find epics, check statuses, create follow-up tickets
 - Answer worker questions when they ask you
 
@@ -95,26 +94,29 @@ If server crashes: pkill -f server-daemon; npx tsx .pi/extensions/ticket/server-
 If a PR closed without merging, tell the server so it re-queues the ticket.
 If priorities shift, redirect the server to a different epic.
 
-Be proactive. Monitor the server log. Fix problems before they escalate.'
+Be proactive. Monitor the server log. Fix problems before they escalate.
+PROMPTEOF
 
-WORKER_PROMPT='You are agent-N, a ticket worker.
+cat > "$PROMPT_DIR/worker-prompt.txt" << 'PROMPTEOF'
+You are agent-N, a ticket worker.
 
 On startup, use the worker-intercom skill to register and go idle.
-When you receive a TASK message, the message includes your worktree path — cd to it.
+When you receive a TASK message, cd to the worktree path in the message.
 
 While working:
 - Use the worker-intercom skill for STATUS updates and asking the boss questions
 - Write the PR description to pr-body.md in the worktree root
 
 CRITICAL RULES:
-- You work in an isolated git worktree — git reset and clean are safe here
+- You work in an isolated git worktree - git reset and clean are safe here
 - NEVER leave your worktree directory
 - NEVER run git commands affecting other branches
 - Only git add, git commit, and git push for shared repo changes
 
 When done:
 - Use the create-pr skill to commit, push, and create the PR
-- Use the worker-intercom skill to report DONE and go IDLE'
+- Use the worker-intercom skill to report DONE and go IDLE
+PROMPTEOF
 
 # ─── Create tmux layout — pi runs directly as pane commands ──────────
 
@@ -125,22 +127,22 @@ tmux new-session -d -s "$SESSION_NAME" -c "$REPO_ROOT" \
   "echo '── Server Log ──'; tail -n 100 -f '$SERVER_LOG'"
 tmux rename-window -t "$SESSION_NAME:0" 'agents'
 
-# Pane 1: worker 1 (split right, runs pi directly)
-AGENT1="${WORKER_PROMPT//agent-N/agent-1}"
+# Pane 1: worker 1
+AGENT1_MSG="You are agent-1. /name agent-1. Use worker-intercom skill to register and go idle."
 tmux split-window -h -t "$SESSION_NAME:0" -c "$REPO_ROOT" \
-  "$PI_BIN --append-system-prompt '$AGENT1' Go"
+  "$PI_BIN --append-system-prompt @$PROMPT_DIR/worker-prompt.txt \"$AGENT1_MSG\""
 
-# Panes 2..N: additional workers (stacked in right column)
+# Panes 2..N: additional workers
 for i in $(seq 2 "$MAX_AGENTS"); do
-  AGENT="${WORKER_PROMPT//agent-N/agent-$i}"
+  AGENT_MSG="You are agent-$i. /name agent-$i. Use worker-intercom skill to register and go idle."
   tmux split-window -v -t "$SESSION_NAME:0.$((i-1))" -c "$REPO_ROOT" \
-    "$PI_BIN --append-system-prompt '$AGENT' Go"
+    "$PI_BIN --append-system-prompt @$PROMPT_DIR/worker-prompt.txt \"$AGENT_MSG\""
 done
 
 # Boss pane (bottom-left, 8 lines)
 BOSS_IDX=$((MAX_AGENTS + 1))
 tmux split-window -v -t "$SESSION_NAME:0.0" -c "$REPO_ROOT" -l 8 \
-  "$PI_BIN --append-system-prompt '$BOSS_PROMPT' Start"
+  "$PI_BIN --append-system-prompt @$PROMPT_DIR/boss-prompt.txt Start"
 
 echo "Panes:"
 tmux list-panes -t "$SESSION_NAME:0" -F "  #{pane_index}: #{pane_current_command}"
@@ -151,7 +153,6 @@ echo "All panes running. Attaching tmux..."
 tmux select-pane -t "$SESSION_NAME:0.0"
 
 cleanup() {
-  kill "$BOSS_WATCHER_PID" 2>/dev/null || true
   kill "$SERVER_PID" 2>/dev/null || true
   tmux kill-session -t "$SESSION_NAME" 2>/dev/null || true
 }
