@@ -116,7 +116,7 @@ describe('useAuthStore', () => {
 
       const store = useAuthStore()
       mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({ user: { id: '1', email: 'test@test.com' } }),
+        mockJsonResponse({ id: '1', email: 'test@test.com' }),
       )
 
       await store.checkSession()
