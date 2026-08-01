@@ -7,5 +7,5 @@ export interface EnvConfig {
   LLM_API_KEY?: string;
   LLM_MODEL?: string;
   BULLET_CAP: number;
-  ENCRYPTION_KEY: string;
+  RESUME_FIELD_ENCRYPTION_KEY: string;
 }
