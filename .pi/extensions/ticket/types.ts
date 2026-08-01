@@ -42,6 +42,17 @@ export interface OrchestratorState {
   teamId: string;
   teamKey: string;
   usedPorts: number[];
+  epicRoots?: string[];  // identifiers of managed epic root tickets (multi-epic)
+}
+
+/** Per-epic metadata tracked alongside its graph. */
+export interface EpicMeta {
+  rootId: string;        // root ticket identifier (e.g. "RES-10")
+  label: string;         // short display label (e.g. "Auth System")
+  ticketCount: number;
+  doneCount: number;
+  runningCount: number;
+  failedCount: number;
 }
 
 export type QueuePriority = 'review' | 'conflict' | 'pending' | 'blocked';

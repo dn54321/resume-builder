@@ -85,7 +85,7 @@ const agentSessionMap = new Map<string, { id: string; name: string }>();  // age
 const idleAgents = new Set<string>();                // agent names waiting for work
 const inFlightAssignments = new Set<string>();       // ticket identifiers currently being assigned (prevents double-assign race)
 
-let currentNodes: Map<string, GraphNode> | null = null;
+const epicGraphs = new Map<string, { nodes: Map<string, GraphNode>; rootId: string }>();
 
 // ─── Boss tracking ─────────────────────────────────────────────────
 
@@ -208,30 +208,114 @@ async function assignWork(node: GraphNode): Promise<boolean> {
   }
 }
 
+// ─── Dashboard output ────────────────────────────────────────────────
+
+const DASHBOARD_PATH = path.join(getRepoRoot(), '.pi', 'tickets', 'dashboard.txt');
+
+function writeDashboard(): void {
+  const STATUS_ICON: Record<string, string> = {
+    pending: '○', blocked: '◆', in_progress: '◉', done: '✓', failed: '✗', merged: '✔',
+  };
+
+  const lines: string[] = [];
+  const now = new Date().toLocaleTimeString();
+  const totalEpics = epicGraphs.size;
+  let totalTickets = 0, totalDone = 0, totalRunning = 0, totalFailed = 0;
+
+  for (const [, epic] of epicGraphs) {
+    totalTickets += epic.nodes.size;
+    for (const [, n] of epic.nodes) {
+      if (n.state.status === 'done' || n.state.status === 'merged') totalDone++;
+      if (n.state.status === 'in_progress') totalRunning++;
+      if (n.state.status === 'failed') totalFailed++;
+    }
+  }
+
+  lines.push(`══ Ticket Agents Dashboard ${now.padStart(30 - now.length + 21)} ══`);
+  lines.push(`${totalEpics} epic(s) · ${totalTickets} tickets · ${totalRunning} running · ${totalDone} done · ${totalFailed} failed · ${idleAgents.size} idle`);
+  lines.push('');
+
+  // Per-epic breakdown
+  for (const [, epic] of epicGraphs) {
+    const rootNode = epic.nodes.get(epic.rootId);
+    const label = rootNode?.ticket.title || epic.rootId;
+    const sorted = [...epic.nodes.values()].sort((a, b) => {
+      const order: Record<string, number> = { in_progress: 0, pending: 1, blocked: 2, failed: 3, done: 4, merged: 5 };
+      return (order[a.state.status] ?? 5) - (order[b.state.status] ?? 5);
+    });
+
+    lines.push(`── ${epic.rootId}: ${label.slice(0, 50)} (${epic.nodes.size} tickets) ──`);
+    for (const node of sorted) {
+      const icon = STATUS_ICON[node.state.status] ?? '?';
+      const id = node.ticket.identifier.padEnd(10);
+      const title = node.ticket.title.slice(0, 40).padEnd(40);
+      let agent = '—';
+      for (const [name, tid] of workerAssignment) {
+        if (tid === node.ticket.identifier) { agent = name; break; }
+      }
+      lines.push(`  ${icon} ${id} ${title} [${agent.padEnd(10)}]`);
+    }
+    lines.push('');
+  }
+
+  // Worker status
+  lines.push('── Workers ──');
+  const activeAgents = new Set([...idleAgents]);
+  for (const [agentName] of workerAssignment) activeAgents.add(agentName);
+  if (activeAgents.size === 0) {
+    lines.push('  (no agents connected)');
+  } else {
+    for (const agentName of [...activeAgents].sort()) {
+      const ticketId = workerAssignment.get(agentName);
+      if (ticketId) {
+        // Find which epic this ticket belongs to
+        let epicId = '?';
+        for (const [eid, epic] of epicGraphs) {
+          if (epic.nodes.has(ticketId)) { epicId = eid; break; }
+        }
+        lines.push(`  ◉ ${agentName.padEnd(12)} → ${ticketId.padEnd(10)} (${epicId})`);
+      } else {
+        lines.push(`  ○ ${agentName.padEnd(12)} idle`);
+      }
+    }
+  }
+
+  lines.push('');
+  lines.push('◉=busy  ○=pending  ◆=blocked  ✓=done  ✗=failed  ✔=merged');
+
+  try {
+    fs.writeFileSync(DASHBOARD_PATH, lines.join('\n'), 'utf-8');
+  } catch { /* best effort */ }
+}
+
 // ─── Launch ready workers ───────────────────────────────────────────
 
 function launchReady(): void {
-  if (!currentNodes) return;
-  const ready = readyTickets(currentNodes);
-  log(`launchReady: ${ready.length} ready tickets, ${idleAgents.size} idle agents`);
-  if (ready.length > 0 && idleAgents.size > 0) {
-    log(`launchReady: ready=[${ready.map(n => n.ticket.identifier).join(',')}], idle=[${[...idleAgents].join(',')}]`);
+  const allReady: { node: GraphNode; epicId: string }[] = [];
+  for (const [epicId, epic] of epicGraphs) {
+    for (const node of readyTickets(epic.nodes)) {
+      allReady.push({ node, epicId });
+    }
   }
-  for (const node of ready) {
+
+  log(`launchReady: ${allReady.length} ready tickets across ${epicGraphs.size} epics, ${idleAgents.size} idle agents`);
+  if (allReady.length > 0 && idleAgents.size > 0) {
+    log(`launchReady: ready=[${allReady.map(r => r.node.ticket.identifier).join(',')}], idle=[${[...idleAgents].join(',')}]`);
+  }
+
+  for (const { node } of allReady) {
     if (workers.has(node.ticket.identifier)) continue;
     const config = getAgentConfig();
     if (workers.size >= config.maxAgents) break;
 
-    // Try intercom assignment first, fall back to direct spawn
     if (idleAgents.size > 0) {
       assignWork(node).then((assigned) => {
         if (assigned) {
           workers.set(node.ticket.identifier, null as any);
-          saveFullState(currentNodes!);
+          saveAllState();
         }
       });
     } else {
-      // No intercom agents — spawn worker directly (orchestrator handles completion)
       log(`launchReady: no intercom agents, spawning worker for ${node.ticket.identifier}`);
       try {
         const proc = spawnWorker(node);
@@ -239,8 +323,8 @@ function launchReady(): void {
         proc.on('close', (code) => {
           workers.delete(node.ticket.identifier);
           log(`Worker for ${node.ticket.identifier} exited (code ${code})`);
-          saveFullState(currentNodes!);
-          launchReady(); // check for next ready ticket
+          saveAllState();
+          launchReady();
         });
       } catch (err: any) {
         log(`Failed to spawn worker for ${node.ticket.identifier}: ${err.message}`);
@@ -249,139 +333,210 @@ function launchReady(): void {
   }
 }
 
+/** Save state for all epic graphs. */
+function saveAllState(): void {
+  const allNodes = new Map<string, GraphNode>();
+  for (const [, epic] of epicGraphs) {
+    for (const [id, node] of epic.nodes) {
+      allNodes.set(id, node);
+    }
+  }
+  saveFullState(allNodes);
+  // Also persist the list of managed epic roots
+  try {
+    const existing = loadState();
+    if (existing) {
+      const st = { ...existing, epicRoots: [...epicGraphs.keys()] };
+      fs.writeFileSync(
+        path.join(getRepoRoot(), '.pi', 'tickets', 'state.json'),
+        JSON.stringify(st, null, 2),
+        'utf-8',
+      );
+    }
+  } catch { /* ignore */ }
+}
+
 // ─── Handle boss commands ───────────────────────────────────────────
+
+/** Find a node by ticket identifier across all epic graphs. */
+function findNode(ticketId: string): { node: GraphNode; epicId: string } | null {
+  for (const [epicId, epic] of epicGraphs) {
+    const node = epic.nodes.get(ticketId);
+    if (node) return { node, epicId };
+  }
+  return null;
+}
+
+/** Add an epic to the managed set. */
+async function addEpic(ticketId: string): Promise<void> {
+  if (epicGraphs.has(ticketId)) {
+    log(`Epic ${ticketId} already managed — skipping`);
+    return;
+  }
+  const existingState = loadState();
+  const { nodes } = await buildGraph(ticketId, existingState);
+  epicGraphs.set(ticketId, { nodes, rootId: ticketId });
+  log(`Added epic ${ticketId} — ${nodes.size} tickets. Total epics: ${epicGraphs.size}`);
+  await syncLinearStatus();
+  saveAllState();
+  writeDashboard();
+  launchReady();
+}
+
+/** Remove an epic from the managed set, freeing any workers assigned to its tickets. */
+function dropEpic(ticketId: string): void {
+  const epic = epicGraphs.get(ticketId);
+  if (!epic) return;
+  // Free any workers assigned to this epic's tickets
+  for (const [agentName, assignedTicket] of workerAssignment) {
+    if (epic.nodes.has(assignedTicket)) {
+      workerAssignment.delete(agentName);
+      idleAgents.add(agentName);
+      log(`Freed ${agentName} from ${assignedTicket} (epic ${ticketId} dropped)`);
+    }
+  }
+  epicGraphs.delete(ticketId);
+  log(`Dropped epic ${ticketId}. Remaining epics: ${epicGraphs.size}`);
+  saveAllState();
+  writeDashboard();
+}
 
 async function handleCommand(from: string, text: string): Promise<void> {
   const trimmed = text.trim();
 
   if (trimmed.startsWith('EPIC ') || trimmed.startsWith('epic ')) {
-    const ticketId = trimmed.split(/\s+/)[1]?.trim();
-    if (!ticketId) return;
-    log(`Boss: switch to epic ${ticketId}`);
-
-    try {
-      // Preserve existing ticket states from saved state
-      const existingState = loadState();
-      const { nodes } = await buildGraph(ticketId, existingState);
-      currentNodes = nodes;
-      workerAssignment.clear();
-      saveFullState(nodes);
-      
-      const total = nodes.size;
-      log(`Loaded ${total} tickets from ${ticketId}.`);
-      await syncLinearStatus();
-      launchReady();
-    } catch (err: any) {
-      log(`Error switching epic: ${err.message}`);
+    // Support multiple: EPIC RES-10 RES-20 RES-30
+    const ids = trimmed.split(/\s+/).slice(1);
+    for (const ticketId of ids) {
+      const id = ticketId.trim();
+      if (!id) continue;
+      log(`Boss: adding epic ${id}`);
+      try {
+        await addEpic(id);
+      } catch (err: any) {
+        log(`Error adding epic ${id}: ${err.message}`);
+        await tellBoss(`Error adding epic ${id}: ${err.message}`);
+      }
     }
-  } else if (trimmed.startsWith('TICKET ') || trimmed.startsWith('ticket ')) {
+    await tellBoss(`Managing ${epicGraphs.size} epic(s): ${[...epicGraphs.keys()].join(', ')}`);
+  } else if (trimmed.startsWith('DROP ') || trimmed.startsWith('drop ')) {
     const ticketId = trimmed.split(/\s+/)[1]?.trim();
     if (!ticketId) return;
-    log(`Boss: switch to ticket ${ticketId}`);
-
+    dropEpic(ticketId);
+    await tellBoss(`Dropped epic ${ticketId}. ${epicGraphs.size} epic(s) remaining.`);
+  } else if (trimmed.startsWith('TICKET ') || trimmed.startsWith('ticket ')) {
+    // Single ticket — build a mini "epic" around it
+    const ticketId = trimmed.split(/\s+/)[1]?.trim();
+    if (!ticketId) return;
+    log(`Boss: add ticket ${ticketId}`);
     try {
-      const existingState = loadState();
-      const { nodes } = await buildGraph(ticketId, existingState);
-      currentNodes = nodes;
-      workerAssignment.clear();
-      saveFullState(nodes);
-      log(`Loaded ${nodes.size} tickets from ${ticketId}.`);
-      await syncLinearStatus();
-      launchReady();
+      await addEpic(ticketId);
+      await tellBoss(`Added ${ticketId}.`);
     } catch (err: any) {
       log(`Error: ${err.message}`);
+      await tellBoss(`Error: ${err.message}`);
     }
   } else if (trimmed === 'STOP' || trimmed === 'stop') {
     log('Boss requested stop');
-    if (currentNodes) {
-      killAllWorkers(currentNodes);
-      saveFullState(currentNodes);
+    for (const [, epic] of epicGraphs) {
+      killAllWorkers(epic.nodes);
     }
+    // Free all agent assignments
+    for (const [name] of workerAssignment) {
+      idleAgents.add(name);
+    }
+    workerAssignment.clear();
+    saveAllState();
+    writeDashboard();
     workers.clear();
+    await tellBoss('All workers stopped.');
   } else if (trimmed.startsWith('STOP ') || trimmed.startsWith('stop ')) {
     // STOP agent-N — stop a specific worker
     const agentName = trimmed.split(/\s+/)[1]?.trim();
     if (!agentName) return;
     log(`Boss: stopping ${agentName}`);
-    // Tell the worker to stop
-    try { await intercom.send(agentName, { text: 'STOP: Boss is reassigning you. Go idle.' }); } catch {}
-    // Free the agent
+    try { await intercom!.send(agentName, { text: 'STOP: Boss is reassigning you. Go idle.' }); } catch {}
     for (const [name, tid] of workerAssignment) {
       if (name === agentName) {
-        const node = currentNodes?.get(tid);
-        if (node && node.state.status === 'in_progress') {
-          node.state.status = 'pending';
-          node.state.error = `Stopped by boss for reassignment`;
+        const found = findNode(tid);
+        if (found && found.node.state.status === 'in_progress') {
+          found.node.state.status = 'pending';
+          found.node.state.error = `Stopped by boss for reassignment`;
         }
         workerAssignment.delete(name);
         break;
       }
     }
     idleAgents.add(agentName);
-    if (currentNodes) { saveFullState(currentNodes); launchReady(); }
+    saveAllState();
+    writeDashboard();
+    launchReady();
+  } else if (trimmed.startsWith('ASSIGN ') || trimmed.startsWith('assign ')) {
+    // ASSIGN agent-N TICKET-ID
+    const parts = trimmed.split(/\s+/);
+    const agentName = parts[1]?.trim();
+    const ticketId = parts[2]?.trim();
+    if (!agentName || !ticketId) return;
+    log(`Boss: assigning ${ticketId} → ${agentName}`);
+
+    // Check if ticket is in any existing epic, if not add it
+    let node = findNode(ticketId);
+    if (!node) {
+      try { await addEpic(ticketId); } catch (err: any) { log(`Build error: ${err.message}`); return; }
+      node = findNode(ticketId);
+    }
+    if (!node) return;
+
+    idleAgents.delete(agentName);
+    const wtDir = path.join(getRepoRoot(), '.pi', 'tickets', 'worktrees');
+    const { worktreePath } = ensureWorktree(getRepoRoot(), ticketId, 'main', wtDir);
+    node.node.state.worktreePath = worktreePath;
+    node.node.state.workerName = agentName;
+    workerAssignment.set(agentName, ticketId);
+    node.node.state.status = 'in_progress';
+    node.node.state.startedAt = new Date().toISOString();
+    saveAllState();
+    writeDashboard();
+    try {
+      await intercom!.send(agentName, { text: `TASK: ${ticketId}\nWorktree: ${worktreePath}\nTicket: ${node.node.ticket.title}\n\n${node.node.ticket.description || '(no description)'}` });
+      log(`Assigned ${ticketId} → ${agentName}`);
+    } catch { idleAgents.add(agentName); }
   } else if (trimmed.startsWith('CLOSE ') || trimmed.startsWith('close ')) {
     const closeId = trimmed.split(/\s+/)[1]?.trim();
     if (!closeId) return;
     log(`Boss: closing ${closeId}`);
     try {
       await closeLinearTicket(closeId);
-      if (currentNodes) {
-        const node = currentNodes.get(closeId);
-        if (node) {
-          node.state.status = 'done';
-          node.state.finishedAt = new Date().toISOString();
-          node.state.error = 'Closed by boss — no longer relevant';
-          for (const [name, tid] of workerAssignment) {
-            if (tid === closeId) { workerAssignment.delete(name); idleAgents.add(name); break; }
-          }
-          saveFullState(currentNodes);
+      const found = findNode(closeId);
+      if (found) {
+        found.node.state.status = 'done';
+        found.node.state.finishedAt = new Date().toISOString();
+        found.node.state.error = 'Closed by boss — no longer relevant';
+        for (const [name, tid] of workerAssignment) {
+          if (tid === closeId) { workerAssignment.delete(name); idleAgents.add(name); break; }
         }
+        saveAllState();
+        writeDashboard();
       }
       log(`Closed ${closeId} in Linear`);
+      await tellBoss(`Closed ${closeId} in Linear.`);
     } catch (err: any) { log(`Failed to close ${closeId}: ${err.message}`); }
-    // ASSIGN agent-N TICKET-ID — manually assign a ticket to a specific worker
-    const parts = trimmed.split(/\s+/);
-    const agentName = parts[1]?.trim();
-    const ticketId = parts[2]?.trim();
-    if (!agentName || !ticketId) return;
-    log(`Boss: assigning ${ticketId} → ${agentName}`);
-    if (!currentNodes) {
-      // Auto-build a single-ticket graph
-      try {
-        const existingState = loadState();
-        const { nodes } = await buildGraph(ticketId, existingState);
-        currentNodes = nodes;
-        saveFullState(nodes);
-        await syncLinearStatus();
-      } catch (err: any) { log(`Build error: ${err.message}`); return; }
-    }
-    const node = currentNodes!.get(ticketId);
-    if (!node) return;
-    // Take agent out of idle and assign directly
-    idleAgents.delete(agentName);
-    const wtDir = path.join(getRepoRoot(), '.pi', 'tickets', 'worktrees');
-    const { worktreePath } = ensureWorktree(getRepoRoot(), ticketId, 'main', wtDir);
-    node.state.worktreePath = worktreePath;
-    node.state.workerName = agentName;
-    workerAssignment.set(agentName, ticketId);
-    node.state.status = 'in_progress';
-    node.state.startedAt = new Date().toISOString();
-    saveFullState(currentNodes!);
-    try {
-      await intercom.send(agentName, { text: `TASK: ${ticketId}\nWorktree: ${worktreePath}\nTicket: ${node.ticket.title}\n\n${node.ticket.description || '(no description)'}` });
-      log(`Assigned ${ticketId} → ${agentName}`);
-    } catch { idleAgents.add(agentName); }
-    await tellBoss('All workers stopped.');
   } else if (trimmed === 'STATUS' || trimmed === 'status') {
-    if (!currentNodes) {
-      await tellBoss('No active tickets. Send EPIC <ID> or TICKET <ID> to start.');
+    writeDashboard();
+    if (epicGraphs.size === 0) {
+      await tellBoss('No active epics. Send EPIC <ID> or TICKET <ID> to start.');
       return;
     }
-    const running = [...currentNodes.values()].filter(n => n.state.status === 'in_progress').length;
-    const done = [...currentNodes.values()].filter(n => n.state.status === 'done' || n.state.status === 'merged').length;
-    const failed = [...currentNodes.values()].filter(n => n.state.status === 'failed').length;
-    const total = currentNodes.size;
-    await tellBoss(`${total} tickets: ${running} running, ${done} done, ${failed} failed. ${idleAgents.size} agents idle.`);
+    let totalTickets = 0, totalDone = 0, totalRunning = 0, totalFailed = 0;
+    for (const [, epic] of epicGraphs) {
+      totalTickets += epic.nodes.size;
+      for (const [, n] of epic.nodes) {
+        if (n.state.status === 'done' || n.state.status === 'merged') totalDone++;
+        if (n.state.status === 'in_progress') totalRunning++;
+        if (n.state.status === 'failed') totalFailed++;
+      }
+    }
+    await tellBoss(`${epicGraphs.size} epic(s) · ${totalTickets} tickets: ${totalRunning} running, ${totalDone} done, ${totalFailed} failed. ${idleAgents.size} agents idle.`);
   }
 }
 
@@ -392,7 +547,6 @@ function handleWebhookEvent(event: WebhookEvent): void {
     case 'pr_opened':
     case 'pr_synchronize':
       tellBoss(`PR event: ${event.type} for ${event.ticketId || 'unknown ticket'}`);
-      // Re-scan conflicts in background
       Promise.all([findMergeConflicts(), findBaseConflictPRs()]).then(([conflicts, baseConflicts]) => {
         if (conflicts.length > 0) {
           const ids = new Set<string>();
@@ -405,18 +559,15 @@ function handleWebhookEvent(event: WebhookEvent): void {
         for (const [tid] of baseConflicts) {
           tellBoss(`Base conflict on ${tid}`);
         }
-        if (currentNodes) {
-          saveFullState(currentNodes);
-          launchReady();
-        }
+        saveAllState();
+        writeDashboard();
+        launchReady();
       }).catch(() => {});
       break;
     case 'pr_comment':
       if (event.ticketId) {
         tellBoss(`New PR comment on ${event.ticketId}`);
-        if (currentNodes) {
-          launchReady();
-        }
+        launchReady();
       }
       break;
   }
@@ -425,42 +576,41 @@ function handleWebhookEvent(event: WebhookEvent): void {
 // ─── Sync ticket status with Linear ─────────────────────────────────
 
 async function syncLinearStatus(): Promise<void> {
-  if (!currentNodes) return;
+  if (epicGraphs.size === 0) return;
   const apiKey = process.env.LINEAR_API_KEY;
   if (!apiKey) return;
 
   try {
-    // Query each ticket individually by identifier
-    for (const [identifier, node] of currentNodes) {
-      // Skip already completed tickets
-      if (node.state.status === 'done' || node.state.status === 'merged') continue;
+    for (const [, epic] of epicGraphs) {
+      for (const [identifier, node] of epic.nodes) {
+        if (node.state.status === 'done' || node.state.status === 'merged') continue;
 
-      const query = `{ issue(id: "${identifier}") { state { name type } } }`;
-      const resp = await fetch('https://api.linear.app/graphql', {
-        method: 'POST',
-        headers: { 'Authorization': apiKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query }),
-      });
-      const json = await resp.json() as any;
-      const issue = json?.data?.issue;
-      if (!issue) continue;
+        const query = `{ issue(id: "${identifier}") { state { name type } } }`;
+        const resp = await fetch('https://api.linear.app/graphql', {
+          method: 'POST',
+          headers: { 'Authorization': apiKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query }),
+        });
+        const json = await resp.json() as any;
+        const issue = json?.data?.issue;
+        if (!issue) continue;
 
-      const stateType = issue.state?.type;
-      if (stateType === 'completed' || stateType === 'canceled') {
-        node.state.status = 'done';
-        node.state.finishedAt = new Date().toISOString();
-        log(`Linear: ${identifier} → done (${issue.state?.name})`);
-        // Free the assigned worker
-        for (const [name, tid] of workerAssignment) {
-          if (tid === identifier) {
-            workerAssignment.delete(name);
-            idleAgents.add(name);
-            break;
+        const stateType = issue.state?.type;
+        if (stateType === 'completed' || stateType === 'canceled') {
+          node.state.status = 'done';
+          node.state.finishedAt = new Date().toISOString();
+          log(`Linear: ${identifier} → done (${issue.state?.name})`);
+          for (const [name, tid] of workerAssignment) {
+            if (tid === identifier) {
+              workerAssignment.delete(name);
+              idleAgents.add(name);
+              break;
+            }
           }
         }
       }
     }
-    saveFullState(currentNodes);
+    saveAllState();
   } catch (err) {
     log(`Linear sync error: ${err}`);
   }
@@ -496,59 +646,21 @@ async function checkBossAlive(): Promise<void> {
 }
 
 function logStatus(): void {
-  if (!currentNodes) {
-    log('── Status: No active tickets ──');
+  writeDashboard();
+  // Log a one-line summary
+  if (epicGraphs.size === 0) {
+    log('── Status: No active epics ──');
     return;
   }
-
-  const STATUS_ICON: Record<string, string> = {
-    pending: '○', blocked: '◆', in_progress: '◉', done: '✓', failed: '✗', merged: '✔',
-  };
-
-  const lines: string[] = [];
-  lines.push('── Ticket Status ──');
-  lines.push('  ◉=running  ○=pending  ◆=blocked  ✓=done  ✗=failed  ✔=merged');
-  lines.push('');
-
-  // Sort: running first
-  const sorted = [...currentNodes.values()].sort((a, b) => {
-    const order: Record<string, number> = { in_progress: 0, pending: 1, blocked: 2, failed: 3, done: 4, merged: 5 };
-    return (order[a.state.status] ?? 5) - (order[b.state.status] ?? 5);
-  });
-
-  for (const node of sorted) {
-    const icon = STATUS_ICON[node.state.status] ?? '?';
-    const id = node.ticket.identifier.padEnd(10);
-    const title = node.ticket.title.slice(0, 40).padEnd(40);
-    // Use real agent assignment, not saved state
-    let agent = '—';
-    for (const [name, tid] of workerAssignment) {
-      if (tid === node.ticket.identifier) { agent = name; break; }
-    }
-    lines.push(`${icon} ${id} ${title} [${agent.padEnd(10)}]`);
-  }
-
-  // Worker status
-  lines.push('── Worker Status ──');
-  lines.push('  ◉=busy  ○=idle');
-  lines.push('');
-  const activeAgents = new Set([...idleAgents]);
-  for (const [agentName] of workerAssignment) {
-    activeAgents.add(agentName);
-  }
-  for (const agentName of activeAgents) {
-    const ticketId = workerAssignment.get(agentName);
-    if (ticketId) {
-      const node = currentNodes.get(ticketId);
-      const status = node?.state.status || 'working';
-      lines.push(`  ◉ ${agentName.padEnd(12)} → ${ticketId.padEnd(10)} (${status})`);
-    } else {
-      lines.push(`  ○ ${agentName.padEnd(12)} idle`);
+  let totalTickets = 0, totalDone = 0, totalRunning = 0;
+  for (const [, epic] of epicGraphs) {
+    totalTickets += epic.nodes.size;
+    for (const [, n] of epic.nodes) {
+      if (n.state.status === 'done' || n.state.status === 'merged') totalDone++;
+      if (n.state.status === 'in_progress') totalRunning++;
     }
   }
-
-  lines.push('──');
-  log(lines.join('\n'));
+  log(`── ${epicGraphs.size} epics · ${totalTickets} tix · ${totalRunning} running · ${totalDone} done · ${idleAgents.size} idle ──`);
 }
 
 // ─── Close a Linear ticket ──────────────────────────────────────────
@@ -590,17 +702,17 @@ async function closeLinearTicket(identifier: string): Promise<void> {
   });
 }
 
-async function findActiveEpic(): Promise<string | null> {
+/** Find all active epics (issues with children) or active tickets. */
+async function findActiveEpics(): Promise<string[]> {
   const apiKey = process.env.LINEAR_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey) return [];
 
   try {
-    // Query for in-progress or todo tickets, prefer those with children (epics)
     const query = `
       query {
         issues(
           filter: { state: { type: { in: ["started", "unstarted"] } } }
-          first: 10
+          first: 25
         ) {
           nodes {
             id
@@ -622,62 +734,64 @@ async function findActiveEpic(): Promise<string | null> {
     const issues: any[] = json?.data?.issues?.nodes ?? [];
     log(`Linear returned ${issues.length} active tickets`);
 
-    // Prefer epics (issues with children)
+    // Return all epics (issues with children)
     const epics = issues.filter((i: any) => i.children?.nodes?.length > 0);
     if (epics.length > 0) {
-      log(`Found epic: ${epics[0].identifier} — ${epics[0].title}`);
-      return epics[0].identifier;
+      return epics.map((e: any) => e.identifier as string);
     }
-    // Fall back to any active ticket
+    // Fall back to first active ticket
     if (issues.length > 0) {
-      log(`Found ticket: ${issues[0].identifier} — ${issues[0].title}`);
-      return issues[0].identifier;
+      return [issues[0].identifier as string];
     }
   } catch (err) {
     log(`Failed to query Linear: ${err}`);
   }
-  return null;
+  return [];
 }
 
 async function autoStart(): Promise<void> {
   log('Looking for work to start...');
   
-  // Check if there's saved state first
+  // Check if there's saved state with epic roots first
   const existingState = loadState();
-  if (existingState && Object.keys(existingState.tickets).length > 0) {
+  const epicRoots = existingState?.epicRoots ?? [];
+  if (epicRoots.length > 0) {
+    log(`Resuming ${epicRoots.length} epic(s): ${epicRoots.join(', ')}`);
+    for (const rootId of epicRoots) {
+      try {
+        await addEpic(rootId);
+      } catch (err: any) {
+        log(`Failed to resume epic ${rootId}: ${err.message}`);
+      }
+    }
+    if (epicGraphs.size > 0) return;
+  }
+  
+  // Fall back to old-style state (single graph without epicRoots)
+  if (existingState && Object.keys(existingState.tickets).length > 0 && epicGraphs.size === 0) {
     const ticketIds = Object.keys(existingState.tickets);
-    const firstId = ticketIds[0];
-    log(`Resuming ${ticketIds.length} tickets from saved state`);
+    const firstId = ticketIds[0]!;
+    log(`Resuming ${ticketIds.length} tickets from saved state (no epic roots recorded)`);
     try {
-      const { nodes } = await buildGraph(firstId, existingState);
-      currentNodes = nodes;
-      saveFullState(nodes);
-      const pending = [...nodes.values()].filter(n => n.state.status === 'pending' || n.state.status === 'blocked');
-      log(`Resumed ${nodes.size} tickets. ${pending.length} pending.`);
-      await syncLinearStatus();
-      launchReady();
-      return;
+      await addEpic(firstId);
+      if (epicGraphs.size > 0) return;
     } catch (err: any) {
       log(`Failed to resume: ${err.message}`);
     }
   }
   
-  // No saved state — query Linear for active work
-  const epicId = await findActiveEpic();
-  if (epicId) {
-    log(`Found active epic: ${epicId}. Building graph...`);
-    try {
-      const existingState = loadState();
-      const { nodes } = await buildGraph(epicId, existingState);
-      currentNodes = nodes;
-      saveFullState(nodes);
-      log(`Loaded ${nodes.size} tickets from ${epicId}.`);
-      await syncLinearStatus();
-      launchReady();
-      return;
-    } catch (err: any) {
-      log(`Failed to build graph: ${err.message}`);
+  // No saved state — query Linear for active epics
+  const epics = await findActiveEpics();
+  if (epics.length > 0) {
+    log(`Found ${epics.length} active epic(s): ${epics.join(', ')}`);
+    for (const epicId of epics) {
+      try {
+        await addEpic(epicId);
+      } catch (err: any) {
+        log(`Failed to build epic ${epicId}: ${err.message}`);
+      }
     }
+    if (epicGraphs.size > 0) return;
   }
   
   log('No active tickets found in Linear. Send EPIC <ID> or TICKET <ID> to start manually.');
@@ -701,7 +815,6 @@ async function main(): Promise<void> {
   intercom.on('message', async (from: any, message: any) => {
     const text: string = (message.content?.text ?? '').trim();
     const senderName: string = from.name || from.id.slice(0, 8);
-
     // Boss registration — track their session ID so tellBoss() works
     if (text.startsWith('BOSS:') || text.startsWith('boss:')) {
       bossSessionId = from.id;
@@ -710,7 +823,7 @@ async function main(): Promise<void> {
       return;
     }
 
-    if (text.startsWith('EPIC ') || text.startsWith('TICKET ') || text === 'STOP' || text === 'STATUS' || text.startsWith('CLOSE ') || text.startsWith('STOP ')) {
+    if (text.startsWith('EPIC ') || text.startsWith('TICKET ') || text === 'STOP' || text === 'STATUS' || text.startsWith('CLOSE ') || text.startsWith('STOP ') || text.startsWith('ASSIGN ') || text.startsWith('DROP ')) {
       await handleCommand(senderName, text);
       return;
     }
@@ -723,7 +836,8 @@ async function main(): Promise<void> {
       // Store by agentName (not session id) so multiple workers can't overwrite each other.
       agentSessionMap.set(agentName, { id: from.id, name: senderName });
       idleAgents.add(agentName);
-      if (currentNodes) launchReady();
+      writeDashboard();
+      launchReady();
     } else if (text === 'IDLE' || text === 'idle') {
       // Resolve agent name from session map (workers have subagent-chat-* intercom names)
       const resolvedName = [...agentSessionMap.entries()].find(
@@ -737,7 +851,8 @@ async function main(): Promise<void> {
         log(`Agent ${agentName} is idle`);
         idleAgents.add(agentName);
       }
-      if (currentNodes) launchReady();
+      writeDashboard();
+      launchReady();
     }
   });
 
@@ -768,40 +883,40 @@ async function main(): Promise<void> {
     await checkBossAlive();
     await syncLinearStatus();
     logStatus();
-    if (!currentNodes) return;
+    if (epicGraphs.size === 0) return;
     try {
       const comments = await scanAllPRComments();
       for (const [tid] of comments) {
-        const node = currentNodes.get(tid);
-        if (node && node.state.status === 'done') {
-          node.state.status = 'pending';
-          node.state.error = 'New PR review comments';
+        const found = findNode(tid);
+        if (found && found.node.state.status === 'done') {
+          found.node.state.status = 'pending';
+          found.node.state.error = 'New PR review comments';
         }
       }
-      for (const [, node] of currentNodes) {
-        if (node.state.status === 'done' && node.state.prUrl) {
-          try {
-            if (await isPRMerged(node.ticket.identifier)) {
-              node.state.status = 'merged';
-              // Clean up the worktree — ticket is fully done
-              if (node.state.worktreePath && node.state.worktreePath.includes('worktrees')) {
-                try {
-                  const repoRoot = getRepoRoot();
-                  removeWorktree(repoRoot, node.state.worktreePath, node.state.branch);
-                  log(`Worktree removed: ${node.ticket.identifier}`);
-                } catch (e) { log(`Failed to remove worktree for ${node.ticket.identifier}: ${e}`); }
+      for (const [, epic] of epicGraphs) {
+        for (const [, node] of epic.nodes) {
+          if (node.state.status === 'done' && node.state.prUrl) {
+            try {
+              if (await isPRMerged(node.ticket.identifier)) {
+                node.state.status = 'merged';
+                if (node.state.worktreePath && node.state.worktreePath.includes('worktrees')) {
+                  try {
+                    removeWorktree(getRepoRoot(), node.state.worktreePath, node.state.branch);
+                    log(`Worktree removed: ${node.ticket.identifier}`);
+                  } catch (e) { log(`Failed to remove worktree for ${node.ticket.identifier}: ${e}`); }
+                }
+              } else if (await isPRClosed(node.ticket.identifier)) {
+                node.state.status = 'pending';
+                node.state.error = 'PR closed without merge — needs remake';
+                node.state.prUrl = null;
+                log(`PR closed: ${node.ticket.identifier} → re-queued`);
               }
-            } else if (await isPRClosed(node.ticket.identifier)) {
-              // PR was closed without merging — work needs to be redone
-              node.state.status = 'pending';
-              node.state.error = 'PR closed without merge — needs remake';
-              node.state.prUrl = null;
-              log(`PR closed: ${node.ticket.identifier} → re-queued`);
-            }
-          } catch { /* skip */ }
+            } catch { /* skip */ }
+          }
         }
       }
-      saveFullState(currentNodes);
+      saveAllState();
+      writeDashboard();
       launchReady();
     } catch { /* best effort */ }
   }, 10_000);
@@ -809,7 +924,8 @@ async function main(): Promise<void> {
   // Cleanup
   process.on('SIGINT', async () => {
     log('Shutting down...');
-    if (currentNodes) { killAllWorkers(currentNodes); saveFullState(currentNodes); }
+    for (const [, epic] of epicGraphs) { killAllWorkers(epic.nodes); }
+    saveAllState();
     stopWebhookServer();
     try { await unregisterWebhooks(); } catch { /* ignore */ }
     try { await intercom.disconnect(); } catch { /* ignore */ }

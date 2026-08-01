@@ -137,34 +137,44 @@ agent.sh                      # Interactive launcher (fzf picker)
    and a higher-priority ticket is ready, the agent is killed (SIGTERM) and
    re-queued. The higher-priority ticket gets spawned.
 
-### CLI Dashboard
+### Dashboard (tmux)
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│  Ticket Agents — 5 tickets · 2 running · 1 done                  │
-├────────────────┬─────────────────────────────────────────────────┤
-│ Agents (25%)   │ Output — RES-11 (running)                       │
-│                │                                                  │
-│ ❯ ◉ RES-11     │ [timestamp] Worker started for RES-11           │
-│   ◉ RES-12     │ [timestamp] Worktree: /path/...                 │
-│   ○ RES-13     │ ...live log output...                            │
-│   ✓ RES-14     │                                                  │
-│   ✗ RES-15     │                                                  │
-├────────────────┴─────────────────────────────────────────────────┤
-│ ↑↓:navigate  Tab:panel  Enter:log  p:prompt  r:retry  x:kill  q  │
-└──────────────────────────────────────────────────────────────────┘
+┌──────────────────────────┬──────────────────────────────┐
+│ ══ Ticket Agents         │ agent-1 (pi)                 │
+│     Dashboard  12:34:56  │                              │
+│                           ├──────────────────────────────┤
+│ 2 epic(s) · 8 tickets    │ agent-2 (pi)                 │
+│ 2 running · 3 done       │                              │
+│                           │                              │
+│ ── RES-10: Auth System ─ │                              │
+│   ◉ RES-11  Add login    │                              │
+│   ✓ RES-12  Add JWT      ├──────────────────────────────┤
+│                           │ agent-3 (pi)                 │
+│ ── RES-20: Database ──── │                              │
+│   ◉ RES-21  Migrations   │                              │
+│   ○ RES-22  Seeds        │                              │
+│                           │                              │
+│ ── Workers ──             │                              │
+│   ◉ agent-1 → RES-11     │                              │
+│   ◉ agent-2 → RES-21     │                              │
+│   ○ agent-3  idle        │                              │
+├───────────────────────────┴──────────────────────────────┤
+│ boss (pi) — small pane at bottom                         │
+└──────────────────────────────────────────────────────────┘
 ```
 
-Key bindings:
-- `↑/↓` — navigate agents (or scroll output when output panel focused)
-- `Tab` — switch focus between agent list and output panel
-- `Enter` — focus output panel
-- `p` — prompt selected agent (opens text input; message is sent as
-  follow-up instructions and the worker restarts)
-- `r` — retry a failed agent
-- `x` — kill a running agent (marks as failed)
-- `q` / `Ctrl+C` — quit (kills all agents, saves state, stops ngrok,
-  unregisters webhooks)
+The left pane shows a **static dashboard** that refreshes every 2 seconds.
+The right panes are interactive pi sessions for workers and the boss.
+
+Server commands (send via intercom to "server"):
+- `EPIC <id1> <id2> ...` — add one or more epic graphs
+- `DROP <id>` — remove an epic from management
+- `TICKET <id>` — add a single ticket as a mini-graph
+- `STOP` / `STOP agent-N` — halt all or a specific worker
+- `ASSIGN agent-N TICKET-ID` — manually assign a ticket
+- `CLOSE <id>` — close a ticket in Linear
+- `STATUS` — get current state summary
 
 ### State persistence
 
