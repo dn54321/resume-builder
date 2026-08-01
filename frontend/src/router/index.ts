@@ -29,6 +29,11 @@ const router = createRouter({
       name: 'account',
       component: () => import('../views/AccountView.vue'),
     },
+    {
+      path: '/builder',
+      name: 'builder',
+      component: () => import('../features/builder/ResumeBuilder.vue'),
+    },
   ],
 });
 
