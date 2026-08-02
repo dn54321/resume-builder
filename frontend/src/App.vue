@@ -3,6 +3,7 @@ import { onMounted } from 'vue'
 import { RouterLink, RouterView, useRouter } from 'vue-router'
 import { useAuth } from '@/features/auth/composables/useAuth'
 import AppLogo from '@/components/AppLogo.vue'
+import ThemeToggle from '@/components/ThemeToggle.vue'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -49,6 +50,8 @@ async function handleLogout() {
           >
             Home
           </RouterLink>
+
+          <ThemeToggle />
 
           <template v-if="isAuthenticated">
             <RouterLink
