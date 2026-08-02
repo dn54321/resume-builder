@@ -29,6 +29,7 @@ services:
       - DATABASE_URL=${DATABASE_URL:-file:./dev.db}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:${FRONTEND_PORT:-5173}}
       - RESUME_FIELD_ENCRYPTION_KEY=${RESUME_FIELD_ENCRYPTION_KEY:-}
+      - SESSION_ENCRYPTION_KEY=${SESSION_ENCRYPTION_KEY:-}
     volumes:
       # Mount source for HMR (exclude node_modules)
       - ./backend/src:/app/src:delegated
