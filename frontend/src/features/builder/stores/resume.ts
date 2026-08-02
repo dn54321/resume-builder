@@ -60,14 +60,14 @@ export const useResumeStore = defineStore('resume', () => {
     sections.value.filter((s) => s.column === 'right'),
   )
 
-  // Derived: enabled section types sorted by their order property
+  // Derived: all section types sorted by order, enabled first, disabled at end
   // (respects drag-and-drop reordering from SectionToggles)
-  const orderedEnabledSectionTypes = computed(() =>
-    sections.value
-      .filter((s) => s.enabled)
-      .sort((a, b) => a.order - b.order)
-      .map((s) => s.sectionType),
-  )
+  const orderedSectionTypes = computed(() => {
+    const sorted = [...sections.value].sort((a, b) => a.order - b.order)
+    const enabled = sorted.filter((s) => s.enabled).map((s) => s.sectionType)
+    const disabled = sorted.filter((s) => !s.enabled).map((s) => s.sectionType)
+    return [...enabled, ...disabled]
+  })
 
   /**
    *
@@ -316,7 +316,7 @@ export const useResumeStore = defineStore('resume', () => {
     layout,
     sections,
     enabledSections,
-    orderedEnabledSectionTypes,
+    orderedSectionTypes,
     leftColumnSections,
     rightColumnSections,
     // Filter state
