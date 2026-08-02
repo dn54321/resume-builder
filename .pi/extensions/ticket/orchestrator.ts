@@ -949,13 +949,32 @@ function hasExistingWork(worktreePath: string, baseBranch: string): boolean {
   }
 }
 
-/** Prune a worktree after the ticket is complete. Best-effort, never throws. */
+/** Prune a worktree after the ticket is complete.
+ *  Only deletes if the branch was successfully merged into the base branch.
+ *  If not merged (e.g., PR creation failed), the branch is preserved for
+ *  manual recovery. Best-effort, never throws. */
 function pruneWorktree(node: GraphNode): void {
   const wt = node.state.worktreePath;
   if (!wt || !fs.existsSync(wt)) return;
   try {
     const repoRoot = getRepoRoot();
-    removeWorktree(repoRoot, wt, node.state.branch);
+    const baseBranch = getDefaultBranch();
+    // Only prune if the branch was actually merged into master.
+    // If PR creation failed, the branch is the only record of the work.
+    const merged = cp.spawnSync(
+      'git', ['branch', '--merged', baseBranch],
+      { cwd: repoRoot, encoding: 'utf-8', timeout: 5000 },
+    );
+    const branchName = node.state.branch;
+    if (merged.stdout?.includes(branchName)) {
+      removeWorktree(repoRoot, wt, branchName);
+    } else {
+      // Branch not merged — keep worktree for manual recovery.
+      // Log but don't delete.
+      const logStream = fs.createWriteStream(node.state.logPath, { flags: 'a' });
+      logStream.write(`\n[${new Date().toISOString()}] Worktree preserved — branch '${branchName}' not yet merged\n`);
+      logStream.end();
+    }
   } catch {
     // Best effort — worktree cleanup is not critical
   }

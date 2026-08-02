@@ -166,18 +166,25 @@ export function createPR(
   }
 }
 
-/** Remove a worktree and its branch. */
-export function removeWorktree(repoRoot: string, worktreePath: string, branch: string): void {
+/*
+ * ⚠️ WARNING — Do NOT delete the branch when removing a worktree.
+ *
+ * RES-45 and RES-46 were lost because `git branch -D` destroyed the
+ * only ref to their commits. The branches had been pushed, PR creation
+ * had failed silently, and the branch deletion made the commits
+ * unreachable (dangling). They were only recoverable via git fsck.
+ *
+ * Removing the worktree directory is safe — the branch preserves the
+ * commit history for manual recovery or later PR creation.
+ */
+export function removeWorktree(repoRoot: string, worktreePath: string, _branch: string): void {
   try {
     execGit(['worktree', 'remove', '--force', worktreePath], repoRoot);
   } catch {
     // ignore
   }
-  try {
-    execGit(['branch', '-D', branch], repoRoot);
-  } catch {
-    // ignore
-  }
+  // DO NOT delete the branch — it's the only record of the work.
+  // Branches are cleaned up by git remote prune / manual review.
 }
 
 /** Check if gh CLI is available. */
