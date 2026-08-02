@@ -119,11 +119,12 @@ async function assignWork(node: GraphNode): Promise<boolean> {
     return false;
   }
   inFlightAssignments.add(node.ticket.identifier);
+  idleAgents.delete(agentName); // Reserve agent immediately to prevent double-assignment
 
   // Verify agent is actually connected via session map
-  if (!intercom) { log(`assignWork: intercom not initialized`); return false; }
+  if (!intercom) { log(`assignWork: intercom not initialized`); idleAgents.add(agentName); inFlightAssignments.delete(node.ticket.identifier); return false; }
   let sessions: any[] = [];
-  try { sessions = await intercom.listSessions(); } catch (err: any) { log(`assignWork: listSessions failed: ${err.message}`); return false; }
+  try { sessions = await intercom.listSessions(); } catch (err: any) { log(`assignWork: listSessions failed: ${err.message}`); idleAgents.add(agentName); inFlightAssignments.delete(node.ticket.identifier); return false; }
   
   // Resolve the agent's intercom session from the registration map
   const sessionInfo = agentSessionMap.get(agentName);
@@ -132,13 +133,13 @@ async function assignWork(node: GraphNode): Promise<boolean> {
     : sessions.find((s: any) => s.name === agentName);
   if (!agentSession) {
     // Agent disconnected — remove from idle and try next
-    idleAgents.delete(agentName);
     const sessionIds = [...sessions.map((s: any) => `${s.name}(${s.id.slice(0,8)})`)].join(', ');
     log(`Agent ${agentName} not connected — removed from idle. Known sessions: [${sessionIds}]`);
+    inFlightAssignments.delete(node.ticket.identifier);
     return assignWork(node); // try next agent
   }
 
-  idleAgents.delete(agentName);
+  // Already deleted from idleAgents above; delete here is a no-op but kept for clarity
 
   // Create worktree
   const repoRoot = getRepoRoot();
