@@ -54,6 +54,7 @@ import {
   hasGhCLI,
   branchName,
   getGitHubRepo,
+  removeWorktree,
 } from './git';
 
 // ─── Worker Prompt Template ──────────────────────────────────────────
@@ -315,6 +316,7 @@ export async function buildGraph(
             node.state.status = 'done';
             node.state.pid = null;
             node.state.error = 'Worker process died but work exists — marking done';
+            pruneWorktree(node);
           } else {
             node.state.status = 'failed';
             node.state.pid = null;
@@ -326,6 +328,7 @@ export async function buildGraph(
         if (node.state.worktreePath && hasExistingWork(node.state.worktreePath, getDefaultBranch())) {
           node.state.status = 'done';
           node.state.error = 'Orphaned assignment but work exists — marking done';
+          pruneWorktree(node);
         } else {
           node.state.status = 'pending';
           node.state.pid = null;
@@ -340,6 +343,7 @@ export async function buildGraph(
       if (node.state.worktreePath && hasExistingWork(node.state.worktreePath, getDefaultBranch())) {
         node.state.status = 'done';
         node.state.error = 'Work exists despite failed status — marking done';
+        pruneWorktree(node);
       } else {
         node.state.status = 'pending';
         node.state.error = null;
@@ -836,6 +840,9 @@ async function onWorkerComplete(
     node.state.finishedAt = new Date().toISOString();
     node.state.pid = null;
 
+    // Prune the worktree now that the ticket is complete
+    pruneWorktree(node);
+
     // Release the assigned port
     if (node.state.assignedPort !== null) {
       const st = loadState();
@@ -860,6 +867,7 @@ async function onWorkerComplete(
       node.state.finishedAt = new Date().toISOString();
       node.state.pid = null;
       node.state.error = `Worker exited with code ${exitCode} but work exists — marking done`;
+      pruneWorktree(node);
       if (node.state.assignedPort !== null) {
         const st = loadState();
         if (st) {
@@ -938,6 +946,18 @@ function hasExistingWork(worktreePath: string, baseBranch: string): boolean {
     return !isNaN(count) && count > 0;
   } catch {
     return false;
+  }
+}
+
+/** Prune a worktree after the ticket is complete. Best-effort, never throws. */
+function pruneWorktree(node: GraphNode): void {
+  const wt = node.state.worktreePath;
+  if (!wt || !fs.existsSync(wt)) return;
+  try {
+    const repoRoot = getRepoRoot();
+    removeWorktree(repoRoot, wt, node.state.branch);
+  } catch {
+    // Best effort — worktree cleanup is not critical
   }
 }
 
