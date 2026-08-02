@@ -19,16 +19,25 @@ Use this skill to communicate with the ticket agent system via pi-intercom.
 
 ## Startup — register as available
 
-When you start, immediately register and go idle:
+When you start, immediately register with your UUID and go idle:
 
 ```
-intercom({ action: "send", to: "server", message: "REGISTER: agent-N" })
-intercom({ action: "send", to: "server", message: "IDLE" })
+intercom({ action: "send", to: "server", message: "REGISTER: <your-uuid> <display-name>" })
+intercom({ action: "send", to: "server", message: "IDLE <your-uuid>" })
 ```
 
-Replace `agent-N` with your assigned name (agent-1, agent-2, etc).
+- **UUID**: A unique worker identifier (e.g., `w-m2x9k3-a7b4f2`). The server assigns this when
+  you first register, or you can generate one yourself. Keep it — it's your permanent identity.
+- **Display name**: Human-readable name (e.g., `agent-1`, `alice`). Optional.
 
-The server will send you a `TASK:` message with a ticket to work on.
+If you don't have a UUID yet, just register with a display name and the server will assign one:
+
+```
+intercom({ action: "send", to: "server", message: "REGISTER: agent-1" })
+```
+
+After receiving a TASK, reference your UUID in all IDLE/DONE messages so the server
+can identify you regardless of session changes.
 
 ## While working — send status
 
@@ -59,7 +68,7 @@ After creating the PR (use the create-pr skill):
 
 ```
 intercom({ action: "send", to: "boss", message: "DONE: https://github.com/owner/repo/pull/123" })
-intercom({ action: "send", to: "server", message: "IDLE" })
+intercom({ action: "send", to: "server", message: "IDLE <your-uuid>" })
 ```
 
 This tells the boss you finished and the server you're free for the next ticket.
@@ -75,9 +84,12 @@ The boss will investigate and may assign another worker to help or fix the issue
 ## Quick reference
 
 ```
-# Register
+# Register (server assigns UUID if none provided)
 intercom({ action: "send", to: "server", message: "REGISTER: agent-1" })
-intercom({ action: "send", to: "server", message: "IDLE" })
+
+# Register with explicit UUID
+intercom({ action: "send", to: "server", message: "REGISTER: w-m2x9k3-a7b4f2 agent-1" })
+intercom({ action: "send", to: "server", message: "IDLE w-m2x9k3-a7b4f2" })
 
 # Status
 intercom({ action: "send", to: "boss", message: "STATUS: doing X" })
@@ -87,7 +99,7 @@ intercom({ action: "ask", to: "boss", message: "Question: ..." })
 
 # Done
 intercom({ action: "send", to: "boss", message: "DONE: <pr-url>" })
-intercom({ action: "send", to: "server", message: "IDLE" })
+intercom({ action: "send", to: "server", message: "IDLE <your-uuid>" })
 
 # Error
 intercom({ action: "send", to: "boss", message: "ERROR: <description>" })
