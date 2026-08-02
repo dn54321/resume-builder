@@ -60,6 +60,15 @@ export const useResumeStore = defineStore('resume', () => {
     sections.value.filter((s) => s.column === 'right'),
   )
 
+  // Derived: enabled section types sorted by their order property
+  // (respects drag-and-drop reordering from SectionToggles)
+  const orderedEnabledSectionTypes = computed(() =>
+    sections.value
+      .filter((s) => s.enabled)
+      .sort((a, b) => a.order - b.order)
+      .map((s) => s.sectionType),
+  )
+
   /**
    *
    */
@@ -307,6 +316,7 @@ export const useResumeStore = defineStore('resume', () => {
     layout,
     sections,
     enabledSections,
+    orderedEnabledSectionTypes,
     leftColumnSections,
     rightColumnSections,
     // Filter state

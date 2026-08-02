@@ -1,126 +1,122 @@
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, watchEffect } from 'vue'
 
-/**
- * Valid theme modes: explicit light/dark, or follow system preference.
- */
-export type Theme = 'light' | 'dark' | 'system'
+export type ThemeMode = 'light' | 'dark' | 'system'
 
-const THEME_STORAGE_KEY = 'theme'
+const STORAGE_KEY = 'theme-mode'
 const DARK_CLASS = 'dark'
 
+// Global reactive state so all consumers share the same value
+const currentTheme = ref<ThemeMode>('system')
+// Whether initTheme has already read localStorage
+let localStorageRead = false
+
 /**
- * Read the stored theme preference from localStorage.
- * Falls back to 'system' when nothing is stored or the value is invalid.
+ * Read the persisted theme from localStorage, defaulting to 'system'.
+ * @returns the stored theme mode
  */
-function getStoredTheme(): Theme {
-  if (typeof window === 'undefined') return 'system'
+function loadTheme(): ThemeMode {
   try {
-    const stored = localStorage.getItem(THEME_STORAGE_KEY)
-    if (stored === 'light' || stored === 'dark' || stored === 'system') return stored
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (stored === 'light' || stored === 'dark' || stored === 'system') {
+      return stored
+    }
   } catch {
-    // localStorage unavailable (private browsing, quota exceeded, etc.)
+    // localStorage unavailable (e.g. SSR, privacy mode)
   }
   return 'system'
 }
 
 /**
- * Query the current system-level color scheme preference.
+ * Persist the current theme choice to localStorage.
+ * @param mode - the selected theme mode
  */
-function getSystemPreference(): 'light' | 'dark' {
-  if (typeof window === 'undefined') return 'light'
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-}
-
-/**
- * Apply or remove the `dark` class on <html>.
- * @param resolved
- */
-function applyTheme(resolved: 'light' | 'dark') {
-  if (typeof document === 'undefined') return
-  if (resolved === 'dark') {
-    document.documentElement.classList.add(DARK_CLASS)
-  } else {
-    document.documentElement.classList.remove(DARK_CLASS)
+function persistTheme(mode: ThemeMode): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, mode)
+  } catch {
+    // Silently fail if localStorage is unavailable
   }
 }
 
 /**
- * Composable that manages the application theme.
+ * Resolve whether dark mode should be active given a theme mode.
+ * @param mode - the selected theme mode
+ * @returns `true` if dark appearance should be applied
+ */
+function resolveIsDark(mode: ThemeMode): boolean {
+  if (mode === 'dark') return true
+  if (mode === 'light') return false
+  // system — check the media query
+  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches
+  }
+  return false
+}
+
+/**
+ * Apply or remove the dark class on the document root.
+ * @param mode - the selected theme mode
+ */
+function applyTheme(mode: ThemeMode): void {
+  if (typeof document === 'undefined') return
+  const isDark = resolveIsDark(mode)
+  document.documentElement.classList.toggle(DARK_CLASS, isDark)
+}
+
+// Watch for changes and apply + persist automatically.
+// First run happens synchronously at module load before any component mounts,
+// writing 'system' to localStorage and toggling dark class. When initTheme()
+// fires on first useTheme() call, it bumps currentTheme.value which re-triggers
+// this effect to persist and apply the correct stored value.
+watchEffect(() => {
+  const mode = currentTheme.value
+  persistTheme(mode)
+  applyTheme(mode)
+})
+
+// Listen for system preference changes
+if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+  const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+  if (mediaQuery) {
+    mediaQuery.addEventListener('change', () => {
+      if (currentTheme.value === 'system') {
+        applyTheme('system')
+      }
+    })
+  }
+}
+
+/**
+ * Initialize the theme — called once on first useTheme() call.
+ * Reads from localStorage and applies the initial theme.
+ */
+function initTheme(): void {
+  if (localStorageRead) return
+  localStorageRead = true
+  currentTheme.value = loadTheme()
+}
+
+/**
+ * Composable to read and write the current theme mode.
  *
- * Provides:
- * - `theme` — reactive ref for the user's chosen mode (light/dark/system)
- * - `resolvedTheme` — computed that resolves 'system' to 'light' or 'dark' via matchMedia
- * - `setTheme(t)` — persist the choice and update <html> class
- * - `toggleTheme()` — cycle light → dark → system → light
- *
- * Theme state is persisted to localStorage under the key `"theme"`.
+ * Initializes from localStorage on first call.
+ * @returns reactive theme ref and a setter
  */
 export function useTheme() {
-  const theme = ref<Theme>(getStoredTheme())
-  const systemPref = ref<'light' | 'dark'>(getSystemPreference())
-
-  const resolvedTheme = computed<'light' | 'dark'>(() => {
-    if (theme.value === 'system') return systemPref.value
-    return theme.value
-  })
-
-  let mediaQuery: MediaQueryList | null = null
+  initTheme()
 
   /**
-   *
-   * @param e
+   * Set the current theme mode.
+   * @param mode - 'light', 'dark', or 'system'
    */
-  function handleSystemChange(e: MediaQueryListEvent) {
-    systemPref.value = e.matches ? 'dark' : 'light'
-  }
-
-  onMounted(() => {
-    mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-    mediaQuery.addEventListener('change', handleSystemChange)
-
-    // Apply the resolved theme on mount so the <html> class matches
-    applyTheme(resolvedTheme.value)
-  })
-
-  onUnmounted(() => {
-    mediaQuery?.removeEventListener('change', handleSystemChange)
-  })
-
-  // Keep <html> class in sync whenever the resolved theme changes
-  watch(resolvedTheme, (newVal) => {
-    applyTheme(newVal)
-  })
-
-  /**
-   * Persist the chosen theme mode and update the document class list.
-   * @param t
-   */
-  function setTheme(t: Theme) {
-    theme.value = t
-    try {
-      localStorage.setItem(THEME_STORAGE_KEY, t)
-    } catch {
-      // Silently ignore localStorage failures
-    }
-    applyTheme(resolvedTheme.value)
-  }
-
-  /**
-   * Cycle through light → dark → system → light.
-   */
-  function toggleTheme() {
-    const cycle: Record<Theme, Theme> = {
-      light: 'dark',
-      dark: 'system',
-      system: 'light',
-    }
-    setTheme(cycle[theme.value])
+  function setTheme(mode: ThemeMode): void {
+    currentTheme.value = mode
   }
 
   return {
-    theme,
-    resolvedTheme,
+    /** The current theme mode (reactive ref). */
+    theme: currentTheme,
+    /** Set the theme mode. */
     setTheme,
-    toggleTheme,
   }
 }

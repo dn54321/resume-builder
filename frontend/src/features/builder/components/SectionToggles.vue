@@ -69,6 +69,8 @@ import {
 const props = defineProps<{
   layout: LayoutType
   enabledSections: SectionType[]
+  /** Display order of enabled sections (from store, respects drag-and-drop reordering) */
+  orderedSectionTypes?: SectionType[]
   columnAssignments: Record<SectionType, 'left' | 'right'>
   selectedSectionId?: string | null
 }>()
@@ -103,7 +105,9 @@ interface OrderedSection {
 }
 
 const orderedSections = computed<OrderedSection[]>(() => {
-  return SECTION_TYPES.map((type) => ({
+  // Use the store-provided order if available, otherwise fall back to SECTION_TYPES
+  const displayOrder = props.orderedSectionTypes ?? SECTION_TYPES
+  return displayOrder.map((type) => ({
     type,
     label: SECTION_LABELS[type],
     enabled: props.enabledSections.includes(type),

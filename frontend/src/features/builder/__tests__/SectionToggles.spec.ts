@@ -243,7 +243,7 @@ describe('SectionToggles', () => {
     expect(moveButtons).toHaveLength(1)
   })
 
-  it('maintains fixed SECTION_TYPES order regardless of enabled state', () => {
+  it('uses SECTION_TYPES order by default when orderedSectionTypes is not provided', () => {
     const enabled: SectionType[] = ['experience', 'name_contact']
     const wrapper = mount(SectionToggles, {
       props: {
@@ -260,6 +260,27 @@ describe('SectionToggles', () => {
     expect(labelTexts[1]).toContain('Summary')
     expect(labelTexts[2]).toContain('Experience')
     expect(labelTexts).toHaveLength(10)
+  })
+
+  it('uses orderedSectionTypes prop for custom display order', () => {
+    const customOrder: SectionType[] = ['experience', 'name_contact', 'summary', 'education']
+    const wrapper = mount(SectionToggles, {
+      props: {
+        layout: 'standard',
+        enabledSections: allEnabled,
+        orderedSectionTypes: customOrder,
+        columnAssignments: noAssignments,
+      },
+    })
+
+    const items = wrapper.findAll('li')
+    const labelTexts = items.map((el) => el.text())
+
+    expect(labelTexts[0]).toContain('Experience')
+    expect(labelTexts[1]).toContain('Name & Contact')
+    expect(labelTexts[2]).toContain('Summary')
+    expect(labelTexts[3]).toContain('Education')
+    expect(labelTexts).toHaveLength(4) // only orderedSectionTypes.length items when provided
   })
 
   it('emits select when clicking an enabled section label', async () => {

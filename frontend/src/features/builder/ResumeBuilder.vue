@@ -69,6 +69,7 @@
         <SectionToggles
           :layout="store.layout"
           :enabled-sections="store.enabledSections"
+          :ordered-section-types="store.orderedEnabledSectionTypes"
           :column-assignments="columnAssignments"
           :selected-section-id="selectedSectionId"
           @toggle="store.toggleSection"
