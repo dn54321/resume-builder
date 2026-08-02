@@ -770,10 +770,13 @@ async function autoDiscoverWorkers(): Promise<void> {
       log(`Auto-discovered worker: ${displayName} (${uuid}, session: ${session.id.slice(0, 8)})`);
     }
 
-    // Remove workers whose sessions disconnected
+    // Remove workers whose sessions disconnected or belong to the boss
     for (const [uuid, w] of workerRegistry) {
       if (!connectedIds.has(w.sessionId)) {
         log(`Removing disconnected worker: ${w.displayName} (${uuid})`);
+        workerRegistry.delete(uuid);
+      } else if (bossSessionId && w.sessionId === bossSessionId) {
+        log(`Removing boss-session worker: ${w.displayName} (${uuid})`);
         workerRegistry.delete(uuid);
       }
     }
@@ -954,6 +957,9 @@ async function main(): Promise<void> {
     if (text.startsWith('BOSS:') || text.startsWith('boss:')) {
       bossSessionId = from.id;
       log(`Boss registered: ${senderName} (session: ${from.id.slice(0, 8)})`);
+      // Re-scan workers now that boss is known (removes any boss sub-agents that were auto-discovered)
+      await autoDiscoverWorkers();
+      writeDashboard();
       await tellBoss('BOSS registered. Server is ready.');
       return;
     }
