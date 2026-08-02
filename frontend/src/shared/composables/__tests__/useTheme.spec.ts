@@ -196,7 +196,8 @@ describe('useTheme', () => {
     let changeHandler: ((e: MediaQueryListEvent) => void) | null = null
     const mql = {
       ...mockMediaQueryList(false),
-      addEventListener: vi.fn<(type: string, listener: EventListenerOrEventListenerObject) => void>().mockImplementation((_event: string, handler: (e: MediaQueryListEvent) => void) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      addEventListener: vi.fn<(...args: any[]) => any>().mockImplementation((_event: string, handler: (e: MediaQueryListEvent) => void) => {
         changeHandler = handler
       }),
     } as MediaQueryList
@@ -225,7 +226,8 @@ describe('useTheme', () => {
     let changeHandler: ((e: MediaQueryListEvent) => void) | null = null
     const mql = {
       ...mockMediaQueryList(false),
-      addEventListener: vi.fn<(type: string, listener: EventListenerOrEventListenerObject) => void>().mockImplementation((_event: string, handler: (e: MediaQueryListEvent) => void) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      addEventListener: vi.fn<(...args: any[]) => any>().mockImplementation((_event: string, handler: (e: MediaQueryListEvent) => void) => {
         changeHandler = handler
       }),
     } as MediaQueryList
