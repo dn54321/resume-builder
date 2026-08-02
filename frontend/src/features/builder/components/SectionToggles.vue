@@ -5,8 +5,19 @@
       <li
         v-for="section in orderedSections"
         :key="section.type"
-        class="flex items-center gap-2 p-2 rounded-md bg-gray-50 cursor-default transition-opacity"
-        :class="{ 'opacity-55': !section.enabled }"
+        class="flex items-center gap-2 p-2 rounded-md bg-gray-50 cursor-default transition-all"
+        :class="{
+          'opacity-55': !section.enabled,
+          'opacity-50': dragType === section.type,
+          'border-t-2 border-blue-500': dropIndicator?.type === section.type && dropIndicator?.position === 'above',
+          'border-b-2 border-blue-500': dropIndicator?.type === section.type && dropIndicator?.position === 'below',
+        }"
+        :draggable="section.enabled"
+        @dragstart="onDragStart($event, section.type)"
+        @dragover="onDragOver($event, section.type)"
+        @dragleave="onDragLeave($event, section.type)"
+        @drop="onDrop($event, section.type)"
+        @dragend="onDragEnd"
       >
         <label class="flex items-center gap-2 flex-1 cursor-pointer" @click.stop="onLabelClick(section)">
           <input
@@ -37,7 +48,6 @@
           v-if="section.enabled"
           class="w-7 h-7 flex items-center justify-center border-none bg-transparent text-gray-400 cursor-grab rounded-sm text-sm hover:bg-gray-200 hover:text-gray-900 active:cursor-grabbing"
           title="Drag to reorder"
-          @mousedown.prevent="onDragStart($event, section.type)"
           aria-label="Reorder {{ section.label }}"
         >
           &#x2630;
@@ -71,6 +81,7 @@ const emit = defineEmits<{
 }>()
 
 const dragType = ref<SectionType | null>(null)
+const dropIndicator = ref<{ type: SectionType; position: 'above' | 'below' } | null>(null)
 
 /**
  * Handle label click: for disabled sections, toggle first then select.
@@ -92,7 +103,6 @@ interface OrderedSection {
 }
 
 const orderedSections = computed<OrderedSection[]>(() => {
-  // Keep all sections in fixed SECTION_TYPES order regardless of enabled state
   return SECTION_TYPES.map((type) => ({
     type,
     label: SECTION_LABELS[type],
@@ -102,49 +112,133 @@ const orderedSections = computed<OrderedSection[]>(() => {
 })
 
 /**
- *
+ * Handle HTML5 dragstart — set effect allowed and store the dragged section type.
+ * Only fires on enabled (draggable) items.
  * @param event
  * @param sectionType
  */
-function onDragStart(event: MouseEvent, sectionType: SectionType) {
+function onDragStart(event: DragEvent, sectionType: SectionType) {
+  const section = orderedSections.value.find((s) => s.type === sectionType)
+  if (!section?.enabled) {
+    event.preventDefault()
+    return
+  }
+  if (!event.dataTransfer) return
   dragType.value = sectionType
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData('text/plain', sectionType)
+}
 
-  /**
-   *
-   * @param e
-   */
-  function onMouseUp(e: MouseEvent) {
-    document.removeEventListener('mouseup', onMouseUp)
-    if (!dragType.value) return
+/**
+ * Handle dragover — determine above/below position and show insertion indicator.
+ * Must call preventDefault() to allow dropping.
+ * @param event
+ * @param sectionType
+ */
+function onDragOver(event: DragEvent, sectionType: SectionType) {
+  // Only allow drops on enabled sections (disabled stay at end)
+  const section = orderedSections.value.find((s) => s.type === sectionType)
+  if (!section?.enabled) return
 
-    // Find the target element under the mouse
-    const target = document.elementFromPoint(e.clientX, e.clientY)
-    const targetItem = target?.closest('li') as HTMLElement | null
-    if (targetItem) {
-      const labelSpan = targetItem.querySelector('label span:last-child')
-      const targetType = labelSpan?.textContent?.trim()
-      const targetSection = SECTION_TYPES.find(
-        (t) => SECTION_LABELS[t] === targetType,
-      )
-      if (targetSection && targetSection !== dragType.value) {
-        // Simple reorder: move dragged item before/after target
-        const enabledList = orderedSections.value
-          .filter((s) => s.enabled)
-          .map((s) => s.type)
-        const draggedIdx = enabledList.indexOf(dragType.value)
-        const targetIdx = enabledList.indexOf(targetSection)
+  // Don't show indicator when dragging over yourself
+  if (dragType.value === sectionType) return
 
-        if (draggedIdx !== -1 && targetIdx !== -1) {
-          const newOrder = [...enabledList]
-          newOrder.splice(draggedIdx, 1)
-          newOrder.splice(targetIdx, 0, dragType.value)
-          emit('reorder', newOrder)
-        }
-      }
-    }
-    dragType.value = null
+  event.preventDefault()
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move'
   }
 
-  document.addEventListener('mouseup', onMouseUp)
+  const target = event.currentTarget as HTMLElement
+  const rect = target.getBoundingClientRect()
+  const midY = rect.top + rect.height / 2
+  const position: 'above' | 'below' = event.clientY < midY ? 'above' : 'below'
+
+  dropIndicator.value = { type: sectionType, position }
+}
+
+/**
+ * Handle dragleave — clear indicator when leaving the target element,
+ * but not when moving to a child element within the same target.
+ * @param event
+ * @param sectionType
+ */
+function onDragLeave(event: DragEvent, sectionType: SectionType) {
+  const target = event.currentTarget as HTMLElement
+  const relatedTarget = event.relatedTarget as HTMLElement | null
+  // Don't clear if moving to a child element (dragleave fires when entering child)
+  if (relatedTarget && target.contains(relatedTarget)) return
+  if (dropIndicator.value?.type === sectionType) {
+    dropIndicator.value = null
+  }
+}
+
+/**
+ * Handle drop — compute new section order from dragged + target + indicator position,
+ * then emit the reorder event.
+ * @param event
+ * @param targetType
+ */
+function onDrop(event: DragEvent, targetType: SectionType) {
+  event.preventDefault()
+
+  if (!dragType.value) {
+    dragType.value = null
+    dropIndicator.value = null
+    return
+  }
+
+  // Don't allow dropping on disabled sections
+  const targetSection = orderedSections.value.find((s) => s.type === targetType)
+  if (!targetSection?.enabled) {
+    dragType.value = null
+    dropIndicator.value = null
+    return
+  }
+
+  // Don't allow dropping on self
+  if (dragType.value === targetType) {
+    dragType.value = null
+    dropIndicator.value = null
+    return
+  }
+
+  // Get current enabled sections in order
+  const enabledList = orderedSections.value
+    .filter((s) => s.enabled)
+    .map((s) => s.type)
+
+  const draggedIdx = enabledList.indexOf(dragType.value)
+  let targetIdx = enabledList.indexOf(targetType)
+
+  if (draggedIdx === -1 || targetIdx === -1) {
+    dragType.value = null
+    dropIndicator.value = null
+    return
+  }
+
+  // If dropping below, insert after target
+  if (dropIndicator.value?.position === 'below') {
+    targetIdx++
+  }
+
+  const newOrder = [...enabledList]
+  newOrder.splice(draggedIdx, 1)
+
+  // Adjust target index if dragged was before target (array shrank by 1)
+  const adjustedTargetIdx = draggedIdx < targetIdx ? targetIdx - 1 : targetIdx
+  newOrder.splice(adjustedTargetIdx, 0, dragType.value)
+
+  emit('reorder', newOrder)
+
+  dragType.value = null
+  dropIndicator.value = null
+}
+
+/**
+ * Handle dragend — clean up all visual state.
+ */
+function onDragEnd() {
+  dragType.value = null
+  dropIndicator.value = null
 }
 </script>
