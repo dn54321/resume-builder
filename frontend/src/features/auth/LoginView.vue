@@ -1,10 +1,16 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuth } from '@/features/auth/composables/useAuth'
 import { ApiRequestError } from '@/shared/composables/useApi'
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 
 const router = useRouter()
+const route = useRoute()
 const { isAuthenticated, login } = useAuth()
 
 const email = ref('')
@@ -16,7 +22,7 @@ const hasErrors = computed(() => errors.value.length > 0)
 
 onMounted(() => {
   if (isAuthenticated) {
-    router.replace('/builder')
+    router.replace('/dashboard')
   }
 })
 
@@ -37,7 +43,12 @@ async function handleSubmit() {
   submitting.value = true
   try {
     await login(email.value, password.value)
-    router.replace('/builder')
+    const redirect = route.query.redirect
+    if (typeof redirect === 'string') {
+      router.replace(redirect)
+    } else {
+      router.replace('/dashboard')
+    }
   } catch (err) {
     if (err instanceof ApiRequestError) {
       if (err.errors) {
@@ -58,118 +69,55 @@ async function handleSubmit() {
 </script>
 
 <template>
-  <div class="auth-view">
-    <h1>Login</h1>
-    <form @submit.prevent="handleSubmit" novalidate>
-      <div class="form-group">
-        <label for="login-email">Email</label>
-        <input
-          id="login-email"
-          v-model="email"
-          type="email"
-          autocomplete="email"
-          :disabled="submitting"
-        />
-      </div>
+  <div class="flex min-h-screen items-center justify-center px-4">
+    <Card class="w-full max-w-md">
+      <CardHeader>
+        <CardTitle>Log in</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form @submit.prevent="handleSubmit" novalidate>
+          <div class="grid gap-4">
+            <div class="grid gap-2">
+              <Label for="login-email">Email</Label>
+              <Input
+                id="login-email"
+                v-model="email"
+                type="email"
+                autocomplete="email"
+                :disabled="submitting"
+              />
+            </div>
 
-      <div class="form-group">
-        <label for="login-password">Password</label>
-        <input
-          id="login-password"
-          v-model="password"
-          type="password"
-          autocomplete="current-password"
-          :disabled="submitting"
-        />
-      </div>
+            <div class="grid gap-2">
+              <Label for="login-password">Password</Label>
+              <Input
+                id="login-password"
+                v-model="password"
+                type="password"
+                autocomplete="current-password"
+                :disabled="submitting"
+              />
+            </div>
 
-      <div v-if="hasErrors" class="errors" role="alert">
-        <p v-for="(msg, i) in errors" :key="i">{{ msg }}</p>
-      </div>
+            <Alert v-if="hasErrors" variant="destructive">
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>
+                <p v-for="(msg, i) in errors" :key="i">{{ msg }}</p>
+              </AlertDescription>
+            </Alert>
 
-      <button type="submit" :disabled="submitting">
-        {{ submitting ? 'Logging in...' : 'Login' }}
-      </button>
-    </form>
-
-    <p class="switch-link">
-      Don't have an account?
-      <RouterLink to="/signup">Sign up</RouterLink>
-    </p>
+            <Button type="submit" :disabled="submitting" class="w-full">
+              {{ submitting ? 'Logging in...' : 'Login' }}
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+      <CardFooter class="justify-center">
+        <p class="text-sm text-muted-foreground">
+          Don't have an account?
+          <RouterLink to="/signup" class="underline underline-offset-4 hover:text-primary">Sign up</RouterLink>
+        </p>
+      </CardFooter>
+    </Card>
   </div>
 </template>
-
-<style scoped>
-.auth-view {
-  max-width: 400px;
-  margin: 2rem auto;
-  padding: 2rem;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-}
-
-h1 {
-  text-align: center;
-  margin-bottom: 1.5rem;
-}
-
-.form-group {
-  margin-bottom: 1rem;
-}
-
-label {
-  display: block;
-  margin-bottom: 0.25rem;
-  font-weight: 600;
-}
-
-input {
-  width: 100%;
-  padding: 0.5rem;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  font-size: 1rem;
-}
-
-input:disabled {
-  opacity: 0.6;
-}
-
-.errors {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  color: #b91c1c;
-  padding: 0.75rem;
-  border-radius: 4px;
-  margin-bottom: 1rem;
-}
-
-.errors p {
-  margin: 0;
-}
-
-.errors p + p {
-  margin-top: 0.25rem;
-}
-
-button {
-  width: 100%;
-  padding: 0.75rem;
-  background: var(--color-text);
-  color: var(--color-background);
-  border: none;
-  border-radius: 4px;
-  font-size: 1rem;
-  cursor: pointer;
-}
-
-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.switch-link {
-  text-align: center;
-  margin-top: 1.5rem;
-}
-</style>
