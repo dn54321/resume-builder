@@ -3,16 +3,11 @@
     <AnonymousBanner v-if="!isAuthenticated" />
 
     <!-- Header with toolbar row -->
-    <header class="flex flex-col gap-2 pb-3 shrink-0">
-      <!-- Top row: PDF export -->
-      <div class="flex items-center justify-end">
-        <PdfExportButton />
-      </div>
-
-      <!-- Toolbar row -->
+    <header class="flex items-center justify-between gap-2 pb-3 shrink-0 flex-wrap">
+      <!-- Left: toolbar buttons -->
       <div class="flex items-center gap-2 flex-wrap">
         <button
-          class="px-3 py-1.5 rounded-md text-[0.8125rem] font-[inherit] font-medium cursor-pointer transition-colors border border-gray-300 bg-white text-gray-900 hover:bg-gray-100"
+          class="px-3 py-1.5 rounded-md text-[0.8125rem] font-[inherit] font-medium cursor-pointer transition-colors border border-border bg-background text-foreground hover:bg-muted"
           @click="jdModalOpen = true"
           data-testid="jd-toolbar-btn"
         >
@@ -21,7 +16,7 @@
 
         <div class="relative inline-flex">
           <button
-            class="px-3 py-1.5 rounded-md text-[0.8125rem] font-[inherit] font-medium cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-blue-500 bg-blue-500 text-white hover:not-disabled:bg-blue-600"
+            class="px-3 py-1.5 rounded-md text-[0.8125rem] font-[inherit] font-medium cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-primary bg-primary text-primary-foreground hover:not-disabled:bg-primary/90"
             :disabled="isTailoring || !store.jdText.trim()"
             :title="!store.jdText.trim() ? 'Save a job description first' : ''"
             @click="onTailor"
@@ -38,7 +33,7 @@
 
         <button
           v-if="store.isFiltered"
-          class="px-3 py-1.5 rounded-md text-[0.8125rem] font-[inherit] font-medium cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-gray-300 bg-white text-gray-900 hover:not-disabled:bg-gray-100"
+          class="px-3 py-1.5 rounded-md text-[0.8125rem] font-[inherit] font-medium cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-border bg-background text-foreground hover:not-disabled:bg-muted"
           :disabled="isTailoring"
           @click="resetFilter"
           data-testid="toolbar-reset-btn"
@@ -51,15 +46,18 @@
           <span class="text-[0.6875rem] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-100 text-blue-500" data-testid="filtered-badge">
             Filtered
           </span>
-          <span class="text-xs text-gray-500">
+          <span class="text-xs text-muted-foreground">
             Showing relevant bullets (max {{ bulletCap }} per entry)
           </span>
         </template>
 
-        <div v-if="tailorError" class="px-3 py-1.5 rounded-sm bg-red-50 text-red-600 text-[0.8125rem] leading-relaxed" data-testid="toolbar-error">
+        <div v-if="tailorError" class="px-3 py-1.5 rounded-sm bg-destructive/10 text-destructive text-[0.8125rem] leading-relaxed" data-testid="toolbar-error">
           {{ tailorError }}
         </div>
       </div>
+
+      <!-- Right: PDF export -->
+      <PdfExportButton />
     </header>
 
     <div class="grid grid-cols-[260px_1fr_300px] gap-4 flex-1 min-h-0 max-[1024px]:grid-cols-1 max-[1024px]:grid-rows-[auto_1fr_1fr]">
