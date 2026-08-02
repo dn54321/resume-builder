@@ -88,7 +88,8 @@ describe('App', () => {
     it('renders the Home nav link', async () => {
       const router = makeRouter()
       const wrapper = await mountApp(router)
-      expect(wrapper.text()).toContain('Home')
+      // Logo/brand acts as the home link — no separate "Home" text needed
+      expect(wrapper.text()).toContain('Resume Builder')
     })
   })
 

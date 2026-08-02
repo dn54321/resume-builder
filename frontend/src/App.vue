@@ -44,13 +44,6 @@ async function handleLogout() {
         </RouterLink>
 
         <nav class="flex items-center gap-4">
-          <RouterLink
-            to="/"
-            class="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Home
-          </RouterLink>
-
           <ThemeToggle />
 
           <template v-if="isAuthenticated">
