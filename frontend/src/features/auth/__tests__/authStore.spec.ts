@@ -50,7 +50,7 @@ describe('useAuthStore', () => {
       mockFetch.mockResolvedValueOnce(
         mockJsonResponse({
           user: { id: '1', email: 'test@test.com' },
-          token: 'signup-token',
+          sessionToken: 'signup-token',
         }),
       )
 
@@ -71,7 +71,7 @@ describe('useAuthStore', () => {
         .mockResolvedValueOnce(
           mockJsonResponse({
             user: { id: '1', email: 'test@test.com' },
-            token: 'signup-token',
+            sessionToken: 'signup-token',
           }),
         )
         .mockResolvedValueOnce(mockJsonResponse({ id: 'res-1' }, 201))
@@ -97,7 +97,7 @@ describe('useAuthStore', () => {
         .mockResolvedValueOnce(
           mockJsonResponse({
             user: { id: '1', email: 'test@test.com' },
-            token: 'signup-token',
+            sessionToken: 'signup-token',
           }),
         )
         .mockResolvedValueOnce(mockJsonResponse({ message: 'Server error' }, 500))
@@ -117,7 +117,7 @@ describe('useAuthStore', () => {
       mockFetch.mockResolvedValueOnce(
         mockJsonResponse({
           user: { id: '1', email: 'test@test.com' },
-          token: 'login-token',
+          sessionToken: 'login-token',
         }),
       )
 
@@ -143,7 +143,7 @@ describe('useAuthStore', () => {
 
       const store = useAuthStore()
       mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({ id: '1', email: 'test@test.com' }),
+        mockJsonResponse({ user: { id: '1', email: 'test@test.com' } }),
       )
 
       await store.checkSession()
