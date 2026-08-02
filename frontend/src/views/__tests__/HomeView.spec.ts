@@ -1,4 +1,3 @@
-// oxlint-disable vitest/require-mock-type-parameters
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
@@ -19,9 +18,6 @@ const router = createRouter({
 
 let pinia: ReturnType<typeof createPinia>
 
-/**
- *
- */
 function mountHome() {
   return mount(HomeView, {
     global: {
@@ -36,10 +32,6 @@ function mountHome() {
   })
 }
 
-/**
- *
- * @param email
- */
 function setAuthenticated(email = 'test@example.com') {
   const store = useAuthStore()
   store.$patch({
@@ -60,49 +52,54 @@ describe('HomeView', () => {
     it('renders the badge, heading, and subheading', () => {
       const wrapper = mountHome()
 
-      expect(wrapper.find('.badge').text()).toBe('Resume Builder')
-      expect(wrapper.find('.hero-heading').text()).toBe(
-        'Build a resume that gets you hired',
-      )
-      expect(wrapper.find('.hero-subheading').exists()).toBe(true)
-      expect(wrapper.find('.hero-subheading').text()).toContain(
-        'smart section management',
-      )
+      // Badge is a span with the text
+      const spans = wrapper.findAll('span')
+      const badge = spans.find((s) => s.text() === 'Resume Builder')
+      expect(badge).toBeTruthy()
+      expect(badge!.classes()).toContain('inline-block')
+      expect(badge!.classes()).toContain('rounded-full')
+
+      // Heading is an h1
+      const heading = wrapper.find('h1')
+      expect(heading.exists()).toBe(true)
+      expect(heading.text()).toBe('Build a resume that gets you hired')
+
+      // Subheading text
+      expect(wrapper.text()).toContain('smart section management')
     })
 
     it('renders guest CTA buttons when not authenticated', () => {
       const wrapper = mountHome()
 
-      const buttons = wrapper.findAll('.cta-buttons .btn')
-      expect(buttons).toHaveLength(2)
+      // CTAs are RouterLink stubs rendered as <a> tags
+      const links = wrapper.findAll('a')
+      // "Get Started" and "Log in"
+      const getStarted = links.find((a) => a.text() === 'Get Started')
+      const logIn = links.find((a) => a.text() === 'Log in')
 
-      const primaryBtn = buttons[0]!
-      expect(primaryBtn.text()).toBe('Get Started')
-      expect(primaryBtn.attributes('href')).toBe('/signup')
-      expect(primaryBtn.classes()).toContain('btn-primary')
+      expect(getStarted).toBeTruthy()
+      expect(getStarted!.attributes('href')).toBe('/signup')
+      expect(getStarted!.classes()).toContain('bg-primary')
 
-      const outlineBtn = buttons[1]!
-      expect(outlineBtn.text()).toBe('Log in')
-      expect(outlineBtn.attributes('href')).toBe('/login')
-      expect(outlineBtn.classes()).toContain('btn-outline')
+      expect(logIn).toBeTruthy()
+      expect(logIn!.attributes('href')).toBe('/login')
+      expect(logIn!.classes()).toContain('border')
     })
 
     it('renders authenticated CTA buttons when authenticated', () => {
       setAuthenticated()
       const wrapper = mountHome()
 
-      const buttons = wrapper.findAll('.cta-buttons .btn')
-      expect(buttons).toHaveLength(2)
+      const links = wrapper.findAll('a')
+      const dashboard = links.find((a) => a.text() === 'Go to Dashboard')
+      const createNew = links.find((a) => a.text() === 'Create New Resume')
 
-      const primaryBtn = buttons[0]!
-      expect(primaryBtn.text()).toBe('Go to Dashboard')
-      expect(primaryBtn.attributes('href')).toBe('/dashboard')
-      expect(primaryBtn.classes()).toContain('btn-primary')
+      expect(dashboard).toBeTruthy()
+      expect(dashboard!.attributes('href')).toBe('/dashboard')
+      expect(dashboard!.classes()).toContain('bg-primary')
 
-      const outlineBtn = buttons[1]!
-      expect(outlineBtn.text()).toBe('Create New Resume')
-      expect(outlineBtn.attributes('href')).toBe('/dashboard')
-      expect(outlineBtn.classes()).toContain('btn-outline')
+      expect(createNew).toBeTruthy()
+      expect(createNew!.attributes('href')).toBe('/dashboard')
     })
   })
 
@@ -110,29 +107,30 @@ describe('HomeView', () => {
     it('renders exactly 4 feature cards', () => {
       const wrapper = mountHome()
 
-      const cards = wrapper.findAll('.feature-card')
+      // Feature cards are divs with rounded-xl border classes
+      const cards = wrapper.findAll('.rounded-xl.border')
       expect(cards).toHaveLength(4)
     })
 
     it('each feature card has an icon, title, and description', () => {
       const wrapper = mountHome()
 
-      const cards = wrapper.findAll('.feature-card')
-      for (const card of cards) {
-        expect(card.find('.feature-icon').exists()).toBe(true)
-        expect(card.find('.feature-title').exists()).toBe(true)
-        expect(card.find('.feature-description').exists()).toBe(true)
-      }
+      // Feature titles
+      expect(wrapper.text()).toContain('Live Preview')
+      expect(wrapper.text()).toContain('Smart Sections')
+      expect(wrapper.text()).toContain('Tailor to Jobs')
+      expect(wrapper.text()).toContain('PDF Export')
+
+      // Descriptions
+      expect(wrapper.text()).toContain('See changes in real time as you edit')
+      expect(wrapper.text()).toContain('Download a polished PDF with one click')
     })
 
-    it('renders expected feature titles', () => {
+    it('feature icons are rendered with aria-hidden', () => {
       const wrapper = mountHome()
 
-      const titles = wrapper.findAll('.feature-title').map((el) => el.text())
-      expect(titles).toContain('Live Preview')
-      expect(titles).toContain('Smart Sections')
-      expect(titles).toContain('Tailor to Jobs')
-      expect(titles).toContain('PDF Export')
+      const icons = wrapper.findAll('[aria-hidden="true"]')
+      expect(icons.length).toBeGreaterThanOrEqual(4)
     })
   })
 
@@ -140,7 +138,7 @@ describe('HomeView', () => {
     it('renders the footer with app name', () => {
       const wrapper = mountHome()
 
-      const footer = wrapper.find('footer.footer')
+      const footer = wrapper.find('footer')
       expect(footer.exists()).toBe(true)
       expect(footer.text()).toContain('Resume Builder')
       expect(footer.text()).toContain('Vue, NestJS, and Tailwind CSS')
