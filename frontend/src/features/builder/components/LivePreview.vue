@@ -27,6 +27,8 @@ const store = useResumeStore()
 
 // US Letter size at 96 DPI
 const PAPER_WIDTH_PX = 816
+// Max scale: 1.2x for comfortable editing on large screens
+const MAX_SCALE = 1.2
 
 const containerWidth = ref(300)
 
@@ -35,7 +37,7 @@ const scale = computed(() => {
   // Add some padding (24px) so the scaled paper isn't flush against edges
   const availableWidth = containerWidth.value - 24
   const s = availableWidth / PAPER_WIDTH_PX
-  return Math.min(s, 1.0)
+  return Math.min(s, MAX_SCALE)
 })
 
 let resizeObserver: ResizeObserver | null = null

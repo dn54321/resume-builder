@@ -38,6 +38,7 @@ services:
       - ./backend/nest-cli.json:/app/nest-cli.json:ro
       - ./backend/tsconfig.json:/app/tsconfig.json:ro
       - ./backend/tsconfig.build.json:/app/tsconfig.build.json:ro
+      - ./backend/prisma.config.ts:/app/prisma.config.ts:ro
       # Anonymous volume to prevent host node_modules from overwriting container's
       - /app/node_modules
       # Database persistence (only persist the DB file, not the entire prisma dir)
