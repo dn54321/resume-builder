@@ -1,3 +1,31 @@
+/*
+ * ⚠️ WARNING — State merge and worktree recovery are critical.
+ *
+ * Two bugs caused catastrophic restart loops (tickets re-spawned
+ * indefinitely despite being complete):
+ *
+ * 1. saveFullState was REPLACING the entire tickets object instead of
+ *    MERGING with existing state. When multiple epics are loaded
+ *    sequentially, each addEpic() call's saveAllState() would wipe out
+ *    state from previously-loaded epics, causing already-done tickets
+ *    to revert to 'pending' and re-spawn.
+ *    Fix: saveFullState now merges with existing tickets when called
+ *    with merge=true (see saveAllState in server-daemon.ts).
+ *    Commits: 19826dd, 432710d, 6dc5b82, 028b819
+ *
+ * 2. When a server restarts and encounters tickets with dead PIDs,
+ *    or when the state file has no record for a ticket at all, the
+ *    code would default to 'pending' without checking whether the
+ *    worktree already has committed work. This caused already-complete
+ *    tickets to be re-spawned on every server restart.
+ *    Fix: hasExistingWork() checks git rev-list on the worktree branch.
+ *    If commits exist beyond the base branch, the ticket is marked
+ *    'done' regardless of saved state.
+ *
+ * DO NOT remove the hasExistingWork checks or the merge parameter
+ * without understanding the above failure modes.
+ */
+
 /**
  * Orchestrator: manages the dependency graph, spawns workers,
  * monitors completion, and advances the pipeline.
