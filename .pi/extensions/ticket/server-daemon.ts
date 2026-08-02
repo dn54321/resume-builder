@@ -355,11 +355,17 @@ function launchReady(): void {
         }
       });
     } else {
-      // Assign a unique agent name for the spawned worker
+      // Assign a unique agent name for the spawned worker.
+      // Check intercom maps AND currently-active headless workers (via workers Map).
       let agentName = '';
+      const usedHeadlessNames = new Set<string>();
+      for (const [tid] of workers) {
+        const found = findNode(tid);
+        if (found?.node.state.workerName) usedHeadlessNames.add(found.node.state.workerName);
+      }
       for (let i = 1; i <= config.maxAgents + 1; i++) {
         const candidate = `agent-${i}`;
-        if (!agentSessionMap.has(candidate) && !idleAgents.has(candidate) && !workerAssignment.has(candidate)) {
+        if (!agentSessionMap.has(candidate) && !idleAgents.has(candidate) && !workerAssignment.has(candidate) && !usedHeadlessNames.has(candidate)) {
           agentName = candidate;
           break;
         }
