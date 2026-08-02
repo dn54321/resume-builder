@@ -327,7 +327,7 @@ describe('ResumesService', () => {
 
       expect(result.sections[0].entries[0].fields[0].value).toBe('Parent');
       expect(result.sections[0].entries[0].children).toHaveLength(1);
-      expect(result.sections[0].entries[0].children[0].fields[0].value).toBe(
+      expect(result.sections[0].entries[0].children![0].fields[0].value).toBe(
         'Child',
       );
     });

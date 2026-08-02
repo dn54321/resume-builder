@@ -61,7 +61,7 @@ export class ResumesService {
       throw new NotFoundException('Resume not found');
     }
 
-    return this.decryptResumeFields(resume);
+    return this.decryptResumeFields(resume!);
   }
 
   async create(userId: string, dto: CreateResumeDto): Promise<ResumeTree> {
@@ -88,10 +88,10 @@ export class ResumesService {
       }
 
       return this.decryptResumeFields(
-        await tx.resume.findUnique({
+        (await tx.resume.findUnique({
           where: { id: resume.id },
           include: fullResumeInclude,
-        }),
+        }))!,
       );
     });
   }
@@ -146,10 +146,10 @@ export class ResumesService {
       }
 
       return this.decryptResumeFields(
-        await tx.resume.findUnique({
+        (await tx.resume.findUnique({
           where: { id },
           include: fullResumeInclude,
-        }),
+        }))!,
       );
     });
   }

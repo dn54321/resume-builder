@@ -6,5 +6,5 @@ import type { SectionField } from './section-field.model';
 export interface SectionEntry {
   id: string;
   fields: SectionField[];
-  children: SectionEntry[];
+  children?: SectionEntry[];
 }
