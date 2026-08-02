@@ -7,6 +7,8 @@ import { ApiRequestError } from '@/shared/composables/useApi'
 const router = useRouter()
 const { isAuthenticated, signup } = useAuth()
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
 const email = ref('')
 const password = ref('')
 const confirmPassword = ref('')
@@ -22,12 +24,27 @@ onMounted(() => {
 })
 
 /**
- *
+ * Validate email format on blur. Pushes a specific error for invalid
+ * format but does not clear other existing errors (e.g. password errors).
+ */
+function validateEmail() {
+  // Remove any existing email-format error before re-checking
+  errors.value = errors.value.filter((msg) => msg !== 'Please enter a valid email address')
+
+  if (email.value.trim() && !EMAIL_REGEX.test(email.value)) {
+    errors.value.push('Please enter a valid email address')
+  }
+}
+
+/**
+ * Full form validation on submit.
  */
 function validate(): boolean {
-  errors.value = []
+  // Run email format check first (clears previous email errors, adds new if invalid)
+  validateEmail()
 
-  if (!email.value.trim()) {
+  // Check required fields (only add if not already present)
+  if (!email.value.trim() && !errors.value.includes('Email is required')) {
     errors.value.push('Email is required')
   }
   if (!password.value) {
@@ -62,7 +79,7 @@ async function handleSubmit() {
         errors.value.push(err.message)
       }
     } else {
-      errors.value.push('Something went wrong. Please try again.')
+      errors.value.push('An unexpected error occurred. Please try again.')
     }
   } finally {
     submitting.value = false
@@ -82,6 +99,7 @@ async function handleSubmit() {
           type="email"
           autocomplete="email"
           :disabled="submitting"
+          @blur="validateEmail"
         />
       </div>
 

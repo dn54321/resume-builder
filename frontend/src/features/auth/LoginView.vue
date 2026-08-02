@@ -13,6 +13,8 @@ const router = useRouter()
 const route = useRoute()
 const { isAuthenticated, login } = useAuth()
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
 const email = ref('')
 const password = ref('')
 const errors = ref<string[]>([])
@@ -25,6 +27,19 @@ onMounted(() => {
     router.replace('/dashboard')
   }
 })
+
+/**
+ * Validate email format on blur. Pushes a specific error for invalid
+ * format but does not clear other existing errors.
+ */
+function validateEmail() {
+  // Remove any existing email-format error before re-checking
+  errors.value = errors.value.filter((msg) => msg !== 'Please enter a valid email address')
+
+  if (email.value.trim() && !EMAIL_REGEX.test(email.value)) {
+    errors.value.push('Please enter a valid email address')
+  }
+}
 
 /**
  *
@@ -60,7 +75,7 @@ async function handleSubmit() {
         errors.value.push(err.message)
       }
     } else {
-      errors.value.push('Something went wrong. Please try again.')
+      errors.value.push('An unexpected error occurred. Please try again.')
     }
   } finally {
     submitting.value = false
@@ -85,6 +100,7 @@ async function handleSubmit() {
                 type="email"
                 autocomplete="email"
                 :disabled="submitting"
+                @blur="validateEmail"
               />
             </div>
 

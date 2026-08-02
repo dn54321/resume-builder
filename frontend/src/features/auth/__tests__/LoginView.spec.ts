@@ -5,6 +5,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../LoginView.vue'
 import { useAuthStore } from '../stores/auth'
+import { ApiRequestError } from '@/shared/composables/useApi'
 
 const mockPush = vi.fn<(...args: unknown[]) => Promise<void>>()
 const mockReplace = vi.fn<(...args: unknown[]) => Promise<void>>()
@@ -121,5 +122,81 @@ describe('LoginView', () => {
     await wrapper.find('form').trigger('submit.prevent')
 
     expect(mockReplace).toHaveBeenCalledWith('/dashboard')
+  })
+
+  it('shows email format error on blur with invalid email', async () => {
+    const wrapper = mountLogin()
+    const emailInput = wrapper.find('#login-email')
+    await emailInput.setValue('not-an-email')
+    await emailInput.trigger('blur')
+    expect(wrapper.find('[role="alert"]').text()).toContain('Please enter a valid email address')
+  })
+
+  it('does not show email format error on blur for valid email', async () => {
+    const wrapper = mountLogin()
+    const emailInput = wrapper.find('#login-email')
+    await emailInput.setValue('user@example.com')
+    await emailInput.trigger('blur')
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+  })
+
+  it('clears email format error when user types a valid email', async () => {
+    const wrapper = mountLogin()
+    const emailInput = wrapper.find('#login-email')
+
+    // First trigger invalid
+    await emailInput.setValue('bad')
+    await emailInput.trigger('blur')
+    expect(wrapper.find('[role="alert"]').text()).toContain('Please enter a valid email address')
+
+    // Then type a valid email and blur again — error should disappear
+    await emailInput.setValue('good@example.com')
+    await emailInput.trigger('blur')
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+  })
+
+  it('displays backend email validation errors verbatim via ApiRequestError', async () => {
+    const store = useAuthStore()
+    vi.spyOn(store, 'login').mockRejectedValue(
+      new ApiRequestError({
+        status: 400,
+        message: 'Validation failed',
+        errors: { email: ['email must be an email'] },
+      }),
+    )
+
+    const wrapper = mountLogin()
+    await wrapper.find('#login-email').setValue('user@bad')
+    await wrapper.find('#login-password').setValue('password')
+    await wrapper.find('form').trigger('submit.prevent')
+    expect(wrapper.find('[role="alert"]').text()).toContain('email must be an email')
+  })
+
+  it('displays ApiRequestError message when no field-level errors', async () => {
+    const store = useAuthStore()
+    vi.spyOn(store, 'login').mockRejectedValue(
+      new ApiRequestError({
+        status: 401,
+        message: 'Invalid email or password',
+      }),
+    )
+
+    const wrapper = mountLogin()
+    await wrapper.find('#login-email').setValue('user@example.com')
+    await wrapper.find('#login-password').setValue('password')
+    await wrapper.find('form').trigger('submit.prevent')
+    expect(wrapper.find('[role="alert"]').text()).toContain('Invalid email or password')
+  })
+
+  it('shows fallback message for non-ApiRequestError errors', async () => {
+    const store = useAuthStore()
+    vi.spyOn(store, 'login').mockRejectedValue(new Error('Network failure'))
+
+    const wrapper = mountLogin()
+    await wrapper.find('#login-email').setValue('user@example.com')
+    await wrapper.find('#login-password').setValue('password')
+    await wrapper.find('form').trigger('submit.prevent')
+    expect(wrapper.find('[role="alert"]').text()).toContain('An unexpected error occurred. Please try again.')
+    expect(wrapper.find('[role="alert"]').text()).not.toContain('Something went wrong')
   })
 })
