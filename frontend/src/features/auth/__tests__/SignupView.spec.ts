@@ -51,38 +51,39 @@ describe('SignupView', () => {
     const wrapper = mountSignup()
     expect(wrapper.find('#signup-email').exists()).toBe(true)
     expect(wrapper.find('#signup-password').exists()).toBe(true)
-    expect(wrapper.find('#signup-confirm-password').exists()).toBe(true)
+    expect(wrapper.find('#signup-confirm').exists()).toBe(true)
     expect(wrapper.find('button[type="submit"]').exists()).toBe(true)
-    expect(wrapper.text()).toContain('Sign Up')
+    expect(wrapper.text()).toContain('Sign up')
   })
 
   it('shows validation errors for empty fields', async () => {
     const wrapper = mountSignup()
     await wrapper.find('form').trigger('submit.prevent')
-    const errors = wrapper.find('.errors')
-    expect(errors.exists()).toBe(true)
-    expect(errors.text()).toContain('Email is required')
-    expect(errors.text()).toContain('Password is required')
+    // shadcn Alert with variant="destructive" has role="alert"
+    const alert = wrapper.find('[role="alert"]')
+    expect(alert.exists()).toBe(true)
+    expect(alert.text()).toContain('Email is required')
+    expect(alert.text()).toContain('Password is required')
   })
 
   it('shows error when password is too short', async () => {
     const wrapper = mountSignup()
     await wrapper.find('#signup-email').setValue('test@test.com')
     await wrapper.find('#signup-password').setValue('short')
-    await wrapper.find('#signup-confirm-password').setValue('short')
+    await wrapper.find('#signup-confirm').setValue('short')
     await wrapper.find('form').trigger('submit.prevent')
-    const errors = wrapper.find('.errors')
-    expect(errors.text()).toContain('Password must be at least 8 characters')
+    const alert = wrapper.find('[role="alert"]')
+    expect(alert.text()).toContain('Password must be at least 8 characters')
   })
 
   it('shows error when passwords do not match', async () => {
     const wrapper = mountSignup()
     await wrapper.find('#signup-email').setValue('test@test.com')
     await wrapper.find('#signup-password').setValue('Password1')
-    await wrapper.find('#signup-confirm-password').setValue('Password2')
+    await wrapper.find('#signup-confirm').setValue('Password2')
     await wrapper.find('form').trigger('submit.prevent')
-    const errors = wrapper.find('.errors')
-    expect(errors.text()).toContain('Passwords do not match')
+    const alert = wrapper.find('[role="alert"]')
+    expect(alert.text()).toContain('Passwords do not match')
   })
 
   it('shows link to login page', () => {
