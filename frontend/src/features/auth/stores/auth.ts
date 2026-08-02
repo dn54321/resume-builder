@@ -61,8 +61,8 @@ export const useAuthStore = defineStore('auth', () => {
 
     const api = useApi()
     try {
-      const response = await api.get<User>('/api/v1/auth/me')
-      user.value = response
+      const response = await api.get<{ user: User }>('/api/v1/auth/me')
+      user.value = response.user
     } catch (err) {
       if (err instanceof ApiRequestError && err.status === 401) {
         clearToken()
@@ -78,12 +78,12 @@ export const useAuthStore = defineStore('auth', () => {
    */
   async function login(email: string, password: string) {
     const api = useApi()
-    const response = await api.post<{ user: User; token: string }>(
+    const response = await api.post<{ user: User; sessionToken: string }>(
       '/api/v1/auth/login',
       { email, password },
     )
 
-    persistToken(response.token)
+    persistToken(response.sessionToken)
     user.value = response.user
 
     // Anonymous-to-authenticated: import resume data
@@ -97,12 +97,12 @@ export const useAuthStore = defineStore('auth', () => {
    */
   async function signup(email: string, password: string) {
     const api = useApi()
-    const response = await api.post<{ user: User; token: string }>(
+    const response = await api.post<{ user: User; sessionToken: string }>(
       '/api/v1/auth/signup',
       { email, password },
     )
 
-    persistToken(response.token)
+    persistToken(response.sessionToken)
     user.value = response.user
 
     // Anonymous-to-authenticated: import resume data

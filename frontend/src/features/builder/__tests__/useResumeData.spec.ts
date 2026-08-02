@@ -130,7 +130,7 @@ describe('useResumeData', () => {
       const auth = useAuthStore()
       // Simulate authenticated user via login
       mockFetch.mockResolvedValueOnce(
-        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, token: 'fake-token' }),
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
       )
       await auth.login('test@test.com', 'password')
 
@@ -164,7 +164,7 @@ describe('useResumeData', () => {
     it('falls back to defaults on 404', async () => {
       const auth = useAuthStore()
       mockFetch.mockResolvedValueOnce(
-        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, token: 'fake-token' }),
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
       )
       await auth.login('test@test.com', 'password')
 
@@ -189,7 +189,7 @@ describe('useResumeData', () => {
     it('PUTs to API for authenticated user', async () => {
       const auth = useAuthStore()
       mockFetch.mockResolvedValueOnce(
-        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, token: 'fake-token' }),
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
       )
       await auth.login('test@test.com', 'password')
 
@@ -214,7 +214,7 @@ describe('useResumeData', () => {
     it('POSTs on 404 (resume not yet created)', async () => {
       const auth = useAuthStore()
       mockFetch.mockResolvedValueOnce(
-        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, token: 'fake-token' }),
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
       )
       await auth.login('test@test.com', 'password')
 
