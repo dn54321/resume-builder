@@ -1,122 +1,95 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
-import { RouterLink, RouterView } from 'vue-router'
-import HelloWorld from '@/components/HelloWorld.vue'
+import { RouterLink, RouterView, useRouter } from 'vue-router'
 import { useAuth } from '@/features/auth/composables/useAuth'
+import AppLogo from '@/components/AppLogo.vue'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
 
+const router = useRouter()
 const { isAuthenticated, user, checkSession, logout } = useAuth()
 
 onMounted(() => {
   checkSession()
 })
+
+/**
+ *
+ */
+async function handleLogout() {
+  await logout()
+  router.push('/')
+}
 </script>
 
 <template>
-  <header>
-    <img alt="Vue logo" class="logo" src="@/assets/logo.svg" width="125" height="125" />
+  <div class="min-h-screen flex flex-col">
+    <header class="border-b bg-background sticky top-0 z-50">
+      <div
+        class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between"
+      >
+        <RouterLink
+          to="/"
+          class="flex items-center gap-2 font-bold text-xl text-foreground no-underline"
+        >
+          <AppLogo />
+          Resume Builder
+        </RouterLink>
 
-    <div class="wrapper">
-      <HelloWorld msg="You did it!" />
+        <nav class="flex items-center gap-4">
+          <RouterLink
+            to="/"
+            class="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Home
+          </RouterLink>
 
-      <nav>
-        <RouterLink to="/">Home</RouterLink>
-        <RouterLink to="/about">About</RouterLink>
-        <template v-if="isAuthenticated">
-          <RouterLink to="/account" class="user-email">{{ user?.email }}</RouterLink>
-          <button class="logout-button" @click="logout()">
-            Log out
-          </button>
-        </template>
-        <template v-else>
-          <RouterLink to="/login">Log in</RouterLink>
-          <RouterLink to="/signup">Sign up</RouterLink>
-        </template>
-      </nav>
-    </div>
-  </header>
+          <template v-if="isAuthenticated">
+            <RouterLink
+              to="/dashboard"
+              class="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              My Resumes
+            </RouterLink>
 
-  <RouterView />
+            <DropdownMenu>
+              <DropdownMenuTrigger as-child>
+                <Button variant="ghost" size="sm" class="gap-2">
+                  <span class="text-sm max-w-[160px] truncate">{{ user?.email }}</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" class="w-56">
+                <DropdownMenuItem @select="router.push('/account')">
+                  Account settings
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem @select="handleLogout">
+                  Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </template>
+
+          <template v-else>
+            <RouterLink to="/login">
+              <Button variant="ghost" size="sm">Log in</Button>
+            </RouterLink>
+            <RouterLink to="/signup">
+              <Button size="sm">Sign up</Button>
+            </RouterLink>
+          </template>
+        </nav>
+      </div>
+    </header>
+
+    <main class="flex-1">
+      <RouterView />
+    </main>
+  </div>
 </template>
-
-<style scoped>
-header {
-  line-height: 1.5;
-  max-height: 100vh;
-}
-
-.logo {
-  display: block;
-  margin: 0 auto 2rem;
-}
-
-nav {
-  width: 100%;
-  font-size: 12px;
-  text-align: center;
-  margin-top: 2rem;
-}
-
-nav a.router-link-exact-active {
-  color: var(--color-text);
-}
-
-nav a.router-link-exact-active:hover {
-  background-color: transparent;
-}
-
-nav a {
-  display: inline-block;
-  padding: 0 1rem;
-  border-left: 1px solid var(--color-border);
-}
-
-nav a:first-of-type {
-  border: 0;
-}
-
-.user-email {
-  display: inline-block;
-  padding: 0 1rem;
-  border-left: 1px solid var(--color-border);
-  color: var(--color-text);
-}
-
-.logout-button {
-  display: inline-block;
-  padding: 0 1rem;
-  border: none;
-  border-left: 1px solid var(--color-border);
-  background: none;
-  color: var(--color-text);
-  font-size: 12px;
-  cursor: pointer;
-  text-decoration: underline;
-}
-
-@media (min-width: 1024px) {
-  header {
-    display: flex;
-    place-items: center;
-    padding-right: calc(var(--section-gap) / 2);
-  }
-
-  .logo {
-    margin: 0 2rem 0 0;
-  }
-
-  header .wrapper {
-    display: flex;
-    place-items: flex-start;
-    flex-wrap: wrap;
-  }
-
-  nav {
-    text-align: left;
-    margin-left: -1rem;
-    font-size: 1rem;
-
-    padding: 1rem 0;
-    margin-top: 1rem;
-  }
-}
-</style>

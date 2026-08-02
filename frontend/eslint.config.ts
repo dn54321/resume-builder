@@ -35,6 +35,15 @@ export default defineConfigWithVueTs(
 
   ...pluginOxlint.buildFromOxlintConfigFile('.oxlintrc.json'),
 
+  // shadcn-vue UI components use single-word names (e.g. Button, Input)
+  {
+    name: 'app/shadcn-vue',
+    files: ['src/components/ui/**/*.vue'],
+    rules: {
+      'vue/multi-word-component-names': 'off',
+    },
+  },
+
   jsdoc.configs['flat/recommended'],
 
   skipFormatting,
