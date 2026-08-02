@@ -34,6 +34,11 @@ const router = createRouter({
       name: 'builder',
       component: () => import('../features/builder/ResumeBuilder.vue'),
     },
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'not-found',
+      component: () => import('../views/NotFoundView.vue'),
+    },
   ],
 });
 
