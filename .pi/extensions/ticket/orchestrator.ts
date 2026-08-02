@@ -13,6 +13,7 @@ import type {
   GraphNode,
 } from './types';
 import { fetchTicketByIdentifier, fetchChildren, transitionTicket } from './linear';
+import { cacheTicket, getCachedTicket, getCachedChildren } from './ticket-cache';
 import {
   getRepoRoot,
   getDefaultBranch,
@@ -24,6 +25,7 @@ import {
   createPRViaApi,
   hasGhCLI,
   branchName,
+  getGitHubRepo,
 } from './git';
 
 // ─── Worker Prompt Template ──────────────────────────────────────────
@@ -138,9 +140,28 @@ export async function buildGraph(
 
   async function fetchRecursive(identifier: string): Promise<TicketInfo> {
     if (fetched.has(identifier)) return fetched.get(identifier)!;
-    const ticket = await fetchTicketByIdentifier(identifier);
+
+    // Try Linear API first, fall back to ticket cache
+    let ticket: TicketInfo | null = null;
+    let fromCache = false;
+    try {
+      ticket = await fetchTicketByIdentifier(identifier);
+    } catch (err: any) {
+      // Rate limited or network error — try cache
+      if (err.message?.includes('Rate limit') || err.message?.includes('429') || err.message?.includes('fetch failed')) {
+        ticket = getCachedTicket(identifier);
+        fromCache = ticket !== null;
+      }
+      if (!ticket) throw err; // Re-throw if no cache fallback
+    }
+
     if (!ticket) throw new Error(`Ticket not found: ${identifier}`);
     fetched.set(identifier, ticket);
+
+    // Cache successfully fetched tickets for future restarts
+    if (!fromCache) {
+      cacheTicket(ticket);
+    }
 
     // Discover dependencies via ref: lines
     for (const ref of ticket.refs) {
@@ -148,7 +169,35 @@ export async function buildGraph(
     }
 
     // Discover children (issues parented under this one)
-    const children = await fetchChildren(ticket.id);
+    let children: TicketInfo[] = [];
+    if (fromCache) {
+      // Use cached children mapping
+      const childIds = getCachedChildren(ticket.id);
+      for (const childId of childIds) {
+        const cached = getCachedTicket(childId);
+        if (cached && !fetched.has(childId)) {
+          children.push(cached);
+        }
+      }
+    } else {
+      try {
+        children = await fetchChildren(ticket.id);
+        // Cache children for future use
+        for (const child of children) {
+          cacheTicket(child);
+        }
+      } catch {
+        // Fall back to cache
+        const childIds = getCachedChildren(ticket.id);
+        for (const childId of childIds) {
+          const cached = getCachedTicket(childId);
+          if (cached && !fetched.has(childId)) {
+            children.push(cached);
+          }
+        }
+      }
+    }
+
     for (const child of children) {
       if (!fetched.has(child.identifier)) {
         fetched.set(child.identifier, child);
@@ -182,6 +231,7 @@ export async function buildGraph(
       error: null,
       assignedPort: null,
       retryCount: 0,
+      workerName: null,
     };
     nodes.set(ticket.identifier, { ticket, state, dependencies: [], dependents: [] });
   }
