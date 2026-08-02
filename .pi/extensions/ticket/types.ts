@@ -57,12 +57,23 @@ export interface EpicMeta {
 
 export type QueuePriority = 'review' | 'conflict' | 'pending' | 'blocked';
 
+export interface WorkerResult {
+  /** Exit code from the worker process */
+  exitCode: number;
+  /** Whether the branch was pushed to remote */
+  branchPushed: boolean;
+  /** PR URL if one was created, null otherwise */
+  prUrl: string | null;
+  /** Why PR creation failed, if applicable */
+  prError: string | null;
+}
+
 export interface GraphNode {
   ticket: TicketInfo;
   state: TicketState;
   dependencies: GraphNode[];
   dependents: GraphNode[];
-  _onComplete?: () => void;
+  _onComplete?: (result: WorkerResult) => void;
   priority?: QueuePriority;
   context?: string;
 }

@@ -764,6 +764,9 @@ async function onWorkerComplete(
   exitCode: number,
 ): Promise<void> {
   const identifier = node.ticket.identifier;
+  let branchPushed = false;
+  let prUrl: string | null = null;
+  let prError: string | null = null;
 
   if (exitCode === 0) {
     // Commit changes
@@ -772,6 +775,7 @@ async function onWorkerComplete(
       const commitMsg = `${node.ticket.title}\n\nCloses ${identifier}`;
       commitAll(worktreePath, commitMsg);
       pushBranch(worktreePath, node.state.branch);
+      branchPushed = true;
 
       // Build PR body with dependency info
       const prBody = extractPRSummary(node.state.logPath, node.ticket);
@@ -796,15 +800,18 @@ async function onWorkerComplete(
       if (hasGhCLI()) {
         const pr = createPR(worktreePath, node.state.branch, node.ticket.title, fullPrBody, baseBranch);
         prUrl = pr.url;
+        prError = pr.error || null;
       } else {
         const config = getAgentConfig();
         if (config.githubToken) {
           const pr = await createPRViaApi(worktreePath, node.state.branch, node.ticket.title, fullPrBody, baseBranch, config.githubToken);
           prUrl = pr.url;
+          prError = pr.error || null;
           if (!prUrl) {
             // PR creation failed — maybe it already exists, try updating
             try {
               prUrl = await updateExistingPR(node, fullPrBody);
+              prError = prUrl ? null : (prError || 'PR update also failed');
               if (prUrl) {
                 const ls = fs.createWriteStream(node.state.logPath, { flags: 'a' });
                 ls.write(`\n[${new Date().toISOString()}] PR updated: ${prUrl}\n`);
@@ -917,7 +924,7 @@ async function onWorkerComplete(
   logStream.end();
 
   saveStateSnapshot(node);
-  node._onComplete?.();
+  node._onComplete?.({ exitCode, branchPushed, prUrl, prError });
 }
 
 function isCleanCheck(worktreePath: string): boolean {
@@ -1066,7 +1073,7 @@ export function killAllWorkers(nodes: Map<string, GraphNode>): void {
 }
 
 /** Attach an onComplete callback to the graph node. Used for orchestrator notifications. */
-export function patchNode(node: GraphNode, onComplete: () => void): void {
+export function patchNode(node: GraphNode, onComplete: (result: { exitCode: number; branchPushed: boolean; prUrl: string | null; prError: string | null }) => void): void {
   node._onComplete = onComplete;
 }
 

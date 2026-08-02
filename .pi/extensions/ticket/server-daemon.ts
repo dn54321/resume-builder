@@ -35,6 +35,7 @@ import {
   loadState,
   getAgentConfig,
   spawnWorker,
+  patchNode,
 } from './orchestrator.js';
 import type { GraphNode, TicketState } from './types.js';
 import { getRepoRoot, ensureWorktree, branchName, removeWorktree } from './git.js';
@@ -301,6 +302,18 @@ function launchReady(): void {
 
     log(`launchReady: spawning worker for ${node.ticket.identifier} as ${agentName}`);
     try {
+      // Attach completion callback BEFORE spawning so we get the structured result
+      patchNode(node, (result) => {
+        if (!result.prUrl && result.branchPushed) {
+          tellBoss(`⚠️ ${node.ticket.identifier}: branch pushed but PR creation failed${result.prError ? ': ' + result.prError : ''}. Branch \`${node.state.branch}\` is on remote.`);
+        } else if (!result.prUrl && !result.branchPushed && result.exitCode === 0) {
+          tellBoss(`⚠️ ${node.ticket.identifier}: no changes to commit or push failed.`);
+        }
+        if (result.exitCode !== 0 && result.exitCode !== 143 && result.exitCode !== 137) {
+          tellBoss(`❌ ${node.ticket.identifier}: worker exited with code ${result.exitCode}. Check log.`);
+        }
+      });
+
       const proc = spawnWorker(node, undefined, undefined, agentName, true);
       spawnedProcesses.set(node.ticket.identifier, proc);
       node.state.workerName = agentName;

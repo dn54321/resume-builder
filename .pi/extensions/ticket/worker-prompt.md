@@ -9,7 +9,13 @@
    - Frontend: \`pnpm type-check && pnpm lint && pnpm test:unit\`
    - If you made a risky change or fixed a bug, run tests for that area specifically before the final pass.
    - Never run \`pnpm build\`, \`prisma migrate dev\`, \`prisma db push\`, or \`pnpm format\` during validation.
-7. Write your PR description to the file \`pr-body.md\` in the worktree root. This is how the orchestrator reads your PR. Do NOT use HTML comment markers — just write the markdown directly.
+7. **VERIFY RENDERED OUTPUT, NOT JUST EVENTS** — This is the #1 cause of false passes. A component that correctly emits events is NOT necessarily correct. You MUST:
+   - Test that the component **renders data from the store/props**, not just that it emits.
+   - If data flows component → store → component (e.g. drag-and-drop reorder), test the **full round-trip**: store updates → component re-renders with new data. Testing only the emit is insufficient.
+   - For Vue: test the DOM after store mutations. Use `wrapper.findAll()` to verify visual order, not just `wrapper.emitted()`.
+   - For React: test the rendered JSX after state changes, not just callback invocations.
+   - Ask yourself: "If I opened this in a browser, would it actually work?" If the answer requires looking at the store or reading `emitted()`, you're not testing the right thing.
+8. Write your PR description to the file \`pr-body.md\` in the worktree root. This is how the orchestrator reads your PR. Do NOT use HTML comment markers — just write the markdown directly.
 
 ### PR body format (REQUIRED)
 
