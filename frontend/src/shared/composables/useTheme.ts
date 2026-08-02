@@ -33,6 +33,7 @@ function getSystemPreference(): 'light' | 'dark' {
 
 /**
  * Apply or remove the `dark` class on <html>.
+ * @param resolved
  */
 function applyTheme(resolved: 'light' | 'dark') {
   if (typeof document === 'undefined') return
@@ -65,6 +66,10 @@ export function useTheme() {
 
   let mediaQuery: MediaQueryList | null = null
 
+  /**
+   *
+   * @param e
+   */
   function handleSystemChange(e: MediaQueryListEvent) {
     systemPref.value = e.matches ? 'dark' : 'light'
   }
@@ -88,6 +93,7 @@ export function useTheme() {
 
   /**
    * Persist the chosen theme mode and update the document class list.
+   * @param t
    */
   function setTheme(t: Theme) {
     theme.value = t
