@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { RouterLink, RouterView } from 'vue-router'
-import HelloWorld from '@/components/HelloWorld.vue'
 import { useAuth } from '@/features/auth/composables/useAuth'
 
 const { isAuthenticated, user, checkSession, logout } = useAuth()
@@ -13,14 +12,8 @@ onMounted(() => {
 
 <template>
   <header>
-    <img alt="Vue logo" class="logo" src="@/assets/logo.svg" width="125" height="125" />
-
-    <div class="wrapper">
-      <HelloWorld msg="You did it!" />
-
-      <nav>
+    <nav>
         <RouterLink to="/">Home</RouterLink>
-        <RouterLink to="/about">About</RouterLink>
         <template v-if="isAuthenticated">
           <RouterLink to="/account" class="user-email">{{ user?.email }}</RouterLink>
           <button class="logout-button" @click="logout()">
@@ -31,8 +24,7 @@ onMounted(() => {
           <RouterLink to="/login">Log in</RouterLink>
           <RouterLink to="/signup">Sign up</RouterLink>
         </template>
-      </nav>
-    </div>
+    </nav>
   </header>
 
   <RouterView />
@@ -42,11 +34,6 @@ onMounted(() => {
 header {
   line-height: 1.5;
   max-height: 100vh;
-}
-
-.logo {
-  display: block;
-  margin: 0 auto 2rem;
 }
 
 nav {
@@ -98,16 +85,6 @@ nav a:first-of-type {
     display: flex;
     place-items: center;
     padding-right: calc(var(--section-gap) / 2);
-  }
-
-  .logo {
-    margin: 0 2rem 0 0;
-  }
-
-  header .wrapper {
-    display: flex;
-    place-items: flex-start;
-    flex-wrap: wrap;
   }
 
   nav {
