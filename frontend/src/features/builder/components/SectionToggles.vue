@@ -19,14 +19,17 @@
         @drop="onDrop($event, section.type)"
         @dragend="onDragEnd"
       >
-        <label class="flex items-center gap-2 flex-1 cursor-pointer" @click.stop="onLabelClick(section)">
+        <label class="flex items-center gap-2 flex-1 cursor-pointer" @click.prevent="onLabelClick(section)">
           <input
             type="checkbox"
             :checked="section.enabled"
-            @change="emit('toggle', section.type)"
+            @change.stop="emit('toggle', section.type)"
             class="peer absolute opacity-0 w-0 h-0"
           />
-          <span class="relative w-9 h-5 bg-gray-300 rounded-[10px] shrink-0 transition-colors peer-checked:bg-blue-500 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:w-4 after:h-4 after:bg-white after:rounded-full after:transition-transform peer-checked:after:translate-x-4"></span>
+          <span
+            class="relative w-9 h-5 bg-gray-300 rounded-[10px] shrink-0 transition-colors peer-checked:bg-blue-500 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:w-4 after:h-4 after:bg-white after:rounded-full after:transition-transform peer-checked:after:translate-x-4 cursor-pointer"
+            @click.prevent.stop="emit('toggle', section.type)"
+          ></span>
           <span
             class="text-[0.8125rem] cursor-pointer"
             :class="section.type === selectedSectionId ? 'font-semibold text-blue-500' : section.enabled ? 'text-gray-900' : 'text-gray-400'"
