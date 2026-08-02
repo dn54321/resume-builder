@@ -1,39 +1,20 @@
 /**
  * Linear API integration for the /ticket extension.
+ * Uses disk caching to avoid rate limit exhaustion on server restarts.
  */
 
 import type { TicketInfo } from './types';
+import { cachedGraphql, getCachedApiKey } from './cache';
 
 const LINEAR_API = 'https://api.linear.app/graphql';
 const IDENTIFIER_PATTERN = /^([A-Z]{1,7})-(\d+)$/;
 
 function getApiKey(): string {
-  const envKey = process.env.LINEAR_API_KEY;
-  if (envKey) return envKey;
-
-  // Try reading from pi-linear credentials
-  try {
-    const fs = require('node:fs');
-    const path = require('node:path');
-    const os = require('node:os');
-    const credPath = path.join(os.homedir(), '.pi', 'agent', 'extensions', 'linear', 'credentials.json');
-    if (fs.existsSync(credPath)) {
-      const creds = JSON.parse(fs.readFileSync(credPath, 'utf-8'));
-      const active = creds.activeWorkspace;
-      if (active && creds.workspaces?.[active]?.apiKey) {
-        return creds.workspaces[active].apiKey;
-      }
-      // Fallback to first workspace
-      const first = Object.keys(creds.workspaces ?? {})[0];
-      if (first) return creds.workspaces[first].apiKey;
-    }
-  } catch {
-    // ignore
-  }
-  throw new Error('No LINEAR_API_KEY found. Set LINEAR_API_KEY env var or run /linear-auth.');
+  return getCachedApiKey();
 }
 
-async function graphql(query: string, variables?: Record<string, unknown>): Promise<any> {
+/** Direct (uncached) GraphQL call — used for mutations and force-refresh. */
+async function graphqlDirect(query: string, variables?: Record<string, unknown>): Promise<any> {
   const apiKey = getApiKey();
   const resp = await fetch(LINEAR_API, {
     method: 'POST',
@@ -48,6 +29,16 @@ async function graphql(query: string, variables?: Record<string, unknown>): Prom
     throw new Error(`Linear API error: ${JSON.stringify(json.errors)}`);
   }
   return json.data;
+}
+
+/** Cached read query — uses disk cache, bypass for mutations. */
+async function graphql(query: string, variables?: Record<string, unknown>): Promise<any> {
+  // Detect mutations — never cache these
+  const isMutation = query.trim().startsWith('mutation');
+  if (isMutation) {
+    return graphqlDirect(query, variables);
+  }
+  return cachedGraphql(query, variables);
 }
 
 /** Parse "RES-11" into { teamKey: "RES", number: 11 }. */

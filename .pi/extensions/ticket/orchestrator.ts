@@ -201,7 +201,7 @@ export async function buildGraph(
   const config = loadAgentConfig();
   for (const [, node] of nodes) {
     // Retry failed tickets that still have attempts left
-    if (node.state.status === 'running') {
+    if (node.state.status === 'in_progress') {
       // Check if the process is still alive
       if (node.state.pid) {
         try {
@@ -347,7 +347,7 @@ export function spawnWorker(
     env: workerEnv,
   });
 
-  node.state.status = 'running';
+  node.state.status = 'in_progress';
   node.state.pid = proc.pid ?? null;
   node.state.startedAt = new Date().toISOString();
   node.state.finishedAt = null;
@@ -836,7 +836,7 @@ export function saveFullState(nodes: Map<string, GraphNode>): void {
 
 /** Kill a single running worker without marking it failed (for preemption). */
 export function killSingleWorker(node: GraphNode): void {
-  if (node.state.status === 'running' && node.state.pid) {
+  if (node.state.status === 'in_progress' && node.state.pid) {
     try { process.kill(node.state.pid, 'SIGTERM'); } catch { /* already dead */ }
     node.state.status = 'blocked';
     node.state.pid = null;
@@ -848,7 +848,7 @@ export function killSingleWorker(node: GraphNode): void {
 /** Kill all running workers. */
 export function killAllWorkers(nodes: Map<string, GraphNode>): void {
   for (const [, node] of nodes) {
-    if (node.state.status === 'running' && node.state.pid) {
+    if (node.state.status === 'in_progress' && node.state.pid) {
       try {
         process.kill(node.state.pid, 'SIGTERM');
       } catch {
@@ -876,7 +876,7 @@ export function sendPromptToWorker(
   spawnFn: (node: GraphNode, perWorkerInstructions: string) => cp.ChildProcess,
 ): void {
   // Kill running worker
-  if (node.state.status === 'running' && node.state.pid) {
+  if (node.state.status === 'in_progress' && node.state.pid) {
     try { process.kill(node.state.pid, 'SIGTERM'); } catch { /* ignore */ }
   }
 
