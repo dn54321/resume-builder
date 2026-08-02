@@ -248,21 +248,35 @@ tmux new-session -d -s "$SESSION_NAME" -c "$REPO_ROOT" \
   "$PROMPT_DIR/dashboard-watch.sh '$DASHBOARD_FILE'"
 tmux rename-window -t "$SESSION_NAME:0" 'agents'
 
-# Pane 1: worker 1
-AGENT1_MSG="You are agent-1. /name agent-1. Use worker-intercom skill to register and go idle."
-tmux split-window -h -t "$SESSION_NAME:0" -c "$REPO_ROOT" \
-  "$PI_BIN --append-system-prompt @$PROMPT_DIR/worker-prompt.txt \"$AGENT1_MSG\""
+# Check if there are any epics to work on
+HAS_EPICS="${SELECTED_EPICS:-}"
 
-# Panes 2..N: additional workers
-for i in $(seq 2 "$MAX_AGENTS"); do
-  AGENT_MSG="You are agent-$i. /name agent-$i. Use worker-intercom skill to register and go idle."
-  tmux split-window -v -t "$SESSION_NAME:0.$((i-1))" -c "$REPO_ROOT" \
-    "$PI_BIN --append-system-prompt @$PROMPT_DIR/worker-prompt.txt \"$AGENT_MSG\""
-done
+if [ -n "$HAS_EPICS" ]; then
+  # ── Workers + Boss layout (with epics) ──
 
-# Boss pane (bottom-left, 10 lines)
-tmux split-window -v -t "$SESSION_NAME:0.0" -c "$REPO_ROOT" -l 10 \
-  "$PI_BIN --append-system-prompt @$PROMPT_DIR/boss-prompt.txt Start"
+  # Pane 1: worker 1
+  AGENT1_MSG="You are agent-1. /name agent-1. Use worker-intercom skill to register and go idle."
+  tmux split-window -h -t "$SESSION_NAME:0" -c "$REPO_ROOT" \
+    "$PI_BIN --append-system-prompt @$PROMPT_DIR/worker-prompt.txt \"$AGENT1_MSG\""
+
+  # Panes 2..N: additional workers
+  for i in $(seq 2 "$MAX_AGENTS"); do
+    AGENT_MSG="You are agent-$i. /name agent-$i. Use worker-intercom skill to register and go idle."
+    tmux split-window -v -t "$SESSION_NAME:0.$((i-1))" -c "$REPO_ROOT" \
+      "$PI_BIN --append-system-prompt @$PROMPT_DIR/worker-prompt.txt \"$AGENT_MSG\""
+  done
+
+  # Boss pane (bottom-left, 10 lines)
+  tmux split-window -v -t "$SESSION_NAME:0.0" -c "$REPO_ROOT" -l 10 \
+    "$PI_BIN --append-system-prompt @$PROMPT_DIR/boss-prompt.txt Start"
+else
+  # ── No epics: just Dashboard + Boss (no workers) ──
+  echo "No epics selected — starting with boss only (no worker agents)."
+
+  # Boss pane (bottom of dashboard, full width, 15 lines)
+  tmux split-window -v -t "$SESSION_NAME:0" -c "$REPO_ROOT" -l 15 \
+    "$PI_BIN --append-system-prompt @$PROMPT_DIR/boss-prompt.txt Start"
+fi
 
 echo "Panes:"
 tmux list-panes -t "$SESSION_NAME:0" -F "  #{pane_index}: #{pane_current_command}"

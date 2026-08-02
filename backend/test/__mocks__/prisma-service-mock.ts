@@ -9,24 +9,60 @@
  * the database layer is intentionally mocked. Database connectivity is
  * covered by unit tests.
  */
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  OnModuleDestroy,
+} from '@nestjs/common';
+
+type AnyFunction = (...args: any[]) => any;
+
+/**
+ * Create a mock model delegate that returns sensible defaults
+ * for common Prisma methods.
+ * @returns A Proxy-wrapped handler map that responds to common Prisma model methods.
+ */
+function createModelMock(): Record<string, AnyFunction> {
+  const handlers: Record<string, AnyFunction> = {
+    findUnique: () => Promise.resolve(null),
+    findFirst: () => Promise.resolve(null),
+    findMany: () => Promise.resolve(null),
+    create: (args?: Record<string, unknown>) =>
+      Promise.resolve(args?.data ?? args ?? {}),
+    update: (args?: Record<string, unknown>) =>
+      Promise.resolve(args?.data ?? args ?? {}),
+    upsert: (args?: Record<string, unknown>) =>
+      Promise.resolve(args?.create ?? args ?? {}),
+    delete: () => Promise.resolve({ count: 1 }),
+    deleteMany: () => Promise.resolve({ count: 1 }),
+    count: () => Promise.resolve(0),
+  };
+
+  return new Proxy(handlers, {
+    get(target, prop: string) {
+      return target[prop] ?? (() => Promise.resolve(null));
+    },
+  });
+}
 
 @Injectable()
 export class MockPrismaService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger('PrismaService');
 
-  // Prisma model delegates (mocked as empty objects with common methods)
   user = createModelMock();
   session = createModelMock();
   resume = createModelMock();
   section = createModelMock();
   sectionField = createModelMock();
 
-  async onModuleInit(): Promise<void> {
+  /** No-op init — logs for visibility in test output. */
+  onModuleInit(): void {
     this.logger.log('Mock database connection established');
   }
 
-  async onModuleDestroy(): Promise<void> {
+  /** No-op teardown. */
+  onModuleDestroy(): void {
     this.logger.log('Mock database connection closed');
   }
 
@@ -38,28 +74,13 @@ export class MockPrismaService implements OnModuleInit, OnModuleDestroy {
     return Promise.resolve();
   }
 
+  /**
+   * Mock transaction that simply executes the callback with `this` as the
+   * transaction client (same as the default interactive transactions behavior).
+   * @param fn
+   */
+
   $transaction<T>(fn: (tx: any) => Promise<T>): Promise<T> {
     return fn(this);
   }
-}
-
-function createModelMock() {
-  return new Proxy({} as any, {
-    get(_target, prop) {
-      if (prop === 'findUnique' || prop === 'findFirst' || prop === 'findMany') {
-        return () => Promise.resolve(null);
-      }
-      if (prop === 'create' || prop === 'update' || prop === 'upsert') {
-        return (args: any) => Promise.resolve(args?.data ?? args ?? {});
-      }
-      if (prop === 'delete' || prop === 'deleteMany') {
-        return () => Promise.resolve({ count: 1 });
-      }
-      if (prop === 'count') {
-        return () => Promise.resolve(0);
-      }
-      // Allow any other method call without crashing
-      return () => Promise.resolve(null);
-    },
-  });
 }
