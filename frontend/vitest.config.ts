@@ -22,11 +22,13 @@ export default mergeConfig(
         },
         include: ['src/**/*.{ts,vue}'],
         exclude: [
+          // Standard exclusions — config/bootstrap/type-only files
           'src/**/__tests__/**',
           'src/**/*.d.ts',
           'src/main.ts',
           'src/router/index.ts',
-          // Vue boilerplate — slated for deletion in UI overhaul milestone
+
+          // Vue boilerplate — deleted in RES-29 (UI overhaul milestone)
           'src/App.vue',
           'src/components/HelloWorld.vue',
           'src/components/TheWelcome.vue',
@@ -35,9 +37,14 @@ export default mergeConfig(
           'src/views/AboutView.vue',
           'src/views/HomeView.vue',
           'src/stores/counter.ts',
-          // Builder feature — being restyled in RES-37; tests will be updated in that ticket
+
+          // Builder feature — restyled in RES-37; component tests will be added/updated then.
+          // Load-bearing composables (useResumeData, useSectionEditor, usePdfExport, useTailor)
+          // and shared components (EntryList, BulletList, editors) currently have 0–70% coverage.
           'src/features/builder/**',
-          // Auth views — being restyled in RES-33/RES-35; tests will be updated
+
+          // Auth views — restyled in RES-33 (LoginView) and RES-35 (SignupView);
+          // tests will be updated alongside those restyles.
           'src/features/auth/LoginView.vue',
           'src/features/auth/SignupView.vue',
         ],

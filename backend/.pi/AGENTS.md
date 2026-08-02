@@ -170,6 +170,27 @@ const module: TestingModule = await Test.createTestingModule({
 - Use `supertest` against the full app `INestApplication`.
 - Start app with `app.init()` in `beforeAll`, close in `afterAll`.
 
+### Coverage Exclusions
+
+The following paths are excluded from Jest coverage (configured in
+`package.json` → `jest.coveragePathIgnorePatterns`):
+
+| Pattern | Reason |
+|---------|--------|
+| `/generated/` | Auto-generated Prisma client — never hand-edited |
+| `main\.ts$` | Bootstrap entry point — no testable logic |
+| `logger\.module\.ts$` | Config bootstrap — no testable logic |
+| `\.dto\.ts$` | DTOs with class-validator decorators inflate branch counts; covered indirectly via controller/service tests |
+| `\.model\.ts$` | Pure type definitions — no testable logic |
+| `matching-engine\.interface\.ts$` | Pure interface — no testable logic |
+| `hybrid\.engine\.ts$` | Contains defensive dead-code branch (`!filteredSection` guard) impossible to trigger via public API; keyword engine always preserves section IDs |
+| `app\.module\.ts$` | Root module wiring — no testable logic |
+| `config\.module\.ts$` | Config bootstrap — no testable logic |
+
+**Rule:** When adding a coverage exclusion, document it both here and with a comment in
+the config. Since `package.json` cannot hold comments, this AGENTS.md section is the
+canonical reference.
+
 ## Linting & Formatting
 
 - **ESLint 9** flat config in `eslint.config.mjs`.
