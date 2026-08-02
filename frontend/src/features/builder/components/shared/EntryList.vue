@@ -32,14 +32,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 
 interface EntryLike {
   id: string
   order: number
 }
 
-defineProps<{
+const props = defineProps<{
   entries: EntryLike[]
   addLabel: string
   entryTitle: (entry: EntryLike, index: number) => string
@@ -52,6 +52,19 @@ const emit = defineEmits<{
 }>()
 
 const expandedIds = ref<Set<string>>(new Set())
+
+// Auto-expand the last entry when a new entry is added
+watch(
+  () => props.entries.length,
+  (newLen, oldLen) => {
+    if (newLen > oldLen && props.entries.length > 0) {
+      const lastEntry = props.entries[props.entries.length - 1]
+      if (lastEntry) {
+        expandedIds.value.add(lastEntry.id)
+      }
+    }
+  },
+)
 
 /**
  *

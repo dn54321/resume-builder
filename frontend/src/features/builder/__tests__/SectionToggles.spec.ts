@@ -171,7 +171,7 @@ describe('SectionToggles', () => {
     expect(moveButtons).toHaveLength(1)
   })
 
-  it('shows enabled sections first, then disabled', () => {
+  it('maintains fixed SECTION_TYPES order regardless of enabled state', () => {
     const enabled: SectionType[] = ['experience', 'name_contact']
     const wrapper = mount(SectionToggles, {
       props: {
@@ -184,11 +184,33 @@ describe('SectionToggles', () => {
     const labels = wrapper.findAll('.section-toggles__label-text')
     const labelTexts = labels.map((el) => el.text())
 
-    // First two should be the enabled ones (contact, experience in their natural order)
-    // Actually, the orderedSections computed puts enabled first maintaining SECTION_TYPES order
+    // All 10 sections in fixed SECTION_TYPES order, regardless of enabled state
     expect(labelTexts[0]).toBe('Name & Contact')
-    expect(labelTexts[1]).toBe('Experience')
-    // Then disabled follow
-    expect(labelTexts[2]).toBe('Summary')
+    expect(labelTexts[1]).toBe('Summary')
+    expect(labelTexts[2]).toBe('Experience')
+    expect(labelTexts[3]).toBe('Education')
+    expect(labelTexts).toHaveLength(10)
+  })
+
+  it('adds disabled class to items that are not enabled', () => {
+    const enabled: SectionType[] = ['name_contact']
+    const wrapper = mount(SectionToggles, {
+      props: {
+        layout: 'standard',
+        enabledSections: enabled,
+        columnAssignments: noAssignments,
+      },
+    })
+
+    const items = wrapper.findAll('.section-toggles__item')
+    // First item (name_contact) should NOT have disabled class
+    expect(items[0]!.classes()).not.toContain('section-toggles__item--disabled')
+    // Second item (summary) SHOULD have disabled class
+    expect(items[1]!.classes()).toContain('section-toggles__item--disabled')
+    // Count disabled items
+    const disabledItems = items.filter((item) =>
+      item.classes().includes('section-toggles__item--disabled'),
+    )
+    expect(disabledItems).toHaveLength(9)
   })
 })

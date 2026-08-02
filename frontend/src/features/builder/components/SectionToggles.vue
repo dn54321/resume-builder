@@ -6,6 +6,7 @@
         v-for="section in orderedSections"
         :key="section.type"
         class="section-toggles__item"
+        :class="{ 'section-toggles__item--disabled': !section.enabled }"
       >
         <label class="section-toggles__toggle" @click.stop="emit('select', section.type)">
           <input
@@ -79,26 +80,13 @@ interface OrderedSection {
 }
 
 const orderedSections = computed<OrderedSection[]>(() => {
-  // Show enabled sections first, then disabled, maintaining order within each group
-  const enabled: OrderedSection[] = []
-  const disabled: OrderedSection[] = []
-
-  for (const type of SECTION_TYPES) {
-    const isEnabled = props.enabledSections.includes(type)
-    const item: OrderedSection = {
-      type,
-      label: SECTION_LABELS[type],
-      enabled: isEnabled,
-      column: props.columnAssignments[type] ?? 'right',
-    }
-    if (isEnabled) {
-      enabled.push(item)
-    } else {
-      disabled.push(item)
-    }
-  }
-
-  return [...enabled, ...disabled]
+  // Keep all sections in fixed SECTION_TYPES order regardless of enabled state
+  return SECTION_TYPES.map((type) => ({
+    type,
+    label: SECTION_LABELS[type],
+    enabled: props.enabledSections.includes(type),
+    column: props.columnAssignments[type] ?? 'right',
+  }))
 })
 
 /**
@@ -181,6 +169,11 @@ function onDragStart(event: MouseEvent, sectionType: SectionType) {
   border-radius: 0.375rem;
   background: var(--color-background-soft, #f9fafb);
   cursor: default;
+  transition: opacity 0.15s;
+}
+
+.section-toggles__item--disabled {
+  opacity: 0.55;
 }
 
 .section-toggles__toggle {
