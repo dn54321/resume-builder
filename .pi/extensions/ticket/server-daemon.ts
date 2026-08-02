@@ -721,7 +721,6 @@ async function checkBossAlive(): Promise<void> {
   if (!intercom) return;
   try {
     const sessions = await intercom.listSessions();
-    const connectedIds = new Set(sessions.map((s: any) => s.id));
     // Boss can register via BOSS: message (tracked by bossSessionId) or by /name boss
     const bossSession = sessions.find((s: any) => s.name === 'boss' || (bossSessionId && s.id === bossSessionId));
     if (!bossSession && !bossSessionId) {
@@ -730,10 +729,50 @@ async function checkBossAlive(): Promise<void> {
       // Boss reconnected with a different session — update tracking
       bossSessionId = bossSession.id;
     }
-    // Clean up workerRegistry: remove disconnected workers
+  } catch { /* best effort */ }
+}
+
+// ─── Auto-discover workers from intercom sessions ──────────────────
+
+async function autoDiscoverWorkers(): Promise<void> {
+  if (!intercom) return;
+  try {
+    const sessions = await intercom.listSessions();
+    const repoRoot = getRepoRoot();
+    const connectedIds = new Set(sessions.map((s: any) => s.id));
+
+    for (const session of sessions) {
+      // Skip: server, boss, already-registered workers
+      if (session.id === 'server' || session.name === 'server') continue;
+      if (bossSessionId && session.id === bossSessionId) continue;
+      if (session.name === 'boss') continue;
+      if (findWorkerBySession(session.id)) continue;
+
+      // Only auto-register sessions in the project directory (or worktrees under it)
+      const sessionCwd = session.cwd || '';
+      if (!sessionCwd.startsWith(repoRoot)) continue;
+
+      // Skip sessions that are actively processing (not idle)
+      if (session.status === 'thinking' || session.status === 'running') continue;
+
+      // Auto-register as a worker
+      const uuid = newWorkerUUID();
+      const displayName = session.name || `worker-${session.id.slice(0, 6)}`;
+      workerRegistry.set(uuid, {
+        uuid,
+        displayName,
+        sessionId: session.id,
+        sessionName: session.name || session.id.slice(0, 8),
+        status: 'idle',
+        assignedTicket: null,
+        registeredAt: new Date().toISOString(),
+      });
+      log(`Auto-discovered worker: ${displayName} (${uuid}, session: ${session.id.slice(0, 8)})`);
+    }
+
+    // Remove workers whose sessions disconnected
     for (const [uuid, w] of workerRegistry) {
-      const stillConnected = connectedIds.has(w.sessionId);
-      if (!stillConnected) {
+      if (!connectedIds.has(w.sessionId)) {
         log(`Removing disconnected worker: ${w.displayName} (${uuid})`);
         workerRegistry.delete(uuid);
       }
@@ -1008,9 +1047,13 @@ async function main(): Promise<void> {
     }
   });
 
-  // Watch for new sessions
+  // Watch for new sessions — auto-discover workers
   intercom.on('session_joined', (session: any) => {
     log(`Session joined: ${session.name} (${session.id?.slice(0, 8)})`);
+    autoDiscoverWorkers().then(() => {
+      writeDashboard();
+      launchReady();
+    });
   });
 
   // Start webhook server
@@ -1036,6 +1079,8 @@ async function main(): Promise<void> {
   // Periodic: Linear sync + status display + PR scan
   setInterval(async () => {
     await checkBossAlive();
+    await autoDiscoverWorkers();
+    writeDashboard();
     await syncLinearStatus();
     logStatus();
 
