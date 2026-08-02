@@ -217,7 +217,30 @@ export async function buildGraph(
   const nodes = new Map<string, GraphNode>();
 
   for (const [, ticket] of fetched) {
-    const existing = existingState?.tickets[ticket.identifier];
+    let existing = existingState?.tickets[ticket.identifier];
+    // If no saved state exists, check if the worktree already has commits.
+    // This handles the case where state was wiped (e.g., by a previous bug)
+    // but the worker had already completed the work.
+    if (!existing) {
+      const candidateWorktree = path.join(worktreesDir(), ticket.identifier);
+      if (fs.existsSync(candidateWorktree) && hasExistingWork(candidateWorktree, getDefaultBranch())) {
+        existing = {
+          identifier: ticket.identifier,
+          status: 'done',
+          branch: branchName(ticket.identifier),
+          worktreePath: candidateWorktree,
+          logPath: path.join(logsDir(), `${ticket.identifier}.log`),
+          pid: null,
+          prUrl: null,
+          startedAt: null,
+          finishedAt: new Date().toISOString(),
+          error: 'Recovered from worktree — work was already committed',
+          assignedPort: null,
+          retryCount: 0,
+          workerName: null,
+        };
+      }
+    }
     const state: TicketState = existing ?? {
       identifier: ticket.identifier,
       status: 'pending',
