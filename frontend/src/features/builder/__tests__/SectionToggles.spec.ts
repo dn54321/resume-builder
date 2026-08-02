@@ -303,7 +303,7 @@ describe('SectionToggles', () => {
     expect(wrapper.emitted('select')![0]).toEqual(['name_contact' as SectionType])
   })
 
-  it('emits toggle then select when clicking a disabled section label', async () => {
+  it('emits select when clicking a disabled section label (no toggle)', async () => {
     const enabled: SectionType[] = ['name_contact']
     const wrapper = mount(SectionToggles, {
       props: {
@@ -321,14 +321,13 @@ describe('SectionToggles', () => {
     const label = summaryItem!.find('label')
     await label.trigger('click')
 
-    // Should emit both toggle and select for summary
-    expect(wrapper.emitted('toggle')).toBeTruthy()
-    expect(wrapper.emitted('toggle')![0]).toEqual(['summary' as SectionType])
+    // Should emit select but NOT toggle (toggling is done via checkbox only)
+    expect(wrapper.emitted('toggle')).toBeFalsy()
     expect(wrapper.emitted('select')).toBeTruthy()
     expect(wrapper.emitted('select')![0]).toEqual(['summary' as SectionType])
   })
 
-  it('does not emit toggle when clicking an enabled section label', async () => {
+  it('does not emit toggle when clicking any section label', async () => {
     const wrapper = mount(SectionToggles, {
       props: {
         layout: 'standard',
