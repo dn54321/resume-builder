@@ -22,11 +22,12 @@ describe('useResumeStore', () => {
       const types = store.sections.map((s) => s.sectionType).sort()
       expect(types).toEqual([...SECTION_TYPES].sort())
 
-      // Defaults: right column, order matches index
+      // Defaults: right column, enabled: true, order matches index
       for (let i = 0; i < store.sections.length; i++) {
         const s = store.sections[i]!
         expect(s.column).toBe('right')
         expect(s.order).toBe(i)
+        expect(s.enabled).toBe(true)
         expect(s.entries).toEqual([])
       }
     })
@@ -66,37 +67,58 @@ describe('useResumeStore', () => {
   })
 
   describe('toggleSection', () => {
-    it('removes an enabled section when toggled off', () => {
+    it('soft-toggles a section off — keeps all sections, flips enabled flag', () => {
       const store = useResumeStore()
       store.initializeDefaults()
       expect(store.isSectionEnabled('name_contact')).toBe(true)
 
       store.toggleSection('name_contact')
       expect(store.isSectionEnabled('name_contact')).toBe(false)
-      expect(store.sections).toHaveLength(9)
+      // All 10 sections still in the array
+      expect(store.sections).toHaveLength(10)
+      const section = store.sections.find((s) => s.sectionType === 'name_contact')
+      expect(section).toBeDefined()
+      expect(section!.enabled).toBe(false)
     })
 
-    it('adds a disabled section back with defaults when toggled on', () => {
+    it('soft-toggles a section back on — preserves entries', () => {
       const store = useResumeStore()
       store.initializeDefaults()
-      store.toggleSection('name_contact') // remove
 
-      store.toggleSection('name_contact') // add back
+      // Add some data to name_contact before toggling
+      const contact = store.sections.find((s) => s.sectionType === 'name_contact')!
+      contact.entries = [{
+        id: 'nc-1',
+        order: 0,
+        parentId: null,
+        fields: [
+          { key: 'fullName', value: 'Jane Doe', order: 0 },
+          { key: 'email', value: 'jane@example.com', order: 1 },
+        ],
+      }]
 
+      store.toggleSection('name_contact') // disable
+      expect(store.isSectionEnabled('name_contact')).toBe(false)
+      expect(contact.enabled).toBe(false)
+      // Data is still there
+      expect(contact.entries).toHaveLength(1)
+      expect(contact.entries[0]!.fields[0]!.value).toBe('Jane Doe')
+
+      store.toggleSection('name_contact') // re-enable
       expect(store.isSectionEnabled('name_contact')).toBe(true)
+      expect(contact.enabled).toBe(true)
+      // Data preserved
+      expect(contact.entries).toHaveLength(1)
+      expect(contact.entries[0]!.fields[0]!.value).toBe('Jane Doe')
       expect(store.sections).toHaveLength(10)
-      const added = store.sections.find((s) => s.sectionType === 'name_contact')
-      expect(added).toBeDefined()
-      expect(added!.column).toBe('right')
-      expect(added!.entries).toEqual([])
     })
 
-    it('adds unknown section type as a new section', () => {
+    it('is a no-op for unknown section types (not in the array)', () => {
       const store = useResumeStore()
       store.initializeDefaults()
       store.toggleSection('unknown' as SectionType)
-      // Unknown types get added (the toggle is remove-if-exists, add-if-not)
-      expect(store.sections).toHaveLength(11)
+      // No change — unknown types are not in the sections array
+      expect(store.sections).toHaveLength(10)
     })
   })
 
@@ -121,7 +143,7 @@ describe('useResumeStore', () => {
   })
 
   describe('reorderSections', () => {
-    it('reorders enabled sections to match provided order', () => {
+    it('reorders enabled sections and appends disabled at end', () => {
       const store = useResumeStore()
       store.initializeDefaults()
       // Disable some
@@ -131,24 +153,28 @@ describe('useResumeStore', () => {
       const newOrder: SectionType[] = ['experience', 'education', 'hard_skills', 'summary', 'projects', 'certifications', 'languages', 'soft_skills']
       store.reorderSections(newOrder)
 
+      // Enabled sections in requested order, disabled at end
       const ordered = store.sections.map((s) => s.sectionType)
-      expect(ordered).toEqual(newOrder)
+      expect(ordered).toEqual([...newOrder, 'name_contact', 'hobbies'])
 
-      // Orders updated
+      // Orders updated: enabled have orders 0..7, disabled have 8..9
       for (let i = 0; i < store.sections.length; i++) {
         expect(store.sections[i]!.order).toBe(i)
       }
     })
 
-    it('drops sections not in the new order list', () => {
+    it('places unordered enabled sections after reordered ones', () => {
       const store = useResumeStore()
       store.initializeDefaults()
 
       store.reorderSections(['hard_skills', 'projects'])
 
-      expect(store.sections).toHaveLength(2)
+      // All 10 sections preserved; hard_skills and projects first, rest follow
+      expect(store.sections).toHaveLength(10)
       expect(store.sections[0]!.sectionType).toBe('hard_skills')
       expect(store.sections[1]!.sectionType).toBe('projects')
+      // Rest are still enabled and appended after the reordered ones
+      expect(store.sections.map((s) => s.enabled).every(Boolean)).toBe(true)
     })
   })
 
@@ -245,6 +271,47 @@ describe('useResumeStore', () => {
       expect(output.sections[0]!.entries[0]!.fields[0]!.value).toBe('John')
       expect(output.sections[1]!.sectionId).toBe('experience')
     })
+
+    it('round-trips enabled flag correctly', () => {
+      const store = useResumeStore()
+      store.initializeDefaults()
+      store.toggleSection('hobbies') // disable
+
+      const payload = store.toPayload()
+      const hobbies = payload.sections.find((s) => s.sectionId === 'hobbies')
+      expect(hobbies!.enabled).toBe(false)
+      const experience = payload.sections.find((s) => s.sectionId === 'experience')
+      expect(experience!.enabled).toBe(true)
+
+      // Reload and verify
+      store.loadFromPayload(payload)
+      expect(store.sections).toHaveLength(10)
+      const reloadedHobby = store.sections.find((s) => s.sectionType === 'hobbies')
+      expect(reloadedHobby!.enabled).toBe(false)
+      expect(store.isSectionEnabled('hobbies')).toBe(false)
+    })
+
+    it('defaults enabled to true for backward-compat payloads without the field', () => {
+      const store = useResumeStore()
+
+      // Payload without `enabled` field (old format)
+      const oldPayload = {
+        layout: 'standard' as const,
+        sections: [
+          {
+            sectionId: 'summary',
+            column: 'right' as const,
+            order: 0,
+            entries: [{ order: 0, parentId: null, fields: [{ key: 'text', value: 'Hello', order: 0 }] }],
+          },
+        ],
+      }
+
+      store.loadFromPayload(oldPayload)
+      expect(store.sections).toHaveLength(1)
+      expect(store.sections[0]!.enabled).toBe(true)
+      expect(store.isSectionEnabled('summary')).toBe(true)
+    })
   })
 
   describe('toPayload', () => {
@@ -255,16 +322,29 @@ describe('useResumeStore', () => {
       expect(payload.sections).toEqual([])
     })
 
-    it('excludes fields not in sections', () => {
+    it('includes all sections with enabled flag in payload', () => {
       const store = useResumeStore()
       store.initializeDefaults()
       store.toggleSection('name_contact')
       store.toggleSection('hobbies')
 
       const payload = store.toPayload()
-      expect(payload.sections).toHaveLength(8)
-      expect(payload.sections.map((s) => s.sectionId)).not.toContain('name_contact')
-      expect(payload.sections.map((s) => s.sectionId)).not.toContain('hobbies')
+      // All 10 sections are serialized (soft-toggle keeps them)
+      expect(payload.sections).toHaveLength(10)
+
+      // Disabled sections have enabled: false
+      const nc = payload.sections.find((s) => s.sectionId === 'name_contact')
+      expect(nc).toBeDefined()
+      expect(nc!.enabled).toBe(false)
+
+      const h = payload.sections.find((s) => s.sectionId === 'hobbies')
+      expect(h).toBeDefined()
+      expect(h!.enabled).toBe(false)
+
+      // Enabled sections have enabled: true
+      const exp = payload.sections.find((s) => s.sectionId === 'experience')
+      expect(exp).toBeDefined()
+      expect(exp!.enabled).toBe(true)
     })
   })
 })

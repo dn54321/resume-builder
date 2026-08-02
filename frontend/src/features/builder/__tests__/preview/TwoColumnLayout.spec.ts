@@ -491,4 +491,66 @@ describe('TwoColumnLayout', () => {
       expect(wrapper.findAll('.preview-section__heading')).toHaveLength(0)
     })
   })
+
+  describe('disabled sections', () => {
+    it('does not render sections where enabled is false', () => {
+      const store = makeStore()
+      store.initializeDefaults()
+
+      // Populate summary with data in left column
+      const summarySection = store.sections.find((s) => s.sectionType === 'summary')!
+      summarySection.entries = [{
+        id: 's1',
+        order: 0,
+        parentId: null,
+        fields: [{ key: 'text', value: 'A great summary.', order: 0 }],
+      }]
+      summarySection.column = 'left'
+
+      // Disable it
+      summarySection.enabled = false
+
+      const wrapper = mount(TwoColumnLayout, {
+        props: { sections: store.sections },
+      })
+
+      // Summary heading should not appear in either column
+      const headings = wrapper.findAll('.preview-section__heading')
+      expect(headings.some((h) => h.text() === 'Summary')).toBe(false)
+    })
+
+    it('hides a section when toggled off and shows it again when toggled on', () => {
+      const store = makeStore()
+      store.initializeDefaults()
+
+      // Populate summary with data
+      const summarySection = store.sections.find((s) => s.sectionType === 'summary')!
+      summarySection.entries = [{
+        id: 's1',
+        order: 0,
+        parentId: null,
+        fields: [{ key: 'text', value: 'A great summary.', order: 0 }],
+      }]
+
+      // Enabled — should render
+      let wrapper = mount(TwoColumnLayout, {
+        props: { sections: store.sections },
+      })
+      expect(wrapper.text()).toContain('A great summary.')
+
+      // Disable via toggle
+      store.toggleSection('summary')
+      wrapper = mount(TwoColumnLayout, {
+        props: { sections: store.sections },
+      })
+      expect(wrapper.text()).not.toContain('A great summary.')
+
+      // Re-enable — should show again with all data
+      store.toggleSection('summary')
+      wrapper = mount(TwoColumnLayout, {
+        props: { sections: store.sections },
+      })
+      expect(wrapper.text()).toContain('A great summary.')
+    })
+  })
 })
