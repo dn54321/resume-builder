@@ -5,15 +5,20 @@
  * Runs as a background process. Handles:
  *   - Worktree creation and management
  *   - Ticket graph building
- *   - Assigning work to idle spawnedProcesses via intercom
+ *   - Spawning headless pi workers and attaching them to tmux panes
  *   - GitHub webhooks (PR comments, merge conflicts)
  *   - Alerting the boss of events
  *
  * The boss (a pi session) sends commands via intercom:
  *   EPIC <TICKET_ID>     — Build full epic graph, assign all tickets
  *   TICKET <ID>          — Build graph for one ticket
- *   STOP                 — Halt all spawnedProcesses
+ *   STOP                 — Halt all workers
  *   STATUS               — Report current state
+ *
+ * Tmux pane management:
+ *   When a headless worker is spawned, its log output is attached to the
+ *   corresponding agent pane via `tmux send-keys`. When the worker finishes,
+ *   the pane is reset to show "Waiting for tasks...".
  *
  * Usage:
  *   npx tsx .pi/extensions/ticket/server-daemon.ts
@@ -80,10 +85,6 @@ function log(msg: string): void {
 // ─── Worker tracking ────────────────────────────────────────────────
 
 const spawnedProcesses = new Map<string, cp.ChildProcess>(); // ticketId → process
-const workerAssignment = new Map<string, string>();  // agentName → ticketId
-const agentSessionMap = new Map<string, { id: string; name: string }>();  // agentName → sessionInfo
-const idleAgents = new Set<string>();                // agent names waiting for work
-const inFlightAssignments = new Set<string>();       // ticket identifiers currently being assigned (prevents double-assign race)
 
 const epicGraphs = new Map<string, { nodes: Map<string, GraphNode>; rootId: string }>();
 
@@ -101,111 +102,81 @@ async function tellBoss(msg: string): Promise<void> {
   } catch { /* boss may have disconnected */ }
 }
 
-// ─── Assign work to an idle worker ──────────────────────────────────
+// ─── Tmux pane management ───────────────────────────────────────────
 
-async function assignWork(node: GraphNode): Promise<boolean> {
-  // Find an idle agent
-  const agentName = [...idleAgents][0];
-  if (!agentName) return false;
-
-  // Prevent double-assignment: if this ticket is already being assigned or has a worker, skip
-  if (inFlightAssignments.has(node.ticket.identifier)) {
-    log(`assignWork: ${node.ticket.identifier} already being assigned — skipping ${agentName}`);
-    return false;
-  }
-  const alreadyAssigned = [...workerAssignment.values()].includes(node.ticket.identifier);
-  if (alreadyAssigned) {
-    log(`assignWork: ${node.ticket.identifier} already has a worker — skipping ${agentName}`);
-    return false;
-  }
-  inFlightAssignments.add(node.ticket.identifier);
-  idleAgents.delete(agentName); // Reserve agent immediately to prevent double-assignment
-
-  // Verify agent is actually connected via session map
-  if (!intercom) { log(`assignWork: intercom not initialized`); idleAgents.add(agentName); inFlightAssignments.delete(node.ticket.identifier); return false; }
-  let sessions: any[] = [];
-  try { sessions = await intercom.listSessions(); } catch (err: any) { log(`assignWork: listSessions failed: ${err.message}`); idleAgents.add(agentName); inFlightAssignments.delete(node.ticket.identifier); return false; }
-  
-  // Resolve the agent's intercom session from the registration map
-  const sessionInfo = agentSessionMap.get(agentName);
-  const agentSession = sessionInfo
-    ? sessions.find((s: any) => s.id === sessionInfo.id || sessionInfo.id.includes(s.id) || s.name === sessionInfo.name)
-    : sessions.find((s: any) => s.name === agentName);
-  if (!agentSession) {
-    // Agent disconnected — remove from idle and try next
-    const sessionIds = [...sessions.map((s: any) => `${s.name}(${s.id.slice(0,8)})`)].join(', ');
-    log(`Agent ${agentName} not connected — removed from idle. Known sessions: [${sessionIds}]`);
-    inFlightAssignments.delete(node.ticket.identifier);
-    return assignWork(node); // try next agent
-  }
-
-  // Already deleted from idleAgents above; delete here is a no-op but kept for clarity
-
-  // Create worktree
-  const repoRoot = getRepoRoot();
-  const wtDir = path.join(repoRoot, '.pi', 'tickets', 'worktrees');
-  const { worktreePath } = ensureWorktree(repoRoot, node.ticket.identifier, 'main', wtDir);
-  node.state.worktreePath = worktreePath;
-  node.state.workerName = agentName;
-  workerAssignment.set(agentName, node.ticket.identifier);
-
-  // Copy skills to the worktree so spawnedProcesses can find them
-  const skillsSrc = path.join(repoRoot, '.agents', 'skills');
-  const skillsDst = path.join(worktreePath, '.agents', 'skills');
+/**
+ * Read the saved pane ID for an agent from the panes directory.
+ * These files are written by agent.sh when the layout is created.
+ */
+function getPaneIdForAgent(agentName: string): string | null {
+  const paneFile = path.join(getRepoRoot(), '.pi', 'tickets', 'panes', `${agentName}.pane`);
   try {
-    for (const skill of ['worker-intercom', 'create-pr']) {
-      const src = path.join(skillsSrc, skill, 'SKILL.md');
-      const dst = path.join(skillsDst, skill, 'SKILL.md');
-      if (fs.existsSync(src)) {
-        fs.mkdirSync(path.dirname(dst), { recursive: true });
-        fs.copyFileSync(src, dst);
-      }
+    if (fs.existsSync(paneFile)) {
+      return fs.readFileSync(paneFile, 'utf-8').trim();
     }
-  } catch { /* best effort */ }
+  } catch { /* ignore */ }
+  return null;
+}
 
-  // Build the prompt
-  const deps = node.ticket.refs.length > 0 ? node.ticket.refs.join(', ') : 'none';
-  const prompt = [
-    `## Ticket Assignment: ${node.ticket.identifier}`,
-    '',
-    `**Title:** ${node.ticket.title}`,
-    `**Dependencies:** ${deps}`,
-    '',
-    `**Worktree:** ${worktreePath}`,
-    '',
-    '## Ticket Description',
-    node.ticket.description || '(no description)',
-    '',
-    '## Instructions',
-    '1. cd to the worktree and implement this ticket',
-    '2. Register: intercom({ action: "send", to: "server", message: "REGISTER: agent-N" })',
-    '3. Status: intercom({ action: "send", to: "boss", message: "STATUS: doing X" })',
-    '4. Question: intercom({ action: "ask", to: "boss", message: "Question: ..." })',
-    '5. Write PR to pr-body.md, use create-pr skill, save pr-url.txt',
-    '6. Done: intercom({ action: "send", to: "boss", message: "DONE: <pr-url>" })',
-    '7. Idle: intercom({ action: "send", to: "server", message: "IDLE" })',
-    '',
-    'See .agents/skills/worker-intercom/SKILL.md and .agents/skills/create-pr/SKILL.md for details.',
-  ].join('\n');
+/**
+ * Attach a headless worker's log output to its designated tmux pane.
+ * Kills whatever is currently running in the pane and starts tailing the log.
+ */
+function attachToPane(agentName: string, logPath: string, ticketId: string): void {
+  const paneId = getPaneIdForAgent(agentName);
+  if (!paneId) {
+    log(`No pane file for ${agentName} — running headless (no pane to attach)`);
+    return;
+  }
 
-  // Send task via intercom — use the resolved session ID for routing
   try {
-    const target = agentSession.id || agentName;
-    log(`assignWork: sending TASK for ${node.ticket.identifier} to ${agentName} via target "${target}"`);
-    await intercom.send(target, { text: `TASK: ${node.ticket.identifier}\n${prompt}` });
-    log(`Assigned ${node.ticket.identifier} → ${agentName}`);
-    node.state.status = 'in_progress';
-    node.state.startedAt = new Date().toISOString();
-    // Transition Linear ticket
-    transitionTicket(node.ticket.id, 'In Progress').catch(() => {});
-    await tellBoss(`Assigned ${node.ticket.identifier} to ${agentName}`);
-    inFlightAssignments.delete(node.ticket.identifier);
-    return true;
-  } catch {
-    // Send failed — agent may be gone, put it back
-    idleAgents.add(agentName);
-    inFlightAssignments.delete(node.ticket.identifier);
-    return false;
+    // Kill the current process in the pane
+    cp.spawnSync('tmux', ['send-keys', '-t', paneId, 'C-c'], { timeout: 2000 });
+    // Brief pause for the process to die
+    cp.spawnSync('sleep', ['0.3'], { timeout: 1000 });
+    // Start tailing the worker's log — -n +0 shows entire file then follows
+    const cmd = `clear && printf '\\n  ${agentName}: Working on ${ticketId}...\\n\\n' && tail -n +0 -f "${logPath}"`;
+    cp.spawnSync('tmux', ['send-keys', '-t', paneId, cmd, 'Enter'], { timeout: 2000 });
+    log(`Attached ${agentName} to pane ${paneId} (${ticketId})`);
+  } catch (err: any) {
+    log(`Failed to attach ${agentName} to pane: ${err.message}`);
+  }
+}
+
+/**
+ * Reset a tmux pane to show "Waiting for tasks" after a worker finishes.
+ */
+function resetPane(agentName: string): void {
+  const paneId = getPaneIdForAgent(agentName);
+  if (!paneId) return;
+
+  try {
+    // Kill the tail process with Ctrl-C
+    cp.spawnSync('tmux', ['send-keys', '-t', paneId, 'C-c'], { timeout: 2000 });
+    cp.spawnSync('sleep', ['0.3'], { timeout: 1000 });
+    // Display the waiting message
+    const cmd = `clear && printf '\\n  Waiting for tasks... (${agentName})\\n\\n'`;
+    cp.spawnSync('tmux', ['send-keys', '-t', paneId, cmd, 'Enter'], { timeout: 2000 });
+    log(`Reset pane for ${agentName}`);
+  } catch (err: any) {
+    log(`Failed to reset pane for ${agentName}: ${err.message}`);
+  }
+}
+
+/** Reset all known agent panes to "Waiting for tasks" on server startup. */
+function resetAllPanes(): void {
+  const config = getAgentConfig();
+  for (let i = 1; i <= config.maxAgents; i++) {
+    const agentName = `agent-${i}`;
+    const paneId = getPaneIdForAgent(agentName);
+    if (paneId) {
+      try {
+        cp.spawnSync('tmux', ['send-keys', '-t', paneId, 'C-c'], { timeout: 2000 });
+        cp.spawnSync('sleep', ['0.2'], { timeout: 1000 });
+        const cmd = `clear && printf '\\n  Waiting for tasks... (${agentName})\\n\\n'`;
+        cp.spawnSync('tmux', ['send-keys', '-t', paneId, cmd, 'Enter'], { timeout: 2000 });
+      } catch { /* ignore */ }
+    }
   }
 }
 
@@ -250,14 +221,7 @@ function writeDashboard(): void {
       const icon = STATUS_ICON[node.state.status] ?? '?';
       const id = node.ticket.identifier.padEnd(10);
       const title = node.ticket.title.slice(0, 40).padEnd(40);
-      let agent = '—';
-      for (const [name, tid] of workerAssignment) {
-        if (tid === node.ticket.identifier) { agent = name; break; }
-      }
-      // Fall back to node.state.workerName for headless spawnedProcesses (not in workerAssignment)
-      if (agent === '—' && node.state.workerName) {
-        agent = node.state.workerName;
-      }
+      const agent = node.state.workerName || '—';
       lines.push(`  ${icon} ${id} ${title} [${agent.padEnd(10)}]`);
     }
     lines.push('');
@@ -265,38 +229,24 @@ function writeDashboard(): void {
 
   // Worker status
   lines.push('── Workers ──');
-  const activeAgents = new Set([...idleAgents]);
-  for (const [agentName] of workerAssignment) activeAgents.add(agentName);
-  // Include headless spawnedProcesses (tracked via spawnedProcesses Map, not workerAssignment)
-  const headlessWorkers: { name: string; ticketId: string }[] = [];
+  const activeWorkers: { name: string; ticketId: string }[] = [];
   for (const [ticketId] of spawnedProcesses) {
     const found = findNode(ticketId);
-    if (found && found.node.state.workerName && !workerAssignment.has(found.node.state.workerName)) {
-      headlessWorkers.push({ name: found.node.state.workerName, ticketId });
+    if (found && found.node.state.workerName) {
+      activeWorkers.push({ name: found.node.state.workerName, ticketId });
     }
   }
-  if (activeAgents.size === 0 && headlessWorkers.length === 0) {
-    lines.push('  (no agents connected)');
+  if (activeWorkers.length === 0) {
+    lines.push('  (no workers active)');
   } else {
-    for (const agentName of [...activeAgents].sort()) {
-      const ticketId = workerAssignment.get(agentName);
-      if (ticketId) {
-        // Find which epic this ticket belongs to
-        let epicId = '?';
-        for (const [eid, epic] of epicGraphs) {
-          if (epic.nodes.has(ticketId)) { epicId = eid; break; }
-        }
-        lines.push(`  ◉ ${agentName.padEnd(12)} → ${ticketId.padEnd(10)} (${epicId})`);
-      } else {
-        lines.push(`  ○ ${agentName.padEnd(12)} idle`);
-      }
-    }
-    for (const hw of headlessWorkers) {
+    for (const w of activeWorkers.sort((a, b) => a.name.localeCompare(b.name))) {
       let epicId = '?';
       for (const [eid, epic] of epicGraphs) {
-        if (epic.nodes.has(hw.ticketId)) { epicId = eid; break; }
+        if (epic.nodes.has(w.ticketId)) { epicId = eid; break; }
       }
-      lines.push(`  ◉ ${hw.name.padEnd(12)} → ${hw.ticketId.padEnd(10)} (${epicId}) [headless]`);
+      const hasPane = getPaneIdForAgent(w.name) !== null;
+      const tag = hasPane ? '' : ' [headless]';
+      lines.push(`  ◉ ${w.name.padEnd(12)} → ${w.ticketId.padEnd(10)} (${epicId})${tag}`);
     }
   }
 
@@ -311,7 +261,7 @@ function writeDashboard(): void {
 // ─── Check if all epics are complete ────────────────────────────────
 
 function areAllEpicsDone(): boolean {
-  if (epicGraphs.size === 0) return true; // no epics = nothing to do
+  if (epicGraphs.size === 0) return true;
   for (const [, epic] of epicGraphs) {
     for (const [, node] of epic.nodes) {
       if (node.state.status !== 'done' && node.state.status !== 'merged' && node.state.status !== 'failed') {
@@ -322,7 +272,7 @@ function areAllEpicsDone(): boolean {
   return true;
 }
 
-// ─── Launch ready spawnedProcesses ───────────────────────────────────────────
+// ─── Launch ready workers ───────────────────────────────────────────
 
 function launchReady(): void {
   if (areAllEpicsDone()) {
@@ -344,14 +294,14 @@ function launchReady(): void {
     if (spawnedProcesses.size >= config.maxAgents) break;
 
     let agentName = '';
-    const usedHeadlessNames = new Set<string>();
+    const usedNames = new Set<string>();
     for (const [tid] of spawnedProcesses) {
       const found = findNode(tid);
-      if (found?.node.state.workerName) usedHeadlessNames.add(found.node.state.workerName);
+      if (found?.node.state.workerName) usedNames.add(found.node.state.workerName);
     }
     for (let i = 1; i <= config.maxAgents + 1; i++) {
       const candidate = `agent-${i}`;
-      if (!usedHeadlessNames.has(candidate)) {
+      if (!usedNames.has(candidate)) {
         agentName = candidate;
         break;
       }
@@ -367,10 +317,18 @@ function launchReady(): void {
       spawnedProcesses.set(node.ticket.identifier, proc);
       node.state.workerName = agentName;
       writePaneAssignments();
+
+      // Attach worker output to its tmux pane so it's visible
+      attachToPane(agentName, node.state.logPath, node.ticket.identifier);
+
       proc.on('close', (code) => {
         spawnedProcesses.delete(node.ticket.identifier);
         writePaneAssignments();
         log(`Worker for ${node.ticket.identifier} exited (code ${code})`);
+
+        // Reset the pane to show "Waiting for tasks"
+        resetPane(agentName);
+
         saveAllState();
         launchReady();
       });
@@ -380,7 +338,7 @@ function launchReady(): void {
   }
 }
 
-/** Write worker-to-pane assignments so tmux panes know which agent-status.txt to watch. */
+/** Write worker-to-pane assignments for tmux panes to reference. */
 function writePaneAssignments(): void {
   const assignments: Record<string, { ticket: string; worktree: string; agent: string }> = {};
   let paneIdx = 1;
@@ -454,18 +412,10 @@ async function addEpic(ticketId: string): Promise<void> {
   launchReady();
 }
 
-/** Remove an epic from the managed set, freeing any spawnedProcesses assigned to its tickets. */
+/** Remove an epic from the managed set, freeing any workers assigned to its tickets. */
 function dropEpic(ticketId: string): void {
   const epic = epicGraphs.get(ticketId);
   if (!epic) return;
-  // Free any spawnedProcesses assigned to this epic's tickets
-  for (const [agentName, assignedTicket] of workerAssignment) {
-    if (epic.nodes.has(assignedTicket)) {
-      workerAssignment.delete(agentName);
-      idleAgents.add(agentName);
-      log(`Freed ${agentName} from ${assignedTicket} (epic ${ticketId} dropped)`);
-    }
-  }
   epicGraphs.delete(ticketId);
   log(`Dropped epic ${ticketId}. Remaining epics: ${epicGraphs.size}`);
   saveAllState();
@@ -476,7 +426,6 @@ async function handleCommand(from: string, text: string): Promise<void> {
   const trimmed = text.trim();
 
   if (trimmed.startsWith('EPIC ') || trimmed.startsWith('epic ')) {
-    // Support multiple: EPIC RES-10 RES-20 RES-30
     const ids = trimmed.split(/\s+/).slice(1);
     for (const ticketId of ids) {
       const id = ticketId.trim();
@@ -496,7 +445,6 @@ async function handleCommand(from: string, text: string): Promise<void> {
     dropEpic(ticketId);
     await tellBoss(`Dropped epic ${ticketId}. ${epicGraphs.size} epic(s) remaining.`);
   } else if (trimmed.startsWith('TICKET ') || trimmed.startsWith('ticket ')) {
-    // Single ticket — build a mini "epic" around it
     const ticketId = trimmed.split(/\s+/)[1]?.trim();
     if (!ticketId) return;
     log(`Boss: add ticket ${ticketId}`);
@@ -511,7 +459,6 @@ async function handleCommand(from: string, text: string): Promise<void> {
     log('Boss requested stop');
     for (const [, epic] of epicGraphs) {
       killAllWorkers(epic.nodes);
-      // Reset all in_progress tickets back to pending
       for (const [, node] of epic.nodes) {
         if (node.state.status === 'in_progress') {
           node.state.status = 'pending';
@@ -522,67 +469,36 @@ async function handleCommand(from: string, text: string): Promise<void> {
         }
       }
     }
-    // Free all agent assignments
-    for (const [name] of workerAssignment) {
-      idleAgents.add(name);
-    }
-    workerAssignment.clear();
+    spawnedProcesses.clear();
     saveAllState();
     writeDashboard();
-    spawnedProcesses.clear();
-    await tellBoss('All spawnedProcesses stopped.');
+    // Reset all panes
+    const config = getAgentConfig();
+    for (let i = 1; i <= config.maxAgents; i++) {
+      resetPane(`agent-${i}`);
+    }
+    await tellBoss('All workers stopped.');
   } else if (trimmed.startsWith('STOP ') || trimmed.startsWith('stop ')) {
-    // STOP agent-N — stop a specific worker
     const agentName = trimmed.split(/\s+/)[1]?.trim();
     if (!agentName) return;
     log(`Boss: stopping ${agentName}`);
-    try { await intercom!.send(agentName, { text: 'STOP: Boss is reassigning you. Go idle.' }); } catch {}
-    for (const [name, tid] of workerAssignment) {
-      if (name === agentName) {
-        const found = findNode(tid);
-        if (found && found.node.state.status === 'in_progress') {
+    // Find and kill the worker process for this agent
+    for (const [ticketId, proc] of spawnedProcesses) {
+      const found = findNode(ticketId);
+      if (found && found.node.state.workerName === agentName) {
+        try { proc.kill('SIGTERM'); } catch { /* ignore */ }
+        spawnedProcesses.delete(ticketId);
+        if (found.node.state.status === 'in_progress') {
           found.node.state.status = 'pending';
           found.node.state.error = `Stopped by boss for reassignment`;
         }
-        spawnedProcesses.delete(tid);
-        workerAssignment.delete(name);
+        resetPane(agentName);
         break;
       }
     }
-    idleAgents.add(agentName);
     saveAllState();
     writeDashboard();
     launchReady();
-  } else if (trimmed.startsWith('ASSIGN ') || trimmed.startsWith('assign ')) {
-    // ASSIGN agent-N TICKET-ID
-    const parts = trimmed.split(/\s+/);
-    const agentName = parts[1]?.trim();
-    const ticketId = parts[2]?.trim();
-    if (!agentName || !ticketId) return;
-    log(`Boss: assigning ${ticketId} → ${agentName}`);
-
-    // Check if ticket is in any existing epic, if not add it
-    let node = findNode(ticketId);
-    if (!node) {
-      try { await addEpic(ticketId); } catch (err: any) { log(`Build error: ${err.message}`); return; }
-      node = findNode(ticketId);
-    }
-    if (!node) return;
-
-    idleAgents.delete(agentName);
-    const wtDir = path.join(getRepoRoot(), '.pi', 'tickets', 'worktrees');
-    const { worktreePath } = ensureWorktree(getRepoRoot(), ticketId, 'main', wtDir);
-    node.node.state.worktreePath = worktreePath;
-    node.node.state.workerName = agentName;
-    workerAssignment.set(agentName, ticketId);
-    node.node.state.status = 'in_progress';
-    node.node.state.startedAt = new Date().toISOString();
-    saveAllState();
-    writeDashboard();
-    try {
-      await intercom!.send(agentName, { text: `TASK: ${ticketId}\nWorktree: ${worktreePath}\nTicket: ${node.node.ticket.title}\n\n${node.node.ticket.description || '(no description)'}` });
-      log(`Assigned ${ticketId} → ${agentName}`);
-    } catch { idleAgents.add(agentName); }
   } else if (trimmed.startsWith('CLOSE ') || trimmed.startsWith('close ')) {
     const closeId = trimmed.split(/\s+/)[1]?.trim();
     if (!closeId) return;
@@ -594,9 +510,6 @@ async function handleCommand(from: string, text: string): Promise<void> {
         found.node.state.status = 'done';
         found.node.state.finishedAt = new Date().toISOString();
         found.node.state.error = 'Closed by boss — no longer relevant';
-        for (const [name, tid] of workerAssignment) {
-          if (tid === closeId) { workerAssignment.delete(name); idleAgents.add(name); break; }
-        }
         saveAllState();
         writeDashboard();
       }
@@ -618,7 +531,7 @@ async function handleCommand(from: string, text: string): Promise<void> {
         if (n.state.status === 'failed') totalFailed++;
       }
     }
-    await tellBoss(`${epicGraphs.size} epic(s) · ${totalTickets} tickets: ${totalRunning} running, ${totalDone} done, ${totalFailed} failed. ${idleAgents.size} agents idle.`);
+    await tellBoss(`${epicGraphs.size} epic(s) · ${totalTickets} tickets: ${totalRunning} running, ${totalDone} done, ${totalFailed} failed. ${spawnedProcesses.size} workers active.`);
   }
 }
 
@@ -682,13 +595,6 @@ async function syncLinearStatus(): Promise<void> {
           node.state.status = 'done';
           node.state.finishedAt = new Date().toISOString();
           log(`Linear: ${identifier} → done (${issue.state?.name})`);
-          for (const [name, tid] of workerAssignment) {
-            if (tid === identifier) {
-              workerAssignment.delete(name);
-              idleAgents.add(name);
-              break;
-            }
-          }
         }
       }
     }
@@ -704,33 +610,17 @@ async function checkBossAlive(): Promise<void> {
   if (!intercom) return;
   try {
     const sessions = await intercom.listSessions();
-    // Boss can register via BOSS: message (tracked by bossSessionId) or by /name boss
     const bossSession = sessions.find((s: any) => s.name === 'boss' || (bossSessionId && s.id === bossSessionId));
     if (!bossSession && !bossSessionId) {
       log('Boss not connected');
     } else if (bossSession && bossSessionId && bossSession.id !== bossSessionId) {
-      // Boss reconnected with a different session — update tracking
       bossSessionId = bossSession.id;
-    }
-    // Clean up idleAgents: remove any that aren't actually connected
-    const connectedIds = new Set(sessions.map((s: any) => s.id));
-    const connectedNames = new Set(sessions.map((s: any) => s.name));
-    for (const name of idleAgents) {
-      const info = agentSessionMap.get(name);
-      const hasSession = info
-        ? (connectedIds.has(info.id) || [...connectedIds].some((cid: string) => info.id.includes(cid)) || connectedNames.has(info.name))
-        : false;
-      if (!hasSession) {
-        idleAgents.delete(name);
-        log(`Removed stale agent from idle: ${name}`);
-      }
     }
   } catch { /* best effort */ }
 }
 
 function logStatus(): void {
   writeDashboard();
-  // Log a one-line summary
   if (epicGraphs.size === 0) {
     log('── Status: No active epics ──');
     return;
@@ -743,7 +633,7 @@ function logStatus(): void {
       if (n.state.status === 'in_progress' || n.state.status === 'running') totalRunning++;
     }
   }
-  log(`── ${epicGraphs.size} epics · ${totalTickets} tix · ${totalRunning} running · ${totalDone} done · ${idleAgents.size} idle ──`);
+  log(`── ${epicGraphs.size} epics · ${totalTickets} tix · ${totalRunning} running · ${totalDone} done · ${spawnedProcesses.size} active ──`);
 }
 
 // ─── Close a Linear ticket ──────────────────────────────────────────
@@ -752,7 +642,6 @@ async function closeLinearTicket(identifier: string): Promise<void> {
   const apiKey = process.env.LINEAR_API_KEY;
   if (!apiKey) throw new Error('No LINEAR_API_KEY');
 
-  // Get the issue ID and team
   const q1 = `{ issue(id: "${identifier}") { id team { id } } }`;
   const r1 = await fetch('https://api.linear.app/graphql', {
     method: 'POST',
@@ -764,7 +653,6 @@ async function closeLinearTicket(identifier: string): Promise<void> {
   const teamId = j1?.data?.issue?.team?.id;
   if (!issueId || !teamId) throw new Error('Issue not found');
 
-  // Find a canceled or done state
   const q2 = `{ workflowStates(filter: { team: { id: { eq: "${teamId}" } } }) { nodes { id name type } } }`;
   const r2 = await fetch('https://api.linear.app/graphql', {
     method: 'POST',
@@ -776,7 +664,6 @@ async function closeLinearTicket(identifier: string): Promise<void> {
   const target = states.find((s: any) => s.type === 'canceled') || states.find((s: any) => s.type === 'completed');
   if (!target) throw new Error('No canceled/done state found');
 
-  // Transition
   const m = `mutation { issueUpdate(id: "${issueId}", input: { stateId: "${target.id}" }) { success } }`;
   await fetch('https://api.linear.app/graphql', {
     method: 'POST',
@@ -817,12 +704,10 @@ async function findActiveEpics(): Promise<string[]> {
     const issues: any[] = json?.data?.issues?.nodes ?? [];
     log(`Linear returned ${issues.length} active tickets`);
 
-    // Return all epics (issues with children)
     const epics = issues.filter((i: any) => i.children?.nodes?.length > 0);
     if (epics.length > 0) {
       return epics.map((e: any) => e.identifier as string);
     }
-    // Fall back to first active ticket
     if (issues.length > 0) {
       return [issues[0].identifier as string];
     }
@@ -835,7 +720,6 @@ async function findActiveEpics(): Promise<string[]> {
 async function autoStart(): Promise<void> {
   log('Looking for work to start...');
   
-  // Check if there's saved state with epic roots first
   const existingState = loadState();
   const epicRoots = existingState?.epicRoots ?? [];
   if (epicRoots.length > 0) {
@@ -850,7 +734,6 @@ async function autoStart(): Promise<void> {
     if (epicGraphs.size > 0) return;
   }
   
-  // Fall back to old-style state (single graph without epicRoots)
   if (existingState && Object.keys(existingState.tickets).length > 0 && epicGraphs.size === 0) {
     const ticketIds = Object.keys(existingState.tickets);
     const firstId = ticketIds[0]!;
@@ -863,7 +746,6 @@ async function autoStart(): Promise<void> {
     }
   }
   
-  // No saved state — query Linear for active epics
   const epics = await findActiveEpics();
   if (epics.length > 0) {
     log(`Found ${epics.length} active epic(s): ${epics.join(', ')}`);
@@ -894,11 +776,15 @@ async function main(): Promise<void> {
 
   await initIntercom();
 
-  // Listen for boss commands and worker messages
+  // Reset all agent panes to "Waiting for tasks" on startup
+  resetAllPanes();
+
+  // Listen for boss commands
   intercom.on('message', async (from: any, message: any) => {
     const text: string = (message.content?.text ?? '').trim();
     const senderName: string = from.name || from.id.slice(0, 8);
-    // Boss registration — track their session ID so tellBoss() works
+
+    // Boss registration
     if (text.startsWith('BOSS:') || text.startsWith('boss:')) {
       bossSessionId = from.id;
       log(`Boss registered: ${senderName} (session: ${from.id.slice(0, 8)})`);
@@ -906,69 +792,10 @@ async function main(): Promise<void> {
       return;
     }
 
-    if (text.startsWith('EPIC ') || text.startsWith('TICKET ') || text === 'STOP' || text === 'STATUS' || text.startsWith('CLOSE ') || text.startsWith('STOP ') || text.startsWith('ASSIGN ') || text.startsWith('DROP ')) {
+    // Boss commands
+    if (text.startsWith('EPIC ') || text.startsWith('TICKET ') || text === 'STOP' || text === 'STATUS' || text.startsWith('CLOSE ') || text.startsWith('STOP ') || text.startsWith('DROP ')) {
       await handleCommand(senderName, text);
       return;
-    }
-
-    // Worker registration — map agent name to session info
-    if (text.startsWith('REGISTER:')) {
-      const agentName = text.slice('REGISTER:'.length).trim();
-      if (!agentName) return;
-
-      // ⚠️ Dedup: prevent multiple agents from sharing the same session.
-      // If this session already registered as a different agent, remove the old mapping.
-      const existingAgentForSession = [...agentSessionMap.entries()].find(
-        ([, info]) => info.id === from.id
-      );
-      if (existingAgentForSession && existingAgentForSession[0] !== agentName) {
-        const oldName = existingAgentForSession[0];
-        log(`Session ${senderName} re-registering: was ${oldName}, now ${agentName}. Removing old mapping.`);
-        agentSessionMap.delete(oldName);
-        idleAgents.delete(oldName);
-        // If the old agent was assigned to a ticket, unassign it
-        if (workerAssignment.has(oldName)) {
-          const tid = workerAssignment.get(oldName)!;
-          workerAssignment.delete(oldName);
-          const found = findNode(tid);
-          if (found && found.node.state.status === 'in_progress') {
-            found.node.state.status = 'pending';
-            found.node.state.error = `Agent ${oldName} re-registered as ${agentName}`;
-            found.node.state.workerName = null;
-          }
-        }
-      }
-
-      // If another session already claimed this agent name, log warning and replace
-      const prevSession = agentSessionMap.get(agentName);
-      if (prevSession && prevSession.id !== from.id) {
-        log(`Agent ${agentName} re-registered from different session (was ${prevSession.id.slice(0, 8)}, now ${from.id.slice(0, 8)})`);
-        idleAgents.delete(agentName);
-      }
-
-      log(`Worker registered: ${agentName} (session: ${senderName}, id: ${from.id.slice(0, 8)})`);
-      agentSessionMap.set(agentName, { id: from.id, name: senderName });
-      // Don't mark as idle if the agent was already assigned work (e.g. via spawn)
-      if (!workerAssignment.has(agentName)) {
-        idleAgents.add(agentName);
-      }
-      writeDashboard();
-      launchReady();
-    } else if (text === 'IDLE' || text === 'idle') {
-      // Resolve agent name from session map (spawnedProcesses have subagent-chat-* intercom names)
-      const resolvedName = [...agentSessionMap.entries()].find(
-        ([, info]) => info.id === from.id || info.name === senderName
-      )?.[0];
-      const agentName = resolvedName || senderName;
-      // Don't re-add agents that are already assigned to a ticket
-      if (workerAssignment.has(agentName)) {
-        log(`Agent ${agentName} is idle but already assigned — ignoring`);
-      } else {
-        log(`Agent ${agentName} is idle`);
-        idleAgents.add(agentName);
-      }
-      writeDashboard();
-      launchReady();
     }
   });
 
@@ -1008,8 +835,8 @@ async function main(): Promise<void> {
     if (allDone) {
       if (!wasAllDone) {
         wasAllDone = true;
-        log('All epics complete — agents idle, no work to assign.');
-        await tellBoss('All epics complete. No more work to assign. Agents staying idle.');
+        log('All epics complete — no work to assign.');
+        await tellBoss('All epics complete. No more work to assign.');
       }
     } else {
       wasAllDone = false;
@@ -1017,7 +844,6 @@ async function main(): Promise<void> {
 
     if (epicGraphs.size === 0) return;
     try {
-      // Still scan PRs even when all done — review comments can re-open tickets
       const comments = await scanAllPRComments();
       for (const [tid] of comments) {
         const found = findNode(tid);
@@ -1051,7 +877,6 @@ async function main(): Promise<void> {
       saveAllState();
       writeDashboard();
 
-      // Only ping agents if there's actual work to do
       if (!allDone) {
         launchReady();
       }

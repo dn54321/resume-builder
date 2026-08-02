@@ -10,8 +10,9 @@
 #   │ Boss     │  agent-3     │
 #   └──────────┴──────────────┘
 #
-# The server pane shows a static dashboard (refreshes every 2s) instead of
-# a scrolling log. Worker statuses are shown inline.
+# Agent panes run simple bash loops displaying "Waiting for tasks...".
+# The server uses tmux send-keys to attach worker output to panes and
+# reset them when workers finish.
 
 set -euo pipefail
 
@@ -60,17 +61,14 @@ echo ""
 echo "  Fetching epics from Linear..."
 echo ""
 
-# Build a list of active epics/tickets from Linear
 EPIC_LIST=""
 if [ -n "${LINEAR_API_KEY:-}" ]; then
-  # Query Linear for active epics + tickets
   QUERY='{"query":"{ issues(filter: { state: { type: { in: [\"started\", \"unstarted\", \"backlog\"] } } } first: 25) { nodes { identifier title children { nodes { id } } } } }"}'
   RAW=$(curl -s -X POST https://api.linear.app/graphql \
     -H "Authorization: ${LINEAR_API_KEY}" \
     -H "Content-Type: application/json" \
     -d "$QUERY" 2>/dev/null || echo '{"data":null}')
   
-  # Parse with python for reliable JSON handling (or fall back to grep)
   if command -v python3 &>/dev/null; then
     EPIC_LIST=$(echo "$RAW" | python3 -c "
 import json, sys
@@ -87,7 +85,6 @@ except: pass
 " 2>/dev/null)
   fi
   
-  # Fallback: grep for identifiers
   if [ -z "$EPIC_LIST" ]; then
     EPIC_LIST=$(echo "$RAW" | grep -oP '"identifier":"[A-Z]+-\d+"' | sed 's/"identifier":"//;s/"//' | sort -u)
   fi
@@ -133,12 +130,16 @@ SERVER_PID=$!
 echo "Server PID: $SERVER_PID"
 sleep 2
 
-# ─── Write prompts to files (avoids tmux argument escaping issues) ──
+# ─── Pane ID directory ───────────────────────────────────────────────
+
+PANES_DIR="$REPO_ROOT/.pi/tickets/panes"
+mkdir -p "$PANES_DIR"
+
+# ─── Write prompts to files ──────────────────────────────────────────
 
 PROMPT_DIR="$REPO_ROOT/.pi/tickets"
 mkdir -p "$PROMPT_DIR"
 
-# Build initial boss message that tells it which epics to load
 INITIAL_EPIC_CMDS=""
 if [ -n "${SELECTED_EPICS:-}" ]; then
   INITIAL_EPIC_CMDS="After registration, immediately send: EPIC $SELECTED_EPICS"
@@ -160,7 +161,6 @@ CAPABILITIES:
   TICKET <id>           — Add a single ticket as a mini-graph
   STOP                  — Halt all workers
   STOP agent-N          — Stop a specific worker
-  ASSIGN agent-N TICKET — Manually assign a ticket to a specific worker
   CLOSE <id>            — Close a ticket in Linear and mark done
   STATUS                — Get current state summary
 - Use linear tools to find epics, check statuses, create follow-up tickets
@@ -183,36 +183,10 @@ management, etc.), immediately commit and push the fix directly to master:
 Do not wait for a PR — agent workflow fixes must be deployed immediately.
 PROMPTEOF
 
-cat > "$PROMPT_DIR/worker-prompt.txt" << 'PROMPTEOF'
-You are agent-N, a ticket worker.
-
-IMPORTANT: Your FIRST action must be to register with the server and go idle.
-Use the worker-intercom skill: send REGISTER: agent-N then IDLE to the server.
-(N is your actual agent number from the initial message.)
-
-When you receive a TASK message, cd to the worktree path in the message.
-
-While working:
-- Use the worker-intercom skill for STATUS updates and asking the boss questions
-- Write the PR description to pr-body.md in the worktree root
-
-CRITICAL RULES:
-- You work in an isolated git worktree - git reset and clean are safe here
-- NEVER leave your worktree directory
-- NEVER run git commands affecting other branches
-- Only git add, git commit, and git push for shared repo changes
-
-When done:
-- Use the create-pr skill to commit, push, and create the PR
-- Use the worker-intercom skill to report DONE and go IDLE
-PROMPTEOF
-
 # ─── Dashboard script ────────────────────────────────────────────────
 
-# Create a small dashboard watcher script
 cat > "$PROMPT_DIR/dashboard-watch.sh" << 'DASHBOARDEOF'
 #!/usr/bin/env bash
-# Dashboard watcher — clears and re-displays dashboard.txt every 2 seconds.
 DASHBOARD_FILE="$1"
 while true; do
   clear
@@ -226,47 +200,69 @@ done
 DASHBOARDEOF
 chmod +x "$PROMPT_DIR/dashboard-watch.sh"
 
-# ─── Create tmux layout — pi runs directly as pane commands ──────────
+# ─── Agent pane display script ───────────────────────────────────────
+# Each agent pane runs this loop. The server uses tmux send-keys to
+# interrupt it and show worker output, then reset it afterward.
+
+cat > "$PROMPT_DIR/agent-pane.sh" << 'AGENTEOF'
+#!/usr/bin/env bash
+AGENT_NAME="$1"
+while true; do
+  clear
+  printf '\n  Waiting for tasks... (%s)\n\n' "$AGENT_NAME"
+  sleep 5
+done
+AGENTEOF
+chmod +x "$PROMPT_DIR/agent-pane.sh"
+
+# ─── Create tmux layout ──────────────────────────────────────────────
 
 echo "Creating tmux layout..."
 
-# Pane 0: Dashboard (left column, full height — static, refreshing)
+# Allow panes to persist after process exit (so server can reuse them)
+tmux set-option -g remain-on-exit on 2>/dev/null || true
+
+# Pane 0: Dashboard (left column, full height)
 tmux new-session -d -s "$SESSION_NAME" -c "$REPO_ROOT" \
   "$PROMPT_DIR/dashboard-watch.sh '$DASHBOARD_FILE'"
 tmux rename-window -t "$SESSION_NAME:0" 'agents'
 
-# Check if there are any epics to work on
 HAS_EPICS="${SELECTED_EPICS:-}"
 
 if [ -n "$HAS_EPICS" ]; then
-  # ── Workers + Boss layout (with epics) ──
+  # ── Workers + Boss layout ──
 
-  # Pane 1: worker 1
-  AGENT1_MSG="You are agent-1. /name agent-1. Use worker-intercom skill to register and go idle."
+  # Pane 1: agent-1 (right column, top)
   tmux split-window -h -t "$SESSION_NAME:0" -c "$REPO_ROOT" \
-    "$PI_BIN --append-system-prompt @$PROMPT_DIR/worker-prompt.txt \"$AGENT1_MSG\""
+    "$PROMPT_DIR/agent-pane.sh agent-1"
+  PANE_ID=$(tmux display-message -p -t "$SESSION_NAME:0.1" '#{pane_id}')
+  echo "$PANE_ID" > "$PANES_DIR/agent-1.pane"
+  echo "  agent-1 → pane $PANE_ID"
 
-  # Panes 2..N: additional workers
+  # Panes 2..N: additional agents (split vertically from the previous)
   for i in $(seq 2 "$MAX_AGENTS"); do
-    AGENT_MSG="You are agent-$i. /name agent-$i. Use worker-intercom skill to register and go idle."
-    tmux split-window -v -t "$SESSION_NAME:0.$((i-1))" -c "$REPO_ROOT" \
-      "$PI_BIN --append-system-prompt @$PROMPT_DIR/worker-prompt.txt \"$AGENT_MSG\""
+    # Split from the previous agent pane
+    PREV_PANE=$((i-1))
+    tmux split-window -v -t "$SESSION_NAME:0.$PREV_PANE" -c "$REPO_ROOT" \
+      "$PROMPT_DIR/agent-pane.sh agent-$i"
+    PANE_ID=$(tmux display-message -p -t "$SESSION_NAME:0.$i" '#{pane_id}')
+    echo "$PANE_ID" > "$PANES_DIR/agent-$i.pane"
+    echo "  agent-$i → pane $PANE_ID"
   done
 
   # Boss pane (bottom-left, 10 lines)
   tmux split-window -v -t "$SESSION_NAME:0.0" -c "$REPO_ROOT" -l 10 \
     "$PI_BIN --append-system-prompt @$PROMPT_DIR/boss-prompt.txt Start"
 else
-  # ── No epics: just Dashboard + Boss (no workers) ──
-  echo "No epics selected — starting with boss only (no worker agents)."
+  # ── No epics: just Dashboard + Boss ──
+  echo "No epics selected — starting with boss only."
 
-  # Boss pane (bottom of dashboard, full width, 15 lines)
   tmux split-window -v -t "$SESSION_NAME:0" -c "$REPO_ROOT" -l 15 \
     "$PI_BIN --append-system-prompt @$PROMPT_DIR/boss-prompt.txt Start"
 fi
 
 echo "Panes:"
-tmux list-panes -t "$SESSION_NAME:0" -F "  #{pane_index}: #{pane_current_command}"
+tmux list-panes -t "$SESSION_NAME:0" -F "  #{pane_index}: #{pane_current_command} (id: #{pane_id})"
 
 # ─── Done ────────────────────────────────────────────────────────────
 
@@ -285,7 +281,6 @@ if [ -t 0 ]; then
 else
   echo "Non-interactive mode: tmux session running in background."
   echo "Attach with: tmux attach-session -t $SESSION_NAME"
-  # Keep script alive so cleanup doesn't fire
   while tmux has-session -t "$SESSION_NAME" 2>/dev/null; do
     sleep 5
   done
