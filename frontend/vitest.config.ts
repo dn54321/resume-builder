@@ -47,6 +47,11 @@ export default mergeConfig(
           // tests will be updated alongside those restyles.
           'src/features/auth/LoginView.vue',
           'src/features/auth/SignupView.vue',
+
+          // shadcn-vue generated code — installed in RES-29 (Tailwind + shadcn-vue setup)
+          'src/components/ui/**',
+          'src/lib/utils.ts',
+          'src/assets/main.css',
         ],
       },
     },

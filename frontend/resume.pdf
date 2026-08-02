@@ -207,7 +207,11 @@ endobj
 20 0 obj
 <<
 /Producer (jsPDF 4.2.1)
+<<<<<<< HEAD
 /CreationDate (D:20260802120346+10'00')
+=======
+/CreationDate (D:20260802112721+10'00')
+>>>>>>> ddad8f6 ([INFRA] Install Tailwind CSS, shadcn-vue, and remove Vue boilerplate)
 >>
 endobj
 21 0 obj
@@ -247,7 +251,11 @@ trailer
 /Size 22
 /Root 21 0 R
 /Info 20 0 R
+<<<<<<< HEAD
 /ID [ <E4EB7AB646264589AAE5A6C7D35EDEFD> <E4EB7AB646264589AAE5A6C7D35EDEFD> ]
+=======
+/ID [ <3422A1D64D2EE1007EDF2B2BDB9D2DFD> <3422A1D64D2EE1007EDF2B2BDB9D2DFD> ]
+>>>>>>> ddad8f6 ([INFRA] Install Tailwind CSS, shadcn-vue, and remove Vue boilerplate)
 >>
 startxref
 2742
