@@ -227,7 +227,7 @@ function writeDashboard(): void {
     totalTickets += epic.nodes.size;
     for (const [, n] of epic.nodes) {
       if (n.state.status === 'done' || n.state.status === 'merged') totalDone++;
-      if (n.state.status === 'in_progress') totalRunning++;
+      if (n.state.status === 'in_progress' || n.state.status === 'running') totalRunning++;
       if (n.state.status === 'failed') totalFailed++;
     }
   }
@@ -571,7 +571,7 @@ async function handleCommand(from: string, text: string): Promise<void> {
       totalTickets += epic.nodes.size;
       for (const [, n] of epic.nodes) {
         if (n.state.status === 'done' || n.state.status === 'merged') totalDone++;
-        if (n.state.status === 'in_progress') totalRunning++;
+        if (n.state.status === 'in_progress' || n.state.status === 'running') totalRunning++;
         if (n.state.status === 'failed') totalFailed++;
       }
     }
@@ -697,7 +697,7 @@ function logStatus(): void {
     totalTickets += epic.nodes.size;
     for (const [, n] of epic.nodes) {
       if (n.state.status === 'done' || n.state.status === 'merged') totalDone++;
-      if (n.state.status === 'in_progress') totalRunning++;
+      if (n.state.status === 'in_progress' || n.state.status === 'running') totalRunning++;
     }
   }
   log(`── ${epicGraphs.size} epics · ${totalTickets} tix · ${totalRunning} running · ${totalDone} done · ${idleAgents.size} idle ──`);
