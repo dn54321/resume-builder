@@ -170,4 +170,89 @@ describe('LivePreview', () => {
     // Check class is applied (exact width/height are set via CSS)
     expect(paper.classes()).toContain('live-preview__paper')
   })
+
+  // ─── Header bar tests ───
+
+  it('renders a header bar with "Preview" label', () => {
+    const store = makeStore()
+    store.initializeDefaults()
+
+    const wrapper = mount(LivePreview)
+
+    const header = wrapper.find('.live-preview__header')
+    expect(header.exists()).toBe(true)
+    expect(header.text()).toContain('Preview')
+  })
+
+  it('renders a "Full Screen" button in the header', () => {
+    const store = makeStore()
+    store.initializeDefaults()
+
+    const wrapper = mount(LivePreview)
+
+    const button = wrapper.findComponent({ name: 'Button' })
+    expect(button.exists()).toBe(true)
+    expect(button.text()).toContain('Full Screen')
+  })
+
+  it('renders the Maximize icon in the full-screen button', () => {
+    const store = makeStore()
+    store.initializeDefaults()
+
+    const wrapper = mount(LivePreview)
+
+    // Lucide icons render as SVGs with specific CSS classes
+    const svg = wrapper.find('svg.lucide-maximize')
+    expect(svg.exists()).toBe(true)
+  })
+
+  it('opens FullscreenPreview modal when "Full Screen" button is clicked', async () => {
+    const store = makeStore()
+    store.initializeDefaults()
+
+    const wrapper = mount(LivePreview)
+
+    // FullscreenPreview should not be open initially
+    const fullscreen = wrapper.findComponent({ name: 'FullscreenPreview' })
+    expect(fullscreen.exists()).toBe(true)
+    expect(fullscreen.props('open')).toBe(false)
+
+    // Click "Full Screen" button
+    const button = wrapper.findComponent({ name: 'Button' })
+    await button.trigger('click')
+
+    // Now FullscreenPreview should be open
+    expect(fullscreen.props('open')).toBe(true)
+  })
+
+  it('closes FullscreenPreview when update:open is emitted with false', async () => {
+    const store = makeStore()
+    store.initializeDefaults()
+
+    const wrapper = mount(LivePreview)
+
+    // Open the modal
+    const button = wrapper.findComponent({ name: 'Button' })
+    await button.trigger('click')
+
+    const fullscreen = wrapper.findComponent({ name: 'FullscreenPreview' })
+    expect(fullscreen.props('open')).toBe(true)
+
+    // Close via v-model
+    await fullscreen.vm.$emit('update:open', false)
+
+    expect(fullscreen.props('open')).toBe(false)
+  })
+
+  it('header bar has correct styling classes', () => {
+    const store = makeStore()
+    store.initializeDefaults()
+
+    const wrapper = mount(LivePreview)
+
+    const header = wrapper.find('.live-preview__header')
+    expect(header.classes()).toContain('h-8')
+    expect(header.classes()).toContain('px-3')
+    expect(header.classes()).toContain('border-b')
+  })
 })

@@ -1,32 +1,50 @@
 <template>
-  <div class="live-preview flex justify-center items-start h-full overflow-y-auto py-3 bg-gray-200">
-    <div
-      id="resume-preview"
-      class="live-preview__paper"
-      :style="{ transform: `scale(${scale})` }"
-    >
-      <StandardLayout
-        v-if="store.layout === 'standard'"
-        :sections="store.sections"
-      />
-      <TwoColumnLayout
-        v-else
-        :sections="store.sections"
-      />
+  <div class="live-preview flex flex-col h-full bg-gray-200">
+    <!-- Header bar -->
+    <div class="live-preview__header h-8 px-3 border-b border-gray-300 flex items-center justify-between shrink-0">
+      <span class="text-xs text-gray-500 font-medium select-none">Preview</span>
+      <Button variant="ghost" size="xs" @click="fullscreenOpen = true">
+        <Maximize class="size-3" />
+        <span class="ml-1">Full Screen</span>
+      </Button>
     </div>
+
+    <!-- Paper container -->
+    <div class="flex justify-center items-start flex-1 overflow-y-auto py-3">
+      <div
+        id="resume-preview"
+        class="live-preview__paper"
+        :style="{ transform: `scale(${scale})` }"
+      >
+        <StandardLayout
+          v-if="store.layout === 'standard'"
+          :sections="store.sections"
+        />
+        <TwoColumnLayout
+          v-else
+          :sections="store.sections"
+        />
+      </div>
+    </div>
+
+    <!-- Fullscreen modal -->
+    <FullscreenPreview v-model:open="fullscreenOpen" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { Maximize } from '@lucide/vue'
+import { Button } from '@/components/ui/button'
 import { useResumeStore } from '@/features/builder/stores/resume'
+import { PAPER_WIDTH_PX } from '@/features/builder/constants/paper'
 import StandardLayout from './preview/StandardLayout.vue'
 import TwoColumnLayout from './preview/TwoColumnLayout.vue'
+import FullscreenPreview from './FullscreenPreview.vue'
 
 const store = useResumeStore()
 
-// US Letter size at 96 DPI
-const PAPER_WIDTH_PX = 816
+const fullscreenOpen = ref(false)
 
 const containerWidth = ref(300)
 
