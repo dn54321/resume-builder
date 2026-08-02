@@ -505,15 +505,22 @@ async function handleCommand(from: string, text: string): Promise<void> {
     log(`Boss: closing ${closeId}`);
     try {
       await closeLinearTicket(closeId);
-      const found = findNode(closeId);
-      if (found) {
-        found.node.state.status = 'done';
-        found.node.state.finishedAt = new Date().toISOString();
-        found.node.state.error = 'Closed by boss — no longer relevant';
+      // Mark ALL instances of this ticket across ALL epic graphs
+      let closed = 0;
+      for (const [, epic] of epicGraphs) {
+        const node = epic.nodes.get(closeId);
+        if (node) {
+          node.state.status = 'done';
+          node.state.finishedAt = new Date().toISOString();
+          node.state.error = 'Closed by boss — no longer relevant';
+          closed++;
+        }
+      }
+      if (closed > 0) {
         saveAllState();
         writeDashboard();
       }
-      log(`Closed ${closeId} in Linear`);
+      log(`Closed ${closeId} in Linear (${closed} epic graph nodes updated)`);
       await tellBoss(`Closed ${closeId} in Linear.`);
     } catch (err: any) { log(`Failed to close ${closeId}: ${err.message}`); }
   } else if (trimmed === 'STATUS' || trimmed === 'status') {
