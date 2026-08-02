@@ -355,11 +355,14 @@ function launchReady(): void {
         workers.set(node.ticket.identifier, proc);
         node.state.workerName = agentName;
         workerAssignment.set(agentName, node.ticket.identifier);
+        // Prevent intercom REGISTER from this agent name from stealing the spawned worker's assignment
+        inFlightAssignments.add(node.ticket.identifier);
         proc.on('close', (code) => {
           workers.delete(node.ticket.identifier);
           workerAssignment.delete(agentName);
           idleAgents.delete(agentName);
           agentSessionMap.delete(agentName);
+          inFlightAssignments.delete(node.ticket.identifier);
           log(`Worker for ${node.ticket.identifier} exited (code ${code})`);
           saveAllState();
           launchReady();
@@ -478,6 +481,16 @@ async function handleCommand(from: string, text: string): Promise<void> {
     log('Boss requested stop');
     for (const [, epic] of epicGraphs) {
       killAllWorkers(epic.nodes);
+      // Reset all in_progress tickets back to pending
+      for (const [, node] of epic.nodes) {
+        if (node.state.status === 'in_progress') {
+          node.state.status = 'pending';
+          node.state.error = 'Stopped by boss';
+          node.state.pid = null;
+          node.state.workerName = null;
+          node.state.startedAt = null;
+        }
+      }
     }
     // Free all agent assignments
     for (const [name] of workerAssignment) {
@@ -871,9 +884,39 @@ async function main(): Promise<void> {
     // Worker registration — map agent name to session info
     if (text.startsWith('REGISTER:')) {
       const agentName = text.slice('REGISTER:'.length).trim();
-      log(`Worker registered: ${agentName} (session: ${senderName})`);
-      // Track the mapping so IDLE messages from subagent-chat-* sessions work.
-      // Store by agentName (not session id) so multiple workers can't overwrite each other.
+      if (!agentName) return;
+
+      // ⚠️ Dedup: prevent multiple agents from sharing the same session.
+      // If this session already registered as a different agent, remove the old mapping.
+      const existingAgentForSession = [...agentSessionMap.entries()].find(
+        ([, info]) => info.id === from.id
+      );
+      if (existingAgentForSession && existingAgentForSession[0] !== agentName) {
+        const oldName = existingAgentForSession[0];
+        log(`Session ${senderName} re-registering: was ${oldName}, now ${agentName}. Removing old mapping.`);
+        agentSessionMap.delete(oldName);
+        idleAgents.delete(oldName);
+        // If the old agent was assigned to a ticket, unassign it
+        if (workerAssignment.has(oldName)) {
+          const tid = workerAssignment.get(oldName)!;
+          workerAssignment.delete(oldName);
+          const found = findNode(tid);
+          if (found && found.node.state.status === 'in_progress') {
+            found.node.state.status = 'pending';
+            found.node.state.error = `Agent ${oldName} re-registered as ${agentName}`;
+            found.node.state.workerName = null;
+          }
+        }
+      }
+
+      // If another session already claimed this agent name, log warning and replace
+      const prevSession = agentSessionMap.get(agentName);
+      if (prevSession && prevSession.id !== from.id) {
+        log(`Agent ${agentName} re-registered from different session (was ${prevSession.id.slice(0, 8)}, now ${from.id.slice(0, 8)})`);
+        idleAgents.delete(agentName);
+      }
+
+      log(`Worker registered: ${agentName} (session: ${senderName}, id: ${from.id.slice(0, 8)})`);
       agentSessionMap.set(agentName, { id: from.id, name: senderName });
       // Don't mark as idle if the agent was already assigned work (e.g. via spawn)
       if (!workerAssignment.has(agentName)) {
