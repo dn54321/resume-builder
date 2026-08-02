@@ -320,12 +320,16 @@ export function readyTickets(nodes: Map<string, GraphNode>): GraphNode[] {
   return ready;
 }
 
-/** Spawn a worker pi process for a single ticket. */
+/** Spawn a worker pi process for a single ticket.
+ * @param headless - If true, runs standalone: no intercom skill, just execute task and exit.
+ *                   agentName is still used for tracking.
+ */
 export function spawnWorker(
   node: GraphNode,
   extraInstructions?: string,
   perWorkerInstructions?: string,
   agentName?: string,
+  headless?: boolean,
 ): cp.ChildProcess {
   const identifier = node.ticket.identifier;
   const repoRoot = getRepoRoot();
@@ -370,8 +374,15 @@ export function spawnWorker(
 
   // Build the worker prompt
   let prompt = buildWorkerPrompt(node, assignedPort, config, extraInstructions, perWorkerInstructions) + retryContext;
-  if (agentName) {
+  if (agentName && !headless) {
     prompt = `You are ${agentName}. /name ${agentName}. Use the worker-intercom skill.
+
+` + prompt;
+  } else if (headless) {
+    // Headless workers just execute and exit — no intercom needed.
+    // They get their task in the prompt and state is tracked via process exit code.
+    prompt = `You are a headless worker. Execute the task below, then exit 0 on success or 1 on failure.
+Do NOT use intercom, register, or wait for tasks — just implement the ticket and exit.
 
 ` + prompt;
   }

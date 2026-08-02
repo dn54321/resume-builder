@@ -254,6 +254,10 @@ function writeDashboard(): void {
       for (const [name, tid] of workerAssignment) {
         if (tid === node.ticket.identifier) { agent = name; break; }
       }
+      // Fall back to node.state.workerName for headless workers (not in workerAssignment)
+      if (agent === '—' && node.state.workerName) {
+        agent = node.state.workerName;
+      }
       lines.push(`  ${icon} ${id} ${title} [${agent.padEnd(10)}]`);
     }
     lines.push('');
@@ -263,7 +267,15 @@ function writeDashboard(): void {
   lines.push('── Workers ──');
   const activeAgents = new Set([...idleAgents]);
   for (const [agentName] of workerAssignment) activeAgents.add(agentName);
-  if (activeAgents.size === 0) {
+  // Include headless workers (tracked via workers Map, not workerAssignment)
+  const headlessWorkers: { name: string; ticketId: string }[] = [];
+  for (const [ticketId] of workers) {
+    const found = findNode(ticketId);
+    if (found && found.node.state.workerName && !workerAssignment.has(found.node.state.workerName)) {
+      headlessWorkers.push({ name: found.node.state.workerName, ticketId });
+    }
+  }
+  if (activeAgents.size === 0 && headlessWorkers.length === 0) {
     lines.push('  (no agents connected)');
   } else {
     for (const agentName of [...activeAgents].sort()) {
@@ -278,6 +290,13 @@ function writeDashboard(): void {
       } else {
         lines.push(`  ○ ${agentName.padEnd(12)} idle`);
       }
+    }
+    for (const hw of headlessWorkers) {
+      let epicId = '?';
+      for (const [eid, epic] of epicGraphs) {
+        if (epic.nodes.has(hw.ticketId)) { epicId = eid; break; }
+      }
+      lines.push(`  ◉ ${hw.name.padEnd(12)} → ${hw.ticketId.padEnd(10)} (${epicId}) [headless]`);
     }
   }
 
@@ -351,18 +370,13 @@ function launchReady(): void {
       }
       log(`launchReady: no intercom agents, spawning worker for ${node.ticket.identifier} as ${agentName}`);
       try {
-        const proc = spawnWorker(node, undefined, undefined, agentName);
+        const proc = spawnWorker(node, undefined, undefined, agentName, true);
         workers.set(node.ticket.identifier, proc);
         node.state.workerName = agentName;
-        workerAssignment.set(agentName, node.ticket.identifier);
-        // Prevent intercom REGISTER from this agent name from stealing the spawned worker's assignment
-        inFlightAssignments.add(node.ticket.identifier);
+        // Headless workers are tracked via process exit code, not intercom.
+        // Do NOT add to workerAssignment/agentSessionMap/idleAgents — those are for intercom agents only.
         proc.on('close', (code) => {
           workers.delete(node.ticket.identifier);
-          workerAssignment.delete(agentName);
-          idleAgents.delete(agentName);
-          agentSessionMap.delete(agentName);
-          inFlightAssignments.delete(node.ticket.identifier);
           log(`Worker for ${node.ticket.identifier} exited (code ${code})`);
           saveAllState();
           launchReady();

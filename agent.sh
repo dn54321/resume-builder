@@ -57,14 +57,14 @@ done
 # ─── Pick epics ──────────────────────────────────────────────────────
 
 echo ""
-echo "  Select epics (TAB to select multiple, ENTER to confirm):"
+echo "  Fetching epics from Linear..."
 echo ""
 
 # Build a list of active epics/tickets from Linear
 EPIC_LIST=""
 if [ -n "${LINEAR_API_KEY:-}" ]; then
   # Query Linear for active epics + tickets
-  QUERY='{"query":"{ issues(filter: { state: { type: { in: [\"started\", \"unstarted\"] } } } first: 25) { nodes { identifier title children { nodes { id } } } } }"}'
+  QUERY='{"query":"{ issues(filter: { state: { type: { in: [\"started\", \"unstarted\", \"backlog\"] } } } first: 25) { nodes { identifier title children { nodes { id } } } } }"}'
   RAW=$(curl -s -X POST https://api.linear.app/graphql \
     -H "Authorization: ${LINEAR_API_KEY}" \
     -H "Content-Type: application/json" \
@@ -99,23 +99,10 @@ if [ -z "$EPIC_LIST" ]; then
   read -rp "  Epic/ticket IDs (space-separated): " MANUAL_IDS
   SELECTED_EPICS="$MANUAL_IDS"
 else
-  # Use fzf for multi-select if available
-  if command -v fzf &>/dev/null; then
-    SELECTED_EPICS=$(echo "$EPIC_LIST" | fzf --multi --prompt="  Select epics > " \
-      --bind='ctrl-a:select-all' \
-      --preview='echo "Selected with TAB, ENTER to confirm"' \
-      | awk '{print $1}')
-  else
-    # No fzf — show the list and ask for input
-    echo "$EPIC_LIST" | head -20
-    echo ""
-    read -rp "  Epic/ticket IDs (space-separated, or 'all'): " MANUAL_IDS
-    if [ "$MANUAL_IDS" = "all" ]; then
-      SELECTED_EPICS=$(echo "$EPIC_LIST" | awk '{print $1}' | tr '\n' ' ')
-    else
-      SELECTED_EPICS="$MANUAL_IDS"
-    fi
-  fi
+  SELECTED_EPICS=$(echo "$EPIC_LIST" | awk '{print $1}' | tr '\n' ' ')
+  echo "$EPIC_LIST" | head -20
+  echo ""
+  echo "  Auto-selecting all: $SELECTED_EPICS"
 fi
 
 if [ -z "${SELECTED_EPICS:-}" ]; then
