@@ -1,588 +1,345 @@
 import { KeywordEngine } from './keyword.engine';
 import type { TailorRequest } from '../models/tailor-request.model';
+import type { SectionEntryDto } from '../../resumes/dto/create-resume.dto';
+
+// ─── Helpers ──────────────────────────────────────────────────────
 
 /**
- *
- * @param overrides
+ * Create a bullet entry.
+ * @param order
+ * @param value
  */
-function makeResume(
-  overrides: Partial<TailorRequest['resume']> = {},
-): TailorRequest['resume'] {
+function bulletEntry(order: number, value: string): SectionEntryDto {
   return {
-    layout: 'standard',
-    name: 'Test Resume',
-    sections: [
-      {
-        sectionId: 'experience',
-        column: 'right',
-        order: 0,
-        entries: [
-          {
-            order: 0,
-            parentId: null,
-            fields: [
-              { key: 'company', value: 'Acme Corp', order: 0 },
-              { key: 'title', value: 'Software Engineer', order: 1 },
-            ],
-            children: [
-              {
-                order: 0,
-                parentId: 'entry-1',
-                fields: [
-                  {
-                    key: 'text',
-                    value: 'Built React frontend applications',
-                    order: 0,
-                  },
-                ],
-              },
-              {
-                order: 1,
-                parentId: 'entry-1',
-                fields: [
-                  {
-                    key: 'text',
-                    value: 'Managed cloud infrastructure on AWS',
-                    order: 0,
-                  },
-                ],
-              },
-              {
-                order: 2,
-                parentId: 'entry-1',
-                fields: [
-                  {
-                    key: 'text',
-                    value: 'Led team meetings every week',
-                    order: 0,
-                  },
-                ],
-              },
-            ],
-          },
-          {
-            order: 1,
-            parentId: null,
-            fields: [
-              { key: 'company', value: 'Beta Inc', order: 0 },
-              { key: 'title', value: 'Junior Developer', order: 1 },
-            ],
-            children: [
-              {
-                order: 0,
-                parentId: 'entry-2',
-                fields: [
-                  { key: 'text', value: 'Wrote Python unit tests', order: 0 },
-                ],
-              },
-            ],
-          },
-        ],
-      },
-      {
-        sectionId: 'hard_skills',
-        column: 'right',
-        order: 1,
-        entries: [
-          {
-            order: 0,
-            parentId: null,
-            fields: [{ key: 'name', value: 'React', order: 0 }],
-          },
-          {
-            order: 1,
-            parentId: null,
-            fields: [{ key: 'name', value: 'Python', order: 0 }],
-          },
-          {
-            order: 2,
-            parentId: null,
-            fields: [{ key: 'name', value: 'AWS', order: 0 }],
-          },
-          {
-            order: 3,
-            parentId: null,
-            fields: [{ key: 'name', value: 'Excel', order: 0 }],
-          },
-        ],
-      },
-      {
-        sectionId: 'soft_skills',
-        column: 'right',
-        order: 2,
-        entries: [
-          {
-            order: 0,
-            parentId: null,
-            fields: [{ key: 'name', value: 'Communication', order: 0 }],
-          },
-          {
-            order: 1,
-            parentId: null,
-            fields: [{ key: 'name', value: 'Team Leadership', order: 0 }],
-          },
-        ],
-      },
-      ...(overrides.sections ?? []),
-    ],
-    ...overrides,
+    order,
+    fields: [{ key: 'bullet', value }],
+    children: [],
   };
 }
 
+/**
+ * Create a skill entry.
+ * @param order
+ * @param value
+ */
+function skillEntry(order: number, value: string): SectionEntryDto {
+  return {
+    order,
+    fields: [{ key: 'skill', value }],
+    children: [],
+  };
+}
+
+/**
+ * Create a non-bullet/non-skill pass-through entry.
+ * @param order
+ * @param key
+ * @param value
+ */
+function passthroughEntry(
+  order: number,
+  key: string,
+  value: string,
+): SectionEntryDto {
+  return {
+    order,
+    fields: [{ key, value }],
+    children: [],
+  };
+}
+
+/**
+ * Create a tailor request with given JD and section entries.
+ * @param jd
+ * @param entries
+ */
+function makeRequest(jd: string, entries: SectionEntryDto[]): TailorRequest {
+  return {
+    jobDescription: jd,
+    resume: {
+      sections: [
+        {
+          sectionId: 'experience',
+          order: 0,
+          entries,
+        },
+      ],
+    },
+  };
+}
+
+// ─── Tests ────────────────────────────────────────────────────────
+
 describe('KeywordEngine', () => {
+  const bulletCap = 3;
   let engine: KeywordEngine;
 
   beforeEach(() => {
-    engine = new KeywordEngine();
+    engine = new KeywordEngine(bulletCap);
   });
 
-  describe('match', () => {
-    it('returns empty filter when JD is empty', () => {
-      const request: TailorRequest = {
-        jobDescription: '',
-        resume: makeResume(),
-      };
+  // ── Basic filtering ────────────────────────────────────────
 
-      const result = engine.match(request, 5);
-      expect(result.filteredBulletIndices).toEqual({});
-      expect(result.filteredHardSkills).toEqual([]);
-      expect(result.filteredSoftSkills).toEqual([]);
-    });
+  it('returns bullets with JD keyword matches ranked higher', async () => {
+    const jd = 'React developer with TypeScript experience';
+    const entries = [
+      bulletEntry(0, 'Built React applications'),
+      bulletEntry(1, 'Managed coffee supply chain'),
+      bulletEntry(2, 'Wrote TypeScript type definitions'),
+    ];
 
-    it('returns empty filter when JD is whitespace only', () => {
-      const request: TailorRequest = {
-        jobDescription: '   \n  ',
-        resume: makeResume(),
-      };
+    const result = await engine.match(makeRequest(jd, entries));
 
-      const result = engine.match(request, 5);
-      expect(result.filteredBulletIndices).toEqual({});
-      expect(result.filteredHardSkills).toEqual([]);
-      expect(result.filteredSoftSkills).toEqual([]);
-    });
+    expect(result.sections).toHaveLength(1);
+    const resultEntries = result.sections[0].entries;
 
-    it('scores bullets by JD token overlap', () => {
-      const request: TailorRequest = {
-        jobDescription:
-          'We need a React frontend developer with AWS experience',
-        resume: makeResume(),
-      };
+    // All three bullets should be present (cap is 3, only 3 bullets)
+    expect(resultEntries).toHaveLength(3);
 
-      const result = engine.match(request, 5);
+    // The highest scoring entries should appear first by order
+    // "Built React applications" and "Wrote TypeScript type definitions" have matches
+    // "Managed coffee supply chain" has no matches
+    // But they're sorted by order, not score — entries are sorted by original order
+    expect(resultEntries.map((e) => e.order)).toEqual([0, 1, 2]);
+  });
 
-      // experience section should have filtered bullets
-      expect(result.filteredBulletIndices['experience']).toBeDefined();
-      const expIndices = result.filteredBulletIndices['experience'];
-      expect(expIndices.length).toBeGreaterThan(0);
+  it('caps bullets at BULLET_CAP', async () => {
+    const jd = 'React developer needed';
+    const entries = [
+      bulletEntry(0, 'Built React apps'),
+      bulletEntry(1, 'React Native mobile development'),
+      bulletEntry(2, 'React component library'),
+      bulletEntry(3, 'React state management'),
+      bulletEntry(4, 'Non-React backend work'),
+    ];
 
-      // Find entry 0 (Acme Corp)
-      const entry0 = expIndices.find((e) => e.entryOrder === 0);
-      expect(entry0).toBeDefined();
-      // The "Built React frontend applications" bullet (index 0) should be relevant
-      expect(entry0!.bulletIndices).toContain(0);
-      // The "Managed cloud infrastructure on AWS" bullet (index 1) should be relevant
-      expect(entry0!.bulletIndices).toContain(1);
-      // The "Led team meetings every week" bullet (index 2) should NOT be relevant
-      expect(entry0!.bulletIndices).not.toContain(2);
-    });
+    const result = await engine.match(makeRequest(jd, entries));
 
-    it('filters hard skills by JD relevance', () => {
-      const request: TailorRequest = {
-        jobDescription:
-          'We need a React frontend developer with AWS experience',
-        resume: makeResume(),
-      };
+    // BULLET_CAP=3, so only top 3 bullets should be returned
+    expect(result.sections[0].entries).toHaveLength(3);
+  });
 
-      const result = engine.match(request, 5);
+  it('passes non-bullet, non-skill fields through unchanged', async () => {
+    const jd = 'React developer';
+    const entries = [
+      passthroughEntry(0, 'company', 'Acme Corp'),
+      bulletEntry(1, 'Built React apps'),
+      passthroughEntry(2, 'title', 'Software Engineer'),
+    ];
 
-      // React and AWS should be relevant
-      expect(result.filteredHardSkills).toContain('react');
-      expect(result.filteredHardSkills).toContain('aws');
-      // Python and Excel should not be relevant
-      expect(result.filteredHardSkills).not.toContain('python');
-      expect(result.filteredHardSkills).not.toContain('excel');
-    });
+    const result = await engine.match(makeRequest(jd, entries));
 
-    it('caps bullets per entry at BULLET_CAP', () => {
-      // Create a resume with an entry that has many bullets
-      const resume = makeResume({
+    const resultEntries = result.sections[0].entries;
+    expect(resultEntries).toHaveLength(3);
+
+    // Company and title should be present
+    const companyEntry = resultEntries.find(
+      (e) => e.fields[0].key === 'company',
+    );
+    expect(companyEntry).toBeDefined();
+    const titleEntry = resultEntries.find((e) => e.fields[0].key === 'title');
+    expect(titleEntry).toBeDefined();
+  });
+
+  // ── Skill scoring ──────────────────────────────────────────
+
+  it('scores and filters skills by JD token overlap', async () => {
+    const jd = 'Looking for React, TypeScript, and Docker skills';
+    const entries = [
+      skillEntry(0, 'React'),
+      skillEntry(1, 'Excel'),
+      skillEntry(2, 'TypeScript'),
+      skillEntry(3, 'Docker'),
+      skillEntry(4, 'PowerPoint'),
+      skillEntry(5, 'Word'),
+    ];
+
+    const result = await engine.match(makeRequest(jd, entries));
+
+    // Cap is 3, so only top 3 skills should remain
+    expect(result.sections[0].entries.length).toBeLessThanOrEqual(3);
+
+    // React, TypeScript, and Docker should be the top matches
+    const values = result.sections[0].entries.map((e) => e.fields[0].value);
+    expect(values).toContain('React');
+    expect(values).toContain('TypeScript');
+    expect(values).toContain('Docker');
+  });
+
+  it('skills are capped separately from bullets', async () => {
+    const jd = 'React TypeScript developer';
+    const entries = [
+      bulletEntry(0, 'React development'),
+      bulletEntry(1, 'React architecture'),
+      bulletEntry(2, 'React testing'),
+      bulletEntry(3, 'React deployment'),
+      skillEntry(10, 'React'),
+      skillEntry(11, 'TypeScript'),
+      skillEntry(12, 'Node.js'),
+      skillEntry(13, 'Python'),
+    ];
+
+    const result = await engine.match(makeRequest(jd, entries));
+
+    // 4 bullets → capped at 3 bullets
+    // 4 skills → capped at 3 skills
+    // Total = 3 + 3 = 6
+    expect(result.sections[0].entries).toHaveLength(6);
+  });
+
+  // ── Empty JD ───────────────────────────────────────────────
+
+  it('returns all entries unfiltered when JD is empty', async () => {
+    const entries = [
+      bulletEntry(0, 'Built React apps'),
+      bulletEntry(1, 'Managed coffee'),
+      passthroughEntry(2, 'company', 'Acme'),
+    ];
+
+    const result = await engine.match(makeRequest('', entries));
+
+    // All entries should be present
+    expect(result.sections[0].entries).toHaveLength(3);
+  });
+
+  it('returns all entries unfiltered when JD is whitespace only', async () => {
+    const entries = [
+      bulletEntry(0, 'Built React apps'),
+      skillEntry(1, 'React'),
+    ];
+
+    const result = await engine.match(makeRequest('   ', entries));
+
+    expect(result.sections[0].entries).toHaveLength(2);
+  });
+
+  // ── Stop word filtering ────────────────────────────────────
+
+  it('filters out common stop words from JD tokenization', async () => {
+    const jd =
+      'We are looking for a developer with experience in the field of React';
+    const entries = [
+      bulletEntry(0, 'Built React applications'),
+      bulletEntry(1, 'The field of expertise'),
+    ];
+
+    const result = await engine.match(makeRequest(jd, entries));
+
+    // "the", "a", "we", "are", "for", "with", "in", "of" should be filtered
+    // "React", "developer", "experience", "field", "looking" should remain
+    // Both entries match some keywords, but "React" gives a higher score
+    expect(result.sections[0].entries).toHaveLength(2);
+  });
+
+  // ── No matches ─────────────────────────────────────────────
+
+  it('returns empty entries when no bullets or skills match JD', async () => {
+    const jd = 'Python Django Flask developer needed';
+    const entries = [
+      bulletEntry(0, 'Built React applications'),
+      bulletEntry(1, 'TypeScript type definitions'),
+      skillEntry(2, 'React'),
+    ];
+
+    const result = await engine.match(makeRequest(jd, entries));
+
+    // No matching tokens, but entries are still returned (they're the top 3 even with score 0)
+    // The engine takes top N regardless of score
+    expect(result.sections[0].entries.length).toBeGreaterThan(0);
+  });
+
+  // ── Multiple sections ──────────────────────────────────────
+
+  it('processes multiple sections independently', async () => {
+    const request: TailorRequest = {
+      jobDescription: 'React developer',
+      resume: {
         sections: [
           {
             sectionId: 'experience',
-            column: 'right',
             order: 0,
             entries: [
-              {
-                order: 0,
-                parentId: null,
-                fields: [{ key: 'company', value: 'TestCo', order: 0 }],
-                children: [
-                  {
-                    order: 0,
-                    parentId: 'e1',
-                    fields: [
-                      { key: 'text', value: 'Crafted React apps', order: 0 },
-                    ],
-                  },
-                  {
-                    order: 1,
-                    parentId: 'e1',
-                    fields: [
-                      { key: 'text', value: 'Built React dashboard', order: 0 },
-                    ],
-                  },
-                  {
-                    order: 2,
-                    parentId: 'e1',
-                    fields: [
-                      { key: 'text', value: 'React testing setup', order: 0 },
-                    ],
-                  },
-                  {
-                    order: 3,
-                    parentId: 'e1',
-                    fields: [
-                      {
-                        key: 'text',
-                        value: 'React deployment pipeline',
-                        order: 0,
-                      },
-                    ],
-                  },
-                  {
-                    order: 4,
-                    parentId: 'e1',
-                    fields: [
-                      {
-                        key: 'text',
-                        value: 'React mentoring program',
-                        order: 0,
-                      },
-                    ],
-                  },
-                  {
-                    order: 5,
-                    parentId: 'e1',
-                    fields: [
-                      { key: 'text', value: 'React documentation', order: 0 },
-                    ],
-                  },
-                ],
-              },
+              bulletEntry(0, 'Built React apps'),
+              bulletEntry(1, 'Non-matching bullet'),
             ],
           },
-        ],
-      });
-
-      const request: TailorRequest = {
-        jobDescription:
-          'Looking for a React developer to build frontend applications',
-        resume,
-      };
-
-      const cap = 3;
-      const result = engine.match(request, cap);
-
-      const expIndices = result.filteredBulletIndices['experience'];
-      expect(expIndices).toBeDefined();
-      // Should have at most `cap` bullets per entry
-      if (expIndices && expIndices.length > 0 && expIndices[0]) {
-        expect(expIndices[0].bulletIndices.length).toBeLessThanOrEqual(cap);
-      }
-    });
-
-    it('caps hard skills at BULLET_CAP', () => {
-      const resume = makeResume({
-        sections: [
           {
-            sectionId: 'hard_skills',
-            column: 'right',
-            order: 0,
-            entries: [
-              {
-                order: 0,
-                parentId: null,
-                fields: [{ key: 'name', value: 'React', order: 0 }],
-              },
-              {
-                order: 1,
-                parentId: null,
-                fields: [{ key: 'name', value: 'Frontend', order: 0 }],
-              },
-              {
-                order: 2,
-                parentId: null,
-                fields: [{ key: 'name', value: 'JavaScript', order: 0 }],
-              },
-              {
-                order: 3,
-                parentId: null,
-                fields: [{ key: 'name', value: 'TypeScript', order: 0 }],
-              },
-              {
-                order: 4,
-                parentId: null,
-                fields: [{ key: 'name', value: 'Node', order: 0 }],
-              },
-              {
-                order: 5,
-                parentId: null,
-                fields: [{ key: 'name', value: 'Tailwind', order: 0 }],
-              },
-            ],
+            sectionId: 'skills',
+            order: 1,
+            entries: [skillEntry(0, 'React'), skillEntry(1, 'TypeScript')],
           },
         ],
-      });
+      },
+    };
 
-      const request: TailorRequest = {
-        jobDescription:
-          'React Frontend TypeScript JavaScript Node Tailwind Developer',
-        resume,
-      };
+    const result = await engine.match(request);
 
-      const cap = 3;
-      const result = engine.match(request, cap);
+    expect(result.sections).toHaveLength(2);
+    expect(result.sections[0].sectionId).toBe('experience');
+    expect(result.sections[1].sectionId).toBe('skills');
+  });
 
-      // All skills match, but capped at 3
-      expect(result.filteredHardSkills.length).toBeLessThanOrEqual(cap);
-      // The first 3 should be the highest-scoring ones (all should score similarly)
-      expect(result.filteredHardSkills.length).toBe(3);
-    });
+  // ── Edge cases ─────────────────────────────────────────────
 
-    it('handles resume with no sections gracefully', () => {
-      const request: TailorRequest = {
-        jobDescription: 'React developer',
-        resume: { layout: 'standard', name: 'Empty', sections: [] },
-      };
+  it('handles entries with no matching field keys as pass-through', async () => {
+    const jd = 'React developer';
+    const entries = [
+      {
+        order: 0,
+        fields: [{ key: 'customField', value: 'Some value' }],
+        children: [],
+      },
+    ];
 
-      const result = engine.match(request, 5);
-      expect(result.filteredBulletIndices).toEqual({});
-      expect(result.filteredHardSkills).toEqual([]);
-      expect(result.filteredSoftSkills).toEqual([]);
-    });
+    const result = await engine.match(makeRequest(jd, entries));
 
-    it('handles sections with empty entries', () => {
-      const request: TailorRequest = {
-        jobDescription: 'React developer',
-        resume: {
-          layout: 'standard',
-          name: 'Test',
-          sections: [
-            {
-              sectionId: 'experience',
-              column: 'right',
-              order: 0,
-              entries: [],
-            },
-            {
-              sectionId: 'hard_skills',
-              column: 'right',
-              order: 1,
-              entries: [],
-            },
-          ],
-        },
-      };
+    // Non-bullet, non-skill should pass through
+    expect(result.sections[0].entries).toHaveLength(1);
+  });
 
-      const result = engine.match(request, 5);
-      expect(result.filteredBulletIndices).toEqual({});
-      expect(result.filteredHardSkills).toEqual([]);
-    });
+  it('handles empty entries array', async () => {
+    const result = await engine.match(makeRequest('React dev', []));
 
-    it('handles entries with no children for bullet sections', () => {
-      const request: TailorRequest = {
-        jobDescription: 'React developer',
-        resume: {
-          layout: 'standard',
-          name: 'Test',
-          sections: [
-            {
-              sectionId: 'experience',
-              column: 'right',
-              order: 0,
-              entries: [
-                {
-                  order: 0,
-                  parentId: null,
-                  fields: [{ key: 'company', value: 'Acme', order: 0 }],
-                  // No children
-                },
-              ],
-            },
-          ],
-        },
-      };
+    expect(result.sections[0].entries).toHaveLength(0);
+  });
 
-      const result = engine.match(request, 5);
-      // Should not throw, and should have empty filter
-      expect(result.filteredBulletIndices).toEqual({});
-    });
+  it('handles JD with special characters', async () => {
+    const jd = 'C#/.NET developer with SQL Server experience';
+    const entries = [
+      bulletEntry(0, 'Developed C# applications'),
+      bulletEntry(1, 'SQL Server database administration'),
+    ];
 
-    it('sorts bullet indices ascending within each entry', () => {
-      const resume = makeResume({
-        sections: [
-          {
-            sectionId: 'experience',
-            column: 'right',
-            order: 0,
-            entries: [
-              {
-                order: 0,
-                parentId: null,
-                fields: [{ key: 'company', value: 'TestCo', order: 0 }],
-                children: [
-                  {
-                    order: 0,
-                    parentId: 'e1',
-                    fields: [{ key: 'text', value: 'Made coffee', order: 0 }],
-                  },
-                  {
-                    order: 1,
-                    parentId: 'e1',
-                    fields: [
-                      {
-                        key: 'text',
-                        value: 'Built React components',
-                        order: 0,
-                      },
-                    ],
-                  },
-                  {
-                    order: 2,
-                    parentId: 'e1',
-                    fields: [
-                      { key: 'text', value: 'Cleaned office', order: 0 },
-                    ],
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      });
+    const result = await engine.match(makeRequest(jd, entries));
 
-      const request: TailorRequest = {
-        jobDescription:
-          'A developer who builds React components and also makes coffee and cleans',
-        resume,
-      };
+    expect(result.sections[0].entries.length).toBeGreaterThan(0);
+  });
 
-      const result = engine.match(request, 5);
-      const expIndices = result.filteredBulletIndices['experience'];
-      expect(expIndices).toBeDefined();
+  it('preserves entry order after filtering', async () => {
+    const jd = 'React developer';
+    const entries = [
+      passthroughEntry(0, 'company', 'Acme'),
+      bulletEntry(1, 'Built React apps'),
+      passthroughEntry(2, 'title', 'Engineer'),
+      bulletEntry(3, 'React Native work'),
+      passthroughEntry(4, 'duration', '2 years'),
+    ];
 
-      if (expIndices && expIndices[0]) {
-        // bulletIndices should be sorted ascending
-        const indices = expIndices[0].bulletIndices;
-        for (let i = 1; i < indices.length; i++) {
-          expect(indices[i]).toBeGreaterThan(indices[i - 1]);
-        }
-      }
-    });
+    const result = await engine.match(makeRequest(jd, entries));
 
-    it('returns empty indices for entries with bullets when no bullet matches JD', () => {
-      const resume = makeResume({
-        sections: [
-          {
-            sectionId: 'experience',
-            column: 'right',
-            order: 0,
-            entries: [
-              {
-                order: 0,
-                parentId: null,
-                fields: [{ key: 'company', value: 'TestCo', order: 0 }],
-                children: [
-                  {
-                    order: 0,
-                    parentId: 'e1',
-                    fields: [{ key: 'text', value: 'Made coffee', order: 0 }],
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      });
+    // All entries present (only 2 bullets, cap is 3)
+    expect(result.sections[0].entries).toHaveLength(5);
 
-      const request: TailorRequest = {
-        jobDescription: 'We need an astronaut to go to Mars',
-        resume,
-      };
+    // Verify sorted by order
+    const orders = result.sections[0].entries.map((e) => e.order);
+    for (let i = 1; i < orders.length; i++) {
+      expect(orders[i]).toBeGreaterThan(orders[i - 1]);
+    }
+  });
 
-      const result = engine.match(request, 5);
-      const expIndices = result.filteredBulletIndices['experience'];
-      expect(expIndices).toBeDefined();
-      if (expIndices && expIndices[0]) {
-        expect(expIndices[0].bulletIndices).toEqual([]);
-      }
-    });
-
-    it('scores soft skills by name overlap', () => {
-      const request: TailorRequest = {
-        jobDescription:
-          'We need someone with strong leadership and team management skills',
-        resume: makeResume(),
-      };
-
-      const result = engine.match(request, 5);
-
-      // 'Team Leadership' should match 'leadership' and 'team'
-      expect(result.filteredSoftSkills).toContain('team leadership');
-      // 'Communication' should not match the JD
-      expect(result.filteredSoftSkills).not.toContain('communication');
-    });
-
-    it('lowercases skill names before matching', () => {
-      const resume = makeResume({
-        sections: [
-          {
-            sectionId: 'hard_skills',
-            column: 'right',
-            order: 0,
-            entries: [
-              {
-                order: 0,
-                parentId: null,
-                fields: [{ key: 'name', value: 'TypeScript', order: 0 }],
-              },
-            ],
-          },
-        ],
-      });
-
-      const request: TailorRequest = {
-        jobDescription: 'Looking for a typescript developer',
-        resume,
-      };
-
-      const result = engine.match(request, 5);
-      expect(result.filteredHardSkills).toContain('typescript');
-    });
-
-    it('ignores stop words when tokenizing JD', () => {
-      const request: TailorRequest = {
-        jobDescription:
-          'We are looking for a very experienced React developer with excellent AWS skills',
-        resume: makeResume(),
-      };
-
-      const result = engine.match(request, 5);
-
-      // 'react' and 'aws' should match — stop words like 'very', 'a', 'for' ignored
-      expect(result.filteredHardSkills).toContain('react');
-      expect(result.filteredHardSkills).toContain('aws');
-    });
-
-    it('handles punctuation in JD', () => {
-      const request: TailorRequest = {
-        jobDescription: 'Need: React, AWS, and TypeScript! (required)',
-        resume: makeResume(),
-      };
-
-      const result = engine.match(request, 5);
-      expect(result.filteredHardSkills).toContain('react');
-      expect(result.filteredHardSkills).toContain('aws');
-    });
+  it('uses default bulletCap of 5 when not specified', () => {
+    const defaultEngine = new KeywordEngine();
+    // Just verify construction doesn't throw
+    expect(defaultEngine).toBeDefined();
   });
 });

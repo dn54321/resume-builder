@@ -1,10 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { Global, Module } from '@nestjs/common';
-import { AuthModule } from './auth.module';
-import { AuthService } from './auth.service';
-import { AuthController } from './auth.controller';
-import { PrismaService } from '../common/database/prisma.service';
-import { CryptoService } from '../common/crypto/crypto.service';
+import { ResumesModule } from './resumes.module';
+import { ResumesService } from './resumes.service';
+import { ResumesController } from './resumes.controller';
+import { PrismaService } from '../../common/database/prisma.service';
+import { CryptoService } from '../../common/crypto/crypto.service';
 import { ConfigService } from '@nestjs/config';
 
 @Global()
@@ -16,8 +16,6 @@ import { ConfigService } from '@nestjs/config';
       useValue: {
         encryptField: jest.fn(),
         decryptField: jest.fn(),
-        generateSessionToken: jest.fn(),
-        hashToken: jest.fn(),
       },
     },
     {
@@ -29,12 +27,12 @@ import { ConfigService } from '@nestjs/config';
 })
 class MockDependenciesModule {}
 
-describe('AuthModule', () => {
+describe('ResumesModule', () => {
   let module: TestingModule;
 
   beforeAll(async () => {
     module = await Test.createTestingModule({
-      imports: [AuthModule, MockDependenciesModule],
+      imports: [ResumesModule, MockDependenciesModule],
     }).compile();
   });
 
@@ -46,13 +44,13 @@ describe('AuthModule', () => {
     expect(module).toBeDefined();
   });
 
-  it('should provide AuthService', () => {
-    const service = module.get(AuthService);
+  it('should provide ResumesService', () => {
+    const service = module.get(ResumesService);
     expect(service).toBeDefined();
   });
 
-  it('should provide AuthController', () => {
-    const controller = module.get(AuthController);
+  it('should provide ResumesController', () => {
+    const controller = module.get(ResumesController);
     expect(controller).toBeDefined();
   });
 });

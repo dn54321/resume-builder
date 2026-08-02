@@ -2,16 +2,16 @@ import type { TailorRequest } from '../models/tailor-request.model';
 import type { TailorResponse } from '../models/tailor-response.model';
 
 /**
- * Matching engine strategy interface.
- * Each engine implements a different approach to scoring
- * bullet/skill relevance against a job description.
+ * Strategy interface for the tailoring matching engine.
+ * Each implementation (keyword, llm, hybrid) defines its own
+ * approach to scoring and filtering resume entries against a JD.
  */
 export interface MatchingEngine {
   /**
-   * Rank and filter bullets + skills against the job description.
-   * @param request - The resume and job description to match
-   * @param bulletCap - Maximum bullets per entry to return
-   * @returns Filtered indices and skill names
+   * Score and filter resume entries against the job description.
+   * Returns a tailored resume with only the most relevant entries.
    */
-  match(request: TailorRequest, bulletCap: number): TailorResponse;
+  match(request: TailorRequest): Promise<TailorResponse>;
 }
+
+export const MATCHING_ENGINE = 'MATCHING_ENGINE';

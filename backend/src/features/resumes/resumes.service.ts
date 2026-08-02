@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../common/database/prisma.service';
-import { CryptoService } from '../common/crypto/crypto.service';
+import { PrismaService } from '../../common/database/prisma.service';
+import { CryptoService } from '../../common/crypto/crypto.service';
 import { CreateResumeDto } from './dto/create-resume.dto';
 import { UpdateResumeDto } from './dto/update-resume.dto';
 import type { TxClient } from './models/tx-client.model';

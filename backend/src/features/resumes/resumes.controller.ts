@@ -9,13 +9,13 @@ import {
   UseGuards,
   Req,
 } from '@nestjs/common';
-import { AuthGuard } from '../common/guards/auth.guard';
+import { AuthGuard } from '../../common/guards/auth.guard';
 import { ResumesService } from './resumes.service';
 import { CreateResumeDto } from './dto/create-resume.dto';
 import { UpdateResumeDto } from './dto/update-resume.dto';
 import type { ResumeSummary } from './models/resume-summary.model';
 import type { ResumeFull } from './models/resume-full.model';
-import type { AuthenticatedRequest } from '../common/models/authenticated-request.model';
+import type { AuthenticatedRequest } from '../../common/models/authenticated-request.model';
 
 @Controller('resumes')
 @UseGuards(AuthGuard)

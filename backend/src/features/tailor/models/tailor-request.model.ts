@@ -1,9 +1,11 @@
-import type { ResumePayload } from './resume-payload.model';
+import type { ResumeSectionDto } from '../../resumes/dto/create-resume.dto';
 
 /**
- * Request body for POST /resumes/tailor.
+ * Internal shape for the tailor request after validation.
  */
 export interface TailorRequest {
   jobDescription: string;
-  resume: ResumePayload;
+  resume: {
+    sections: ResumeSectionDto[];
+  };
 }

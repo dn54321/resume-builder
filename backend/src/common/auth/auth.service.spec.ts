@@ -1,4 +1,4 @@
-jest.mock('../generated/prisma/client', () => ({
+jest.mock('../../generated/prisma/client', () => ({
   PrismaClient: jest.fn().mockImplementation(() => ({})),
 }));
 
@@ -11,8 +11,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { compare } from 'bcryptjs';
 import { AuthService } from './auth.service';
-import { PrismaService } from '../common/database/prisma.service';
-import { CryptoService } from '../common/crypto/crypto.service';
+import { PrismaService } from '../database/prisma.service';
+import { CryptoService } from '../crypto/crypto.service';
 
 describe('AuthService', () => {
   let authService: AuthService;

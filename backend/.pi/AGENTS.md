@@ -53,16 +53,31 @@ backend/
 │   ├── app.controller.ts       # Root controller
 │   ├── app.controller.spec.ts  # Root controller unit tests
 │   ├── app.service.ts          # Root service
-│   └── <feature>/
-│       ├── <feature>.module.ts
-│       ├── <feature>.controller.ts
-│       ├── <feature>.controller.spec.ts
-│       ├── <feature>.service.ts
-│       ├── <feature>.service.spec.ts
-│       ├── dto/
-│       │   └── <name>.dto.ts
-│       └── entities/
-│           └── <name>.entity.ts
+│   ├── prisma-schema.spec.ts   # Schema validation test
+│   ├── features/               # All product features live here
+│   │   └── <feature>/
+│   │       ├── <feature>.module.ts
+│   │       ├── <feature>.module.spec.ts
+│   │       ├── <feature>.controller.ts
+│   │       ├── <feature>.controller.spec.ts
+│   │       ├── <feature>.service.ts
+│   │       ├── <feature>.service.spec.ts
+│   │       ├── dto/
+│   │       │   └── <name>.dto.ts
+│   │       ├── models/
+│   │       │   └── <name>.model.ts
+│   │       └── engines/         # Optional: for strategy/engine patterns
+│   │           └── <engine>.engine.ts
+│   ├── common/                  # Shared pipes, guards, interceptors, config, database
+│   │   ├── auth/
+│   │   ├── config/
+│   │   ├── crypto/
+│   │   ├── database/
+│   │   ├── guards/
+│   │   ├── logger/
+│   │   └── models/              # Shared types (e.g. AuthenticatedRequest)
+│   └── generated/               # Auto-generated code (Prisma client)
+│       └── prisma/
 ├── test/
 │   └── app.e2e-spec.ts         # E2E test(s)
 ├── nest-cli.json               # Nest CLI config (sourceRoot, compiler options)
@@ -75,8 +90,9 @@ backend/
 
 ### NestJS Architecture Rules
 
-- Product feature live in `src/feature/<feature>/`.
-- Each feature has its own **module**, **controller**, and **service**.
+- **All product features** live in `src/features/<feature>/`. Never put feature modules directly in `src/`.
+- **Shared infrastructure** (auth, config, crypto, database, guards, logger, shared models) lives in `src/common/`.
+- **Never** create duplicate feature directories outside of `src/features/`. If a feature exists in both `src/<feature>/` and `src/features/<feature>/`, the `src/features/` version is canonical.
 - **DTOs** go in a `dto/` subdirectory; use `class-validator` decorators for validation.
 - **Enums** go in `dto/enums`
 - **Entities** (database models) go in `entities/`.

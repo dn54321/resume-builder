@@ -1,22 +1,19 @@
-import {
-  IsString,
-  IsNotEmpty,
-  IsDefined,
-  ValidateNested,
-} from 'class-validator';
+import { IsString, IsNotEmpty, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ResumePayloadDto } from './resume-payload.dto';
+import { ResumeSectionDto } from '../../resumes/dto/create-resume.dto';
 
-/**
- * Validated request body for POST /resumes/tailor.
- */
+class TailorResumeDto {
+  @ValidateNested({ each: true })
+  @Type(() => ResumeSectionDto)
+  sections!: ResumeSectionDto[];
+}
+
 export class TailorRequestDto {
   @IsString()
   @IsNotEmpty()
   jobDescription!: string;
 
-  @IsDefined()
   @ValidateNested()
-  @Type(() => ResumePayloadDto)
-  resume!: ResumePayloadDto;
+  @Type(() => TailorResumeDto)
+  resume!: TailorResumeDto;
 }

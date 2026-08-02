@@ -1,4 +1,4 @@
-jest.mock('../generated/prisma/client', () => ({
+jest.mock('../../generated/prisma/client', () => ({
   PrismaClient: jest.fn().mockImplementation(() => ({})),
 }));
 
@@ -15,7 +15,7 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { ResumesController } from './resumes.controller';
 import { ResumesService } from './resumes.service';
-import { AuthGuard } from '../common/guards/auth.guard';
+import { AuthGuard } from '../../common/guards/auth.guard';
 
 interface ResumeBody {
   id: string;

@@ -5,8 +5,8 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { compare, hash } from 'bcryptjs';
-import { PrismaService } from '../common/database/prisma.service';
-import { CryptoService } from '../common/crypto/crypto.service';
+import { PrismaService } from '../database/prisma.service';
+import { CryptoService } from '../crypto/crypto.service';
 
 const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 

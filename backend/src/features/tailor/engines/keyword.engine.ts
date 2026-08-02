@@ -1,29 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import type { MatchingEngine } from './matching-engine.interface';
 import type { TailorRequest } from '../models/tailor-request.model';
-import type {
-  ResumePayload,
-  ResumeSectionPayload,
-  ResumeEntryPayload,
-} from '../models/resume-payload.model';
-import type {
-  TailorResponse,
-  EntryBulletIndices,
-} from '../models/tailor-response.model';
+import type { TailorResponse } from '../models/tailor-response.model';
+import type { ScoredEntry } from '../models/scored-entry.model';
+import type { SectionEntryDto } from '../../resumes/dto/create-resume.dto';
 
 /**
- * Sections that contain bullet points (children entries with 'text' field).
- */
-const BULLET_SECTION_TYPES = ['experience', 'projects'] as const;
-
-/**
- * Sections that contain skills (entries with 'name' field).
- */
-const SKILL_SECTION_TYPES = ['hard_skills', 'soft_skills'] as const;
-
-/**
- * Common English stop words. These are excluded from JD tokenization
- * because they carry no domain-specific signal.
+ * English stop words filtered out during JD tokenization.
  */
 const STOP_WORDS = new Set([
   'the',
@@ -91,249 +74,163 @@ const STOP_WORDS = new Set([
   'about',
   'also',
   'etc',
-  '&',
-  '-',
-  '—',
-  '–',
 ]);
 
-// ─── Helper types for bullet scoring ──────────────────────────────
+/**
+ * Field keys that contain bullet-point text (experience descriptions).
+ */
+const BULLET_FIELD_KEYS = new Set(['bullet', 'description', 'detail']);
 
-interface ScoredBullet {
-  entryIndex: number; // index into top-level entries
-  bulletIndex: number; // index into that entry's children
-  score: number;
-}
+/**
+ * Field keys that contain skill names.
+ */
+const SKILL_FIELD_KEYS = new Set(['skill', 'skills', 'skillName', 'name']);
 
-interface ScoredSkill {
-  name: string;
-  score: number;
-}
-
+/**
+ * Keyword-based matching engine using TF-IDF-style token overlap.
+ * 100% offline — no network calls.
+ */
 @Injectable()
 export class KeywordEngine implements MatchingEngine {
-  private readonly logger = new Logger(KeywordEngine.name);
+  private readonly bulletCap: number;
 
-  /**
-   * Tokenize text for keyword matching.
-   * Lowercase, split on non-alphanumeric, remove stop words and short tokens.
-   * @param text
-   */
-  private tokenize(text: string): string[] {
-    return text
-      .toLowerCase()
-      .split(/[^a-z0-9]+/)
-      .filter((t) => t.length > 1 && !STOP_WORDS.has(t));
+  constructor(bulletCap: number = 5) {
+    this.bulletCap = bulletCap;
   }
 
   /**
-   * Score a text against a set of JD tokens.
-   * Returns the count of JD tokens found in the text, divided by the number
-   * of tokens in the text (to avoid bias toward long text). Minimum 0.
+   * Tokenize the job description: lowercase, split on non-alpha,
+   * remove stop words, keep unique tokens.
+   * @param jd
+   */
+  private tokenize(jd: string): Set<string> {
+    const tokens = jd
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((t) => t.length > 1 && !STOP_WORDS.has(t));
+    return new Set(tokens);
+  }
+
+  /**
+   * Score a text value against JD tokens: count of overlapping tokens
+   * divided by text length (normalize to avoid long texts winning).
    * @param text
    * @param jdTokens
    */
   private scoreText(text: string, jdTokens: Set<string>): number {
-    const tokens = this.tokenize(text);
-    if (tokens.length === 0) return 0;
-    let hits = 0;
-    for (const t of tokens) {
-      if (jdTokens.has(t)) hits++;
-    }
-    return hits / tokens.length;
-  }
-
-  /**
-   * Get bullet text from an entry's children.
-   * @param entry
-   */
-  private getBulletTexts(
-    entry: ResumeEntryPayload,
-  ): { index: number; text: string }[] {
-    const children = entry.children ?? [];
-    return children
-      .sort((a, b) => a.order - b.order)
-      .map((child, index) => ({
-        index,
-        text: child.fields.find((f) => f.key === 'text')?.value ?? '',
-      }))
-      .filter((b) => b.text.trim().length > 0);
-  }
-
-  /**
-   * Get skill name from an entry's fields.
-   * @param entry
-   */
-  private getSkillName(entry: ResumeEntryPayload): string {
-    return (entry.fields.find((f) => f.key === 'name')?.value ?? '')
+    if (!text || jdTokens.size === 0) return 0;
+    const words = text
       .toLowerCase()
-      .trim();
+      .split(/[^a-z0-9]+/)
+      .filter(Boolean);
+    if (words.length === 0) return 0;
+    const matches = words.filter((w) => jdTokens.has(w)).length;
+    return matches / words.length;
   }
 
   /**
-   * Score bullets for a section with bullet-type entries.
-   * Returns scored bullets sorted descending by score.
+   * Extract the text value from an entry's bullet-type field.
+   * @param entry
+   */
+  private getBulletText(entry: SectionEntryDto): string | null {
+    for (const field of entry.fields) {
+      if (BULLET_FIELD_KEYS.has(field.key)) {
+        return field.value;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Extract the text value from an entry's skill-type field.
+   * @param entry
+   */
+  private getSkillText(entry: SectionEntryDto): string | null {
+    for (const field of entry.fields) {
+      if (SKILL_FIELD_KEYS.has(field.key)) {
+        return field.value;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Check if an entry is a bullet-type entry.
+   * @param entry
+   */
+  private isBulletEntry(entry: SectionEntryDto): boolean {
+    return entry.fields.some((f) => BULLET_FIELD_KEYS.has(f.key));
+  }
+
+  /**
+   * Check if an entry is a skill-type entry.
+   * @param entry
+   */
+  private isSkillEntry(entry: SectionEntryDto): boolean {
+    return entry.fields.some((f) => SKILL_FIELD_KEYS.has(f.key));
+  }
+
+  /**
+   * Process a section: score bullet/skill entries, filter to top N,
+   * pass non-bullet/non-skill entries through unchanged.
    * @param section
-   * @param jdTokenSet
+   * @param jdTokens
    */
-  private scoreBullets(
-    section: ResumeSectionPayload,
-    jdTokenSet: Set<string>,
-  ): ScoredBullet[] {
-    const topLevel = section.entries
-      .filter((e) => !e.parentId)
-      .sort((a, b) => a.order - b.order);
-
-    const scored: ScoredBullet[] = [];
-    for (let entryIndex = 0; entryIndex < topLevel.length; entryIndex++) {
-      const entry = topLevel[entryIndex];
-      const bullets = this.getBulletTexts(entry);
-      for (const bullet of bullets) {
-        const score = this.scoreText(bullet.text, jdTokenSet);
-        if (score > 0) {
-          scored.push({
-            entryIndex,
-            bulletIndex: bullet.index,
-            score,
-          });
-        }
-      }
-    }
-
-    scored.sort((a, b) => b.score - a.score);
-    return scored;
-  }
-
-  /**
-   * Score skills for a skills section.
-   * Returns scored skills sorted descending by score.
-   * @param section
-   * @param jdTokenSet
-   */
-  private scoreSkills(
-    section: ResumeSectionPayload,
-    jdTokenSet: Set<string>,
-  ): ScoredSkill[] {
-    const topLevel = section.entries
-      .filter((e) => !e.parentId)
-      .sort((a, b) => a.order - b.order);
-
-    const scored: ScoredSkill[] = [];
-    for (const entry of topLevel) {
-      const name = this.getSkillName(entry);
-      if (!name) continue;
-      const score = this.scoreText(name, jdTokenSet);
-      if (score > 0) {
-        scored.push({ name, score });
-      }
-    }
-
-    scored.sort((a, b) => b.score - a.score);
-    return scored;
-  }
-
-  /**
-   * Top-N capped bullet selection per entry.
-   * Groups scored bullets by entry, then takes the top `bulletCap` per entry.
-   * @param scoredBullets
-   * @param bulletCap
-   */
-  private capPerEntry(
-    scoredBullets: ScoredBullet[],
-    bulletCap: number,
-  ): EntryBulletIndices[] {
-    // Group by entry
-    const byEntry = new Map<number, ScoredBullet[]>();
-    for (const b of scoredBullets) {
-      if (!byEntry.has(b.entryIndex)) {
-        byEntry.set(b.entryIndex, []);
-      }
-      byEntry.get(b.entryIndex)!.push(b);
-    }
-
-    const result: EntryBulletIndices[] = [];
-    for (const [entryOrder, bullets] of byEntry) {
-      // Already sorted globally, so top-N per entry are first
-      bullets.sort((a, b) => b.score - a.score);
-      const capped = bullets.slice(0, bulletCap);
-      result.push({
-        entryOrder,
-        bulletIndices: capped.map((b) => b.bulletIndex).sort((a, b) => a - b),
-      });
-    }
-
-    // Sort by entryOrder for deterministic output
-    result.sort((a, b) => a.entryOrder - b.entryOrder);
-    return result;
-  }
-
-  /**
-   * Main match method.
-   * @param request
-   * @param bulletCap
-   */
-  match(request: TailorRequest, bulletCap: number): TailorResponse {
-    const jd = request.jobDescription;
-    if (!jd || jd.trim().length === 0) {
-      // Empty JD → return empty filter (all items shown)
+  private filterSection(
+    section: TailorRequest['resume']['sections'][number],
+    jdTokens: Set<string>,
+  ): TailorResponse['sections'][number] {
+    if (jdTokens.size === 0) {
+      // Empty JD: return all entries unfiltered
       return {
-        filteredBulletIndices: {},
-        filteredHardSkills: [],
-        filteredSoftSkills: [],
+        sectionId: section.sectionId,
+        entries: section.entries,
       };
     }
 
-    const jdTokens = this.tokenize(jd);
-    const jdTokenSet = new Set(jdTokens);
-    this.logger.debug(
-      `JD tokens (unique): ${jdTokenSet.size} total: ${jdTokens.length}`,
-    );
+    const scoredBullets: ScoredEntry[] = [];
+    const scoredSkills: ScoredEntry[] = [];
+    const passThrough: SectionEntryDto[] = [];
 
-    const filteredBulletIndices: Record<string, EntryBulletIndices[]> = {};
-    let filteredHardSkills: string[] = [];
-    let filteredSoftSkills: string[] = [];
-
-    for (const section of request.resume.sections) {
-      if (
-        BULLET_SECTION_TYPES.includes(
-          section.sectionId as (typeof BULLET_SECTION_TYPES)[number],
-        )
-      ) {
-        const scored = this.scoreBullets(section, jdTokenSet);
-        const capped = this.capPerEntry(scored, bulletCap);
-        if (capped.length > 0) {
-          filteredBulletIndices[section.sectionId] = capped;
-        } else {
-          // Even if no bullets scored, include empty arrays so frontend
-          // knows to hide all bullets in this section
-          const topLevel = section.entries.filter((e) => !e.parentId);
-          if (topLevel.some((e) => (e.children?.length ?? 0) > 0)) {
-            filteredBulletIndices[section.sectionId] = topLevel.map((_, i) => ({
-              entryOrder: i,
-              bulletIndices: [],
-            }));
-          }
-        }
-      } else if (section.sectionId === 'hard_skills') {
-        const scored = this.scoreSkills(section, jdTokenSet);
-        filteredHardSkills = scored.map((s) => s.name);
-        // Cap hard skills at bulletCap per section
-        if (filteredHardSkills.length > bulletCap) {
-          filteredHardSkills = filteredHardSkills.slice(0, bulletCap);
-        }
-      } else if (section.sectionId === 'soft_skills') {
-        const scored = this.scoreSkills(section, jdTokenSet);
-        filteredSoftSkills = scored.map((s) => s.name);
-        if (filteredSoftSkills.length > bulletCap) {
-          filteredSoftSkills = filteredSoftSkills.slice(0, bulletCap);
-        }
+    for (const entry of section.entries) {
+      if (this.isBulletEntry(entry)) {
+        const text = this.getBulletText(entry) ?? '';
+        scoredBullets.push({ entry, score: this.scoreText(text, jdTokens) });
+      } else if (this.isSkillEntry(entry)) {
+        const text = this.getSkillText(entry) ?? '';
+        scoredSkills.push({ entry, score: this.scoreText(text, jdTokens) });
+      } else {
+        passThrough.push(entry);
       }
     }
 
+    // Sort descending by score
+    scoredBullets.sort((a, b) => b.score - a.score);
+    scoredSkills.sort((a, b) => b.score - a.score);
+
+    // Take top bulletCap bullets (or all if fewer)
+    const topBullets = scoredBullets
+      .slice(0, this.bulletCap)
+      .map((s) => s.entry);
+    const topSkills = scoredSkills.slice(0, this.bulletCap).map((s) => s.entry);
+
+    // Combine: pass-through + top bullets + top skills, sorted by original order
+    const allEntries = [...passThrough, ...topBullets, ...topSkills];
+    allEntries.sort((a, b) => a.order - b.order);
+
     return {
-      filteredBulletIndices,
-      filteredHardSkills,
-      filteredSoftSkills,
+      sectionId: section.sectionId,
+      entries: allEntries,
     };
+  }
+
+  match(request: TailorRequest): Promise<TailorResponse> {
+    const jdTokens = this.tokenize(request.jobDescription);
+
+    const sections = request.resume.sections.map((section) =>
+      this.filterSection(section, jdTokens),
+    );
+
+    return Promise.resolve({ sections });
   }
 }
