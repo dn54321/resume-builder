@@ -57,6 +57,10 @@ jobs:
         working-directory: frontend
         run: pnpm install --frozen-lockfile
 
+      - name: Build for preview
+        working-directory: frontend
+        run: pnpm build-only
+
       - name: Install Playwright browsers
         working-directory: frontend
         run: npx playwright install --with-deps
