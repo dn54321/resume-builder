@@ -1,10 +1,10 @@
 <template>
-  <div class="experience-editor">
-    <h3 class="experience-editor__title">
+  <div class="p-4">
+    <h3 class="text-base font-semibold m-0 mb-4 text-gray-900">
       Experience
       <span
         v-if="store.isFiltered"
-        class="experience-editor__filter-info"
+        class="font-normal text-xs text-gray-500"
       >
         &mdash; Showing {{ filteredCount.visible }} of {{ filteredCount.total }} bullets
       </span>
@@ -18,69 +18,69 @@
       @reorder="editor.reorderEntries"
     >
       <template #fields="{ entry, index: entryIndex }">
-        <div class="experience-editor__fields">
-          <div class="experience-editor__field">
-            <label class="experience-editor__label">Company</label>
+        <div class="flex flex-col gap-2.5">
+          <div class="flex flex-col gap-1">
+            <label class="text-xs font-medium text-gray-900">Company</label>
             <input
               type="text"
               :value="editor.getFieldValue(entry.id, 'company')"
               @input="editor.updateField(entry.id, 'company', ($event.target as HTMLInputElement).value)"
-              class="experience-editor__input"
+              class="px-2 py-1.5 border border-gray-300 rounded-sm text-[0.8125rem] font-[inherit] text-gray-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
               placeholder="Acme Corp"
             />
           </div>
-          <div class="experience-editor__field">
-            <label class="experience-editor__label">Title</label>
+          <div class="flex flex-col gap-1">
+            <label class="text-xs font-medium text-gray-900">Title</label>
             <input
               type="text"
               :value="editor.getFieldValue(entry.id, 'title')"
               @input="editor.updateField(entry.id, 'title', ($event.target as HTMLInputElement).value)"
-              class="experience-editor__input"
+              class="px-2 py-1.5 border border-gray-300 rounded-sm text-[0.8125rem] font-[inherit] text-gray-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
               placeholder="Software Engineer"
             />
           </div>
-          <div class="experience-editor__row">
-            <div class="experience-editor__field experience-editor__field--half">
-              <label class="experience-editor__label">Start Date</label>
+          <div class="flex gap-2">
+            <div class="flex flex-col gap-1 flex-1">
+              <label class="text-xs font-medium text-gray-900">Start Date</label>
               <input
                 type="month"
                 :value="editor.getFieldValue(entry.id, 'startDate')"
                 @input="editor.updateField(entry.id, 'startDate', ($event.target as HTMLInputElement).value)"
-                class="experience-editor__input"
+                class="px-2 py-1.5 border border-gray-300 rounded-sm text-[0.8125rem] font-[inherit] text-gray-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
               />
             </div>
-            <div class="experience-editor__field experience-editor__field--half">
-              <label class="experience-editor__label">End Date</label>
+            <div class="flex flex-col gap-1 flex-1">
+              <label class="text-xs font-medium text-gray-900">End Date</label>
               <input
                 type="month"
                 :value="editor.getFieldValue(entry.id, 'endDate')"
                 @input="editor.updateField(entry.id, 'endDate', ($event.target as HTMLInputElement).value)"
-                class="experience-editor__input"
+                class="px-2 py-1.5 border border-gray-300 rounded-sm text-[0.8125rem] font-[inherit] text-gray-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
                 :disabled="isCurrentJob(entry.id)"
               />
             </div>
           </div>
-          <div class="experience-editor__field">
-            <label class="experience-editor__label">Location</label>
+          <div class="flex flex-col gap-1">
+            <label class="text-xs font-medium text-gray-900">Location</label>
             <input
               type="text"
               :value="editor.getFieldValue(entry.id, 'location')"
               @input="editor.updateField(entry.id, 'location', ($event.target as HTMLInputElement).value)"
-              class="experience-editor__input"
+              class="px-2 py-1.5 border border-gray-300 rounded-sm text-[0.8125rem] font-[inherit] text-gray-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
               placeholder="San Francisco, CA"
             />
           </div>
-          <label class="experience-editor__checkbox-label">
+          <label class="flex items-center gap-2 text-[0.8125rem] text-gray-900 cursor-pointer">
             <input
               type="checkbox"
               :checked="isCurrentJob(entry.id)"
               @change="toggleCurrentJob(entry.id)"
-              class="experience-editor__checkbox"
+              class="w-4 h-4 cursor-pointer"
             />
             Current position
           </label>
-          <div class="experience-editor__bullets">
-            <label class="experience-editor__label">Bullet Points</label>
+          <div class="mt-2 pt-2 border-t border-gray-200">
+            <label class="text-xs font-medium text-gray-900">Bullet Points</label>
             <BulletList
               :bullets="bulletStates(entry.id, entryIndex)"
               @add="editor.addBullet(entry.id)"
@@ -91,11 +91,8 @@
               <template #bullet="{ index: bulletIndex }">
                 <span
                   v-if="store.isFiltered"
-                  class="experience-editor__relevance"
-                  :class="{
-                    'experience-editor__relevance--yes': store.isBulletRelevant('experience', entryIndex, bulletIndex),
-                    'experience-editor__relevance--no': !store.isBulletRelevant('experience', entryIndex, bulletIndex),
-                  }"
+                  class="text-[0.6875rem] shrink-0 w-4 text-center cursor-default"
+                  :class="store.isBulletRelevant('experience', entryIndex, bulletIndex) ? 'text-green-600' : 'text-gray-300'"
                   :title="store.isBulletRelevant('experience', entryIndex, bulletIndex) ? 'Relevant' : 'Filtered out'"
                 >
                   {{ store.isBulletRelevant('experience', entryIndex, bulletIndex) ? '&#10003;' : '&#10005;' }}
@@ -204,106 +201,4 @@ function onBulletUpdate(parentId: string, index: number, value: string) {
 }
 </script>
 
-<style scoped>
-.experience-editor {
-  padding: 1rem;
-}
 
-.experience-editor__title {
-  font-size: 1rem;
-  font-weight: 600;
-  margin: 0 0 1rem;
-  color: var(--color-text, #111827);
-}
-
-.experience-editor__fields {
-  display: flex;
-  flex-direction: column;
-  gap: 0.625rem;
-}
-
-.experience-editor__field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.experience-editor__field--half {
-  flex: 1;
-}
-
-.experience-editor__row {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.experience-editor__label {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--color-text, #111827);
-}
-
-.experience-editor__input {
-  padding: 0.375rem 0.5rem;
-  border: 1px solid var(--color-border, #d1d5db);
-  border-radius: 0.25rem;
-  font-size: 0.8125rem;
-  font-family: inherit;
-  color: var(--color-text, #111827);
-  background: var(--color-background, #fff);
-}
-
-.experience-editor__input:focus {
-  outline: none;
-  border-color: var(--color-primary, #3b82f6);
-  box-shadow: 0 0 0 1px var(--color-primary, #3b82f6);
-}
-
-.experience-editor__input:disabled {
-  background: var(--color-background-soft, #f3f4f6);
-  color: var(--color-text-muted, #9ca3af);
-}
-
-.experience-editor__checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8125rem;
-  color: var(--color-text, #111827);
-  cursor: pointer;
-}
-
-.experience-editor__checkbox {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-}
-
-.experience-editor__bullets {
-  margin-top: 0.5rem;
-  padding-top: 0.5rem;
-  border-top: 1px solid var(--color-border, #e5e7eb);
-}
-
-.experience-editor__filter-info {
-  font-weight: 400;
-  font-size: 0.75rem;
-  color: var(--color-text-muted, #6b7280);
-}
-
-.experience-editor__relevance {
-  font-size: 0.6875rem;
-  flex-shrink: 0;
-  width: 16px;
-  text-align: center;
-  cursor: default;
-}
-
-.experience-editor__relevance--yes {
-  color: var(--color-success, #16a34a);
-}
-
-.experience-editor__relevance--no {
-  color: var(--color-text-muted, #d1d5db);
-}
-</style>

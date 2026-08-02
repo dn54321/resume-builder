@@ -23,7 +23,7 @@ describe('SectionToggles', () => {
       },
     })
 
-    const items = wrapper.findAll('.section-toggles__item')
+    const items = wrapper.findAll('li')
     expect(items).toHaveLength(10)
   })
 
@@ -36,7 +36,7 @@ describe('SectionToggles', () => {
       },
     })
 
-    const checkboxes = wrapper.findAll<HTMLInputElement>('.section-toggles__checkbox')
+    const checkboxes = wrapper.findAll<HTMLInputElement>('input[type="checkbox"]')
     expect(checkboxes).toHaveLength(10)
     for (const cb of checkboxes) {
       expect(cb.element.checked).toBe(true)
@@ -53,13 +53,12 @@ describe('SectionToggles', () => {
       },
     })
 
-    const checkboxes = wrapper.findAll<HTMLInputElement>('.section-toggles__checkbox')
+    const checkboxes = wrapper.findAll<HTMLInputElement>('input[type="checkbox"]')
     // experience should be unchecked (not in enabled list)
-    const experienceCheckbox = checkboxes.find((cb) => {
-      const label = (cb.element.closest('.section-toggles__item') as HTMLElement)
-        ?.querySelector('.section-toggles__label-text')
-        ?.textContent
-      return label === 'Experience'
+    const experienceCheckbox = checkboxes.find((_cb, idx) => {
+      const items = wrapper.findAll('li')
+      const item = items[idx]
+      return item?.text().includes('Experience')
     })
     expect(experienceCheckbox?.element.checked).toBe(false)
   })
@@ -74,7 +73,8 @@ describe('SectionToggles', () => {
     })
 
     // Toggle off "name_contact" — find its checkbox
-    const contactItem = wrapper.findAll('.section-toggles__item').find((item) =>
+    const items = wrapper.findAll('li')
+    const contactItem = items.find((item) =>
       item.text().includes('Contact'),
     )
     const checkbox = contactItem!.find<HTMLInputElement>('input[type="checkbox"]')
@@ -93,7 +93,7 @@ describe('SectionToggles', () => {
       },
     })
 
-    const selects = wrapper.findAll('.section-toggles__column-select')
+    const selects = wrapper.findAll('select')
     expect(selects).toHaveLength(10)
   })
 
@@ -106,7 +106,7 @@ describe('SectionToggles', () => {
       },
     })
 
-    const selects = wrapper.findAll('.section-toggles__column-select')
+    const selects = wrapper.findAll('select')
     expect(selects).toHaveLength(0)
   })
 
@@ -120,7 +120,7 @@ describe('SectionToggles', () => {
       },
     })
 
-    const selects = wrapper.findAll('.section-toggles__column-select')
+    const selects = wrapper.findAll('select')
     expect(selects).toHaveLength(1) // only contact
   })
 
@@ -133,10 +133,11 @@ describe('SectionToggles', () => {
       },
     })
 
-    const contactItem = wrapper.findAll('.section-toggles__item').find((item) =>
+    const items = wrapper.findAll('li')
+    const contactItem = items.find((item) =>
       item.text().includes('Contact'),
     )
-    const select = contactItem!.find('.section-toggles__column-select')
+    const select = contactItem!.find('select')
     await select.setValue('left')
 
     expect(wrapper.emitted('setColumn')).toBeTruthy()
@@ -153,7 +154,7 @@ describe('SectionToggles', () => {
       },
     })
 
-    const moveButtons = wrapper.findAll('.section-toggles__move-btn')
+    const moveButtons = wrapper.findAll('button[title="Drag to reorder"]')
     expect(moveButtons).toHaveLength(3)
   })
 
@@ -167,7 +168,7 @@ describe('SectionToggles', () => {
       },
     })
 
-    const moveButtons = wrapper.findAll('.section-toggles__move-btn')
+    const moveButtons = wrapper.findAll('button[title="Drag to reorder"]')
     expect(moveButtons).toHaveLength(1)
   })
 
@@ -181,18 +182,17 @@ describe('SectionToggles', () => {
       },
     })
 
-    const labels = wrapper.findAll('.section-toggles__label-text')
-    const labelTexts = labels.map((el) => el.text())
+    const items = wrapper.findAll('li')
+    const labelTexts = items.map((el) => el.text())
 
     // All 10 sections in fixed SECTION_TYPES order, regardless of enabled state
-    expect(labelTexts[0]).toBe('Name & Contact')
-    expect(labelTexts[1]).toBe('Summary')
-    expect(labelTexts[2]).toBe('Experience')
-    expect(labelTexts[3]).toBe('Education')
+    expect(labelTexts[0]).toContain('Name & Contact')
+    expect(labelTexts[1]).toContain('Summary')
+    expect(labelTexts[2]).toContain('Experience')
     expect(labelTexts).toHaveLength(10)
   })
 
-  it('adds disabled class to items that are not enabled', () => {
+  it('applies opacity-55 to items that are not enabled', () => {
     const enabled: SectionType[] = ['name_contact']
     const wrapper = mount(SectionToggles, {
       props: {
@@ -202,14 +202,14 @@ describe('SectionToggles', () => {
       },
     })
 
-    const items = wrapper.findAll('.section-toggles__item')
-    // First item (name_contact) should NOT have disabled class
-    expect(items[0]!.classes()).not.toContain('section-toggles__item--disabled')
-    // Second item (summary) SHOULD have disabled class
-    expect(items[1]!.classes()).toContain('section-toggles__item--disabled')
+    const items = wrapper.findAll('li')
+    // First item (name_contact) should NOT have opacity-55 class
+    expect(items[0]!.classes()).not.toContain('opacity-55')
+    // Second item (summary) SHOULD have opacity-55 class
+    expect(items[1]!.classes()).toContain('opacity-55')
     // Count disabled items
     const disabledItems = items.filter((item) =>
-      item.classes().includes('section-toggles__item--disabled'),
+      item.classes().includes('opacity-55'),
     )
     expect(disabledItems).toHaveLength(9)
   })

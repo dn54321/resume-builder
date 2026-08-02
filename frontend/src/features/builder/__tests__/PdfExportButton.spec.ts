@@ -41,20 +41,20 @@ describe('PdfExportButton', () => {
 
   it('renders the download button', () => {
     const wrapper = mountButton()
-    const button = wrapper.find('.pdf-export__button')
+    const button = wrapper.find('button')
     expect(button.exists()).toBe(true)
     expect(button.text()).toBe('Download PDF')
   })
 
   it('is not disabled by default', () => {
     const wrapper = mountButton()
-    const button = wrapper.find('.pdf-export__button')
+    const button = wrapper.find('button')
     expect(button.element.hasAttribute('disabled')).toBe(false)
   })
 
   it('does not show an error by default', () => {
     const wrapper = mountButton()
-    expect(wrapper.find('.pdf-export__error').exists()).toBe(false)
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
   })
 
   it('shows loading state when export starts and preview element exists', async () => {
@@ -66,13 +66,13 @@ describe('PdfExportButton', () => {
     mockHtml2Canvas.mockReturnValue(new Promise(() => {}))
 
     const wrapper = mountButton()
-    const button = wrapper.find('.pdf-export__button')
+    const button = wrapper.find('button')
 
     await button.trigger('click')
 
     expect(button.text()).toBe('Exporting...')
     expect(button.element.hasAttribute('disabled')).toBe(true)
-    expect(wrapper.find('.pdf-export__spinner').exists()).toBe(true)
+    expect(wrapper.find('.animate-spin').exists()).toBe(true)
   })
 
   it('triggers html2canvas and jsPDF when clicked', async () => {
@@ -84,7 +84,7 @@ describe('PdfExportButton', () => {
     mockHtml2Canvas.mockResolvedValue(canvas)
 
     const wrapper = mountButton()
-    await wrapper.find('.pdf-export__button').trigger('click')
+    await wrapper.find('button').trigger('click')
 
     // Wait for async export to complete
     await vi.waitFor(() => {
@@ -98,16 +98,16 @@ describe('PdfExportButton', () => {
 
   it('shows an error when the preview element is missing', async () => {
     const wrapper = mountButton()
-    await wrapper.find('.pdf-export__button').trigger('click')
+    await wrapper.find('button').trigger('click')
 
     await vi.waitFor(() => {
-      expect(wrapper.find('.pdf-export__error').exists()).toBe(true)
+      expect(wrapper.find('[role="alert"]').exists()).toBe(true)
     })
 
-    expect(wrapper.find('.pdf-export__error').text()).toBe(
+    expect(wrapper.find('[role="alert"]').text()).toBe(
       'Preview element not found',
     )
-    expect(wrapper.find('.pdf-export__button').text()).toBe('Download PDF')
+    expect(wrapper.find('button').text()).toBe('Download PDF')
   })
 
   it('shows an error when html2canvas fails', async () => {
@@ -118,13 +118,13 @@ describe('PdfExportButton', () => {
     mockHtml2Canvas.mockRejectedValue(new Error('Canvas error'))
 
     const wrapper = mountButton()
-    await wrapper.find('.pdf-export__button').trigger('click')
+    await wrapper.find('button').trigger('click')
 
     await vi.waitFor(() => {
-      expect(wrapper.find('.pdf-export__error').exists()).toBe(true)
+      expect(wrapper.find('[role="alert"]').exists()).toBe(true)
     })
 
-    expect(wrapper.find('.pdf-export__error').text()).toBe('Canvas error')
+    expect(wrapper.find('[role="alert"]').text()).toBe('Canvas error')
   })
 
   it('resets loading state after successful export', async () => {
@@ -136,10 +136,10 @@ describe('PdfExportButton', () => {
     mockHtml2Canvas.mockResolvedValue(canvas)
 
     const wrapper = mountButton()
-    await wrapper.find('.pdf-export__button').trigger('click')
+    await wrapper.find('button').trigger('click')
 
     await vi.waitFor(() => {
-      const button = wrapper.find('.pdf-export__button')
+      const button = wrapper.find('button')
       expect(button.text()).toBe('Download PDF')
       expect(button.element.hasAttribute('disabled')).toBe(false)
     })
@@ -153,10 +153,10 @@ describe('PdfExportButton', () => {
     mockHtml2Canvas.mockRejectedValue(new Error('fail'))
 
     const wrapper = mountButton()
-    await wrapper.find('.pdf-export__button').trigger('click')
+    await wrapper.find('button').trigger('click')
 
     await vi.waitFor(() => {
-      const button = wrapper.find('.pdf-export__button')
+      const button = wrapper.find('button')
       expect(button.text()).toBe('Download PDF')
       expect(button.element.hasAttribute('disabled')).toBe(false)
     })

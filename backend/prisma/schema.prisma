@@ -1,3 +1,7 @@
+// ⚠️  WARNING — DO NOT change the output path without updating
+// scripts/patch-prisma-client.js. Prisma 7 generates ESM-only code
+// (import.meta.url) that crashes NestJS CJS compilation. The patch
+// script removes those lines. See AGENTS.md § Agent-to-Agent Warnings.
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"

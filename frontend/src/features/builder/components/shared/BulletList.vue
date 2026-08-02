@@ -1,34 +1,34 @@
 <template>
-  <div class="bullet-list">
+  <div class="flex flex-col gap-1.5">
     <div
       v-for="(bullet, index) in bullets"
       :key="bullet.id"
-      class="bullet-list__row"
-      :class="{ 'bullet-list__row--dimmed': bullet.dimmed }"
+      class="flex items-center gap-1.5 transition-opacity"
+      :class="{ 'opacity-45': bullet.dimmed }"
     >
       <span
-        class="bullet-list__drag-handle"
+        class="cursor-grab text-gray-400 text-xs shrink-0 active:cursor-grabbing"
         @mousedown.prevent="onDragStart($event, index)"
         title="Drag to reorder"
       >&#x2630;</span>
       <slot name="bullet" :bullet="bullet" :index="index" />
-      <span class="bullet-list__dot">&bull;</span>
+      <span class="text-gray-400 shrink-0">&bull;</span>
       <input
         type="text"
         :value="bullet.value"
         @input="onUpdate(index, ($event.target as HTMLInputElement).value)"
-        class="bullet-list__input"
-        :class="{ 'bullet-list__input--dimmed': bullet.dimmed }"
+        class="flex-1 px-2 py-1.5 border border-gray-300 rounded-sm text-[0.8125rem] font-[inherit] bg-white focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+        :class="bullet.dimmed ? 'text-gray-400' : 'text-gray-900'"
         :placeholder="placeholder"
       />
       <button
-        class="bullet-list__remove-btn"
+        class="w-6 h-6 flex items-center justify-center border-none bg-transparent text-gray-400 cursor-pointer rounded-sm text-lg leading-none shrink-0 hover:bg-red-50 hover:text-red-600"
         @click="onRemove(bullet.id)"
         title="Remove bullet"
         aria-label="Remove bullet point"
       >&times;</button>
     </div>
-    <button class="bullet-list__add-btn" @click="$emit('add')">
+    <button class="px-3 py-1.5 border border-dashed border-gray-300 rounded-sm bg-transparent text-gray-500 cursor-pointer text-[0.8125rem] font-[inherit] self-start transition-colors hover:border-blue-500 hover:text-blue-500" @click="$emit('add')">
       + Add bullet point
     </button>
   </div>
@@ -113,97 +113,4 @@ function onRemove(id: string) {
 }
 </script>
 
-<style scoped>
-.bullet-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-}
 
-.bullet-list__row {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  transition: opacity 0.2s;
-}
-
-.bullet-list__row--dimmed {
-  opacity: 0.45;
-}
-
-.bullet-list__drag-handle {
-  cursor: grab;
-  color: var(--color-text-muted, #9ca3af);
-  font-size: 0.75rem;
-  flex-shrink: 0;
-}
-
-.bullet-list__drag-handle:active {
-  cursor: grabbing;
-}
-
-.bullet-list__dot {
-  color: var(--color-text-muted, #9ca3af);
-  flex-shrink: 0;
-}
-
-.bullet-list__input {
-  flex: 1;
-  padding: 0.375rem 0.5rem;
-  border: 1px solid var(--color-border, #d1d5db);
-  border-radius: 0.25rem;
-  font-size: 0.8125rem;
-  font-family: inherit;
-  color: var(--color-text, #111827);
-  background: var(--color-background, #fff);
-}
-
-.bullet-list__input:focus {
-  outline: none;
-  border-color: var(--color-primary, #3b82f6);
-  box-shadow: 0 0 0 1px var(--color-primary, #3b82f6);
-}
-
-.bullet-list__input--dimmed {
-  color: var(--color-text-muted, #9ca3af);
-}
-
-.bullet-list__remove-btn {
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  color: var(--color-text-muted, #9ca3af);
-  cursor: pointer;
-  border-radius: 0.25rem;
-  font-size: 1.125rem;
-  line-height: 1;
-  flex-shrink: 0;
-}
-
-.bullet-list__remove-btn:hover {
-  background: var(--color-error-bg, #fef2f2);
-  color: var(--color-error, #dc2626);
-}
-
-.bullet-list__add-btn {
-  padding: 0.375rem 0.75rem;
-  border: 1px dashed var(--color-border, #d1d5db);
-  border-radius: 0.25rem;
-  background: transparent;
-  color: var(--color-text-muted, #6b7280);
-  cursor: pointer;
-  font-size: 0.8125rem;
-  font-family: inherit;
-  align-self: flex-start;
-  transition: border-color 0.15s, color 0.15s;
-}
-
-.bullet-list__add-btn:hover {
-  border-color: var(--color-primary, #3b82f6);
-  color: var(--color-primary, #3b82f6);
-}
-</style>

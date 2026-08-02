@@ -1,12 +1,12 @@
 <template>
-  <div class="resume-builder">
+  <div class="flex flex-col h-screen max-h-screen overflow-hidden p-4 box-border">
     <AnonymousBanner v-if="!isAuthenticated" />
-    <header class="resume-builder__toolbar">
+    <header class="flex items-center justify-end pb-3 shrink-0">
       <PdfExportButton />
     </header>
-    <div class="resume-builder__grid">
+    <div class="grid grid-cols-[260px_1fr_300px] gap-4 flex-1 min-h-0 max-[1024px]:grid-cols-1 max-[1024px]:grid-rows-[auto_1fr_1fr]">
       <!-- Left sidebar: LayoutPicker + SectionToggles -->
-      <aside class="resume-builder__sidebar">
+      <aside class="overflow-y-auto p-4 border border-gray-300 rounded-lg bg-white">
         <LayoutPicker v-model="store.layout" />
         <SectionToggles
           :layout="store.layout"
@@ -21,18 +21,18 @@
       </aside>
 
       <!-- Center: Section editor -->
-      <main class="resume-builder__editor">
+      <main class="overflow-y-auto p-4 border border-gray-300 rounded-lg bg-white">
         <SectionEditor :selected-section-id="selectedSectionId" />
       </main>
 
       <!-- Right: Live preview -->
-      <aside class="resume-builder__preview">
+      <aside class="overflow-hidden border border-gray-300 rounded-lg bg-white">
         <LivePreview />
       </aside>
     </div>
 
     <!-- Bottom: JD input area -->
-    <footer class="resume-builder__jd-input">
+    <footer class="p-0 mt-4 border border-gray-300 rounded-lg bg-white shrink-0 max-h-[35vh] overflow-y-auto">
       <JdInput />
     </footer>
   </div>
@@ -80,82 +80,4 @@ onUnmounted(() => {
 })
 </script>
 
-<style scoped>
-.resume-builder {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  max-height: 100vh;
-  overflow: hidden;
-  padding: 1rem;
-  box-sizing: border-box;
-}
 
-.resume-builder__toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding-bottom: 0.75rem;
-  flex-shrink: 0;
-}
-
-.resume-builder__grid {
-  display: grid;
-  grid-template-columns: 260px 1fr 300px;
-  gap: 1rem;
-  flex: 1;
-  min-height: 0;
-}
-
-.resume-builder__sidebar {
-  overflow-y: auto;
-  padding: 1rem;
-  border: 1px solid var(--color-border, #d1d5db);
-  border-radius: 0.5rem;
-  background: var(--color-background, #fff);
-}
-
-.resume-builder__editor {
-  overflow-y: auto;
-  padding: 1rem;
-  border: 1px solid var(--color-border, #d1d5db);
-  border-radius: 0.5rem;
-  background: var(--color-background, #fff);
-}
-
-.resume-builder__preview {
-  overflow: hidden;
-  border: 1px solid var(--color-border, #d1d5db);
-  border-radius: 0.5rem;
-  background: var(--color-background, #fff);
-}
-
-.resume-builder__placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: var(--color-text-muted, #9ca3af);
-  font-size: 0.875rem;
-  font-style: italic;
-}
-
-.resume-builder__jd-input {
-  padding: 0;
-  margin-top: 1rem;
-  border: 1px solid var(--color-border, #d1d5db);
-  border-radius: 0.5rem;
-  background: var(--color-background, #fff);
-  flex-shrink: 0;
-  max-height: 35vh;
-  overflow-y: auto;
-}
-
-/* Responsive: stack on smaller screens */
-@media (max-width: 1024px) {
-  .resume-builder__grid {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr 1fr;
-  }
-}
-</style>

@@ -1,6 +1,6 @@
 <template>
-  <div class="education-editor">
-    <h3 class="education-editor__title">Education</h3>
+  <div class="p-4">
+    <h3 class="text-base font-semibold m-0 mb-4 text-gray-900">Education</h3>
     <EntryList
       :entries="editor.entries.value.filter((e) => !e.parentId)"
       add-label="Add Education"
@@ -10,54 +10,54 @@
       @reorder="editor.reorderEntries"
     >
       <template #fields="{ entry }">
-        <div class="education-editor__fields">
-          <div class="education-editor__field">
-            <label class="education-editor__label">School</label>
+        <div class="flex flex-col gap-2.5">
+          <div class="flex flex-col gap-1">
+            <label class="text-xs font-medium text-gray-900">School</label>
             <input
               type="text"
               :value="editor.getFieldValue(entry.id, 'school')"
               @input="editor.updateField(entry.id, 'school', ($event.target as HTMLInputElement).value)"
-              class="education-editor__input"
+              class="px-2 py-1.5 border border-gray-300 rounded-sm text-[0.8125rem] font-[inherit] text-gray-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               placeholder="University of California"
             />
           </div>
-          <div class="education-editor__field">
-            <label class="education-editor__label">Degree</label>
+          <div class="flex flex-col gap-1">
+            <label class="text-xs font-medium text-gray-900">Degree</label>
             <input
               type="text"
               :value="editor.getFieldValue(entry.id, 'degree')"
               @input="editor.updateField(entry.id, 'degree', ($event.target as HTMLInputElement).value)"
-              class="education-editor__input"
+              class="px-2 py-1.5 border border-gray-300 rounded-sm text-[0.8125rem] font-[inherit] text-gray-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               placeholder="Bachelor of Science"
             />
           </div>
-          <div class="education-editor__field">
-            <label class="education-editor__label">Field of Study</label>
+          <div class="flex flex-col gap-1">
+            <label class="text-xs font-medium text-gray-900">Field of Study</label>
             <input
               type="text"
               :value="editor.getFieldValue(entry.id, 'fieldOfStudy')"
               @input="editor.updateField(entry.id, 'fieldOfStudy', ($event.target as HTMLInputElement).value)"
-              class="education-editor__input"
+              class="px-2 py-1.5 border border-gray-300 rounded-sm text-[0.8125rem] font-[inherit] text-gray-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               placeholder="Computer Science"
             />
           </div>
-          <div class="education-editor__row">
-            <div class="education-editor__field education-editor__field--half">
-              <label class="education-editor__label">Start Date</label>
+          <div class="flex gap-2">
+            <div class="flex flex-col gap-1 flex-1">
+              <label class="text-xs font-medium text-gray-900">Start Date</label>
               <input
                 type="month"
                 :value="editor.getFieldValue(entry.id, 'startDate')"
                 @input="editor.updateField(entry.id, 'startDate', ($event.target as HTMLInputElement).value)"
-                class="education-editor__input"
+                class="px-2 py-1.5 border border-gray-300 rounded-sm text-[0.8125rem] font-[inherit] text-gray-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               />
             </div>
-            <div class="education-editor__field education-editor__field--half">
-              <label class="education-editor__label">End Date</label>
+            <div class="flex flex-col gap-1 flex-1">
+              <label class="text-xs font-medium text-gray-900">End Date</label>
               <input
                 type="month"
                 :value="editor.getFieldValue(entry.id, 'endDate')"
                 @input="editor.updateField(entry.id, 'endDate', ($event.target as HTMLInputElement).value)"
-                class="education-editor__input"
+                class="px-2 py-1.5 border border-gray-300 rounded-sm text-[0.8125rem] font-[inherit] text-gray-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               />
             </div>
           </div>
@@ -95,58 +95,4 @@ function entryTitle(entry: { id: string; order: number }): string {
 }
 </script>
 
-<style scoped>
-.education-editor {
-  padding: 1rem;
-}
 
-.education-editor__title {
-  font-size: 1rem;
-  font-weight: 600;
-  margin: 0 0 1rem;
-  color: var(--color-text, #111827);
-}
-
-.education-editor__fields {
-  display: flex;
-  flex-direction: column;
-  gap: 0.625rem;
-}
-
-.education-editor__field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.education-editor__field--half {
-  flex: 1;
-}
-
-.education-editor__row {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.education-editor__label {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--color-text, #111827);
-}
-
-.education-editor__input {
-  padding: 0.375rem 0.5rem;
-  border: 1px solid var(--color-border, #d1d5db);
-  border-radius: 0.25rem;
-  font-size: 0.8125rem;
-  font-family: inherit;
-  color: var(--color-text, #111827);
-  background: var(--color-background, #fff);
-}
-
-.education-editor__input:focus {
-  outline: none;
-  border-color: var(--color-primary, #3b82f6);
-  box-shadow: 0 0 0 1px var(--color-primary, #3b82f6);
-}
-</style>

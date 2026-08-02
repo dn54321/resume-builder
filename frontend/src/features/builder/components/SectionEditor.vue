@@ -1,6 +1,6 @@
 <template>
-  <div class="section-editor">
-    <div v-if="!selectedSectionId" class="section-editor__empty">
+  <div class="h-full overflow-y-auto">
+    <div v-if="!selectedSectionId" class="flex items-center justify-center h-full text-sm text-gray-400 italic">
       <p>Select a section to edit from the sidebar</p>
     </div>
     <template v-else>
@@ -37,19 +37,4 @@ const editorComponent = computed(() => {
 })
 </script>
 
-<style scoped>
-.section-editor {
-  height: 100%;
-  overflow-y: auto;
-}
 
-.section-editor__empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: var(--color-text-muted, #9ca3af);
-  font-size: 0.875rem;
-  font-style: italic;
-}
-</style>

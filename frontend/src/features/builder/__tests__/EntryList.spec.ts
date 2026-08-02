@@ -35,10 +35,14 @@ describe('EntryList', () => {
       props: { entries, addLabel: 'Add Item', entryTitle },
     })
 
-    const titles = wrapper.findAll('.entry-list__title')
-    expect(titles).toHaveLength(2)
-    expect(titles[0]!.text()).toBe('Entry entry-1')
-    expect(titles[1]!.text()).toBe('Entry entry-2')
+    const panels = wrapper.findAll('[data-entry-panel]')
+    expect(panels).toHaveLength(2)
+    // The title span is the flex-1 span in the header
+    const titleSpans = panels.map((panel) =>
+      panel.find('span.flex-1'),
+    )
+    expect(titleSpans[0]!.text()).toBe('Entry entry-1')
+    expect(titleSpans[1]!.text()).toBe('Entry entry-2')
   })
 
   it('renders add button with the correct label', () => {
@@ -46,7 +50,9 @@ describe('EntryList', () => {
       props: { entries: [], addLabel: 'Add Job', entryTitle },
     })
 
-    const addBtn = wrapper.find('.entry-list__add-btn')
+    // The add button is the last button in the component
+    const buttons = wrapper.findAll('button')
+    const addBtn = buttons[buttons.length - 1]
     expect(addBtn.exists()).toBe(true)
     expect(addBtn.text()).toBe('+ Add Job')
   })
@@ -57,7 +63,8 @@ describe('EntryList', () => {
       props: { entries, addLabel: 'Add Item', entryTitle },
     })
 
-    const bodies = wrapper.findAll('.entry-list__body')
+    // Expanded body panels have class 'p-3 border-t'
+    const bodies = wrapper.findAll('.p-3.border-t')
     expect(bodies).toHaveLength(0)
   })
 
@@ -67,10 +74,12 @@ describe('EntryList', () => {
       props: { entries, addLabel: 'Add Item', entryTitle },
     })
 
-    const headers = wrapper.findAll('.entry-list__header')
-    await headers[0]!.trigger('click')
+    // Find the first entry panel's header (the div with cursor-pointer)
+    const panels = wrapper.findAll('[data-entry-panel]')
+    const header = panels[0]!.find('[class*="cursor-pointer"]')
+    await header.trigger('click')
 
-    const bodies = wrapper.findAll('.entry-list__body')
+    const bodies = wrapper.findAll('.p-3.border-t')
     expect(bodies).toHaveLength(1)
   })
 
@@ -80,13 +89,14 @@ describe('EntryList', () => {
       props: { entries, addLabel: 'Add Item', entryTitle },
     })
 
-    const headers = wrapper.findAll('.entry-list__header')
+    const panels = wrapper.findAll('[data-entry-panel]')
+    const header = panels[0]!.find('[class*="cursor-pointer"]')
     // Expand
-    await headers[0]!.trigger('click')
-    expect(wrapper.findAll('.entry-list__body')).toHaveLength(1)
+    await header.trigger('click')
+    expect(wrapper.findAll('.p-3.border-t')).toHaveLength(1)
     // Collapse
-    await headers[0]!.trigger('click')
-    expect(wrapper.findAll('.entry-list__body')).toHaveLength(0)
+    await header.trigger('click')
+    expect(wrapper.findAll('.p-3.border-t')).toHaveLength(0)
   })
 
   it('auto-expands a newly added entry', async () => {
@@ -96,7 +106,7 @@ describe('EntryList', () => {
     })
 
     // Initially all collapsed
-    expect(wrapper.findAll('.entry-list__body')).toHaveLength(0)
+    expect(wrapper.findAll('.p-3.border-t')).toHaveLength(0)
 
     // Simulate adding a new entry by updating props
     const newEntries = [...entries, { id: 'entry-3', order: 2 }]
@@ -104,12 +114,13 @@ describe('EntryList', () => {
     await nextTick()
 
     // The new entry (last one) should be expanded
-    const bodies = wrapper.findAll('.entry-list__body')
+    const bodies = wrapper.findAll('.p-3.border-t')
     expect(bodies).toHaveLength(1)
 
-    // The expanded panel should have the expanded class
-    const panels = wrapper.findAll('.entry-list__panel')
-    expect(panels[2]!.classes()).toContain('entry-list__panel--expanded')
+    // The third panel should have an expanded body
+    const panels = wrapper.findAll('[data-entry-panel]')
+    expect(panels).toHaveLength(3)
+    expect(panels[2]!.find('.p-3.border-t').exists()).toBe(true)
   })
 
   it('emits add event when add button is clicked', async () => {
@@ -117,7 +128,8 @@ describe('EntryList', () => {
       props: { entries: [], addLabel: 'Add Job', entryTitle },
     })
 
-    const addBtn = wrapper.find('.entry-list__add-btn')
+    // The add button is the only button (when entries is empty)
+    const addBtn = wrapper.find('button')
     await addBtn.trigger('click')
     expect(wrapper.emitted('add')).toHaveLength(1)
   })
@@ -129,7 +141,7 @@ describe('EntryList', () => {
       props: { entries, addLabel: 'Add Item', entryTitle },
     })
 
-    const removeBtn = wrapper.find('.entry-list__remove-btn')
+    const removeBtn = wrapper.find('button[title="Remove entry"]')
     await removeBtn.trigger('click')
 
     expect(window.confirm).toHaveBeenCalled()
@@ -144,7 +156,7 @@ describe('EntryList', () => {
       props: { entries, addLabel: 'Add Item', entryTitle },
     })
 
-    const removeBtn = wrapper.find('.entry-list__remove-btn')
+    const removeBtn = wrapper.find('button[title="Remove entry"]')
     await removeBtn.trigger('click')
 
     expect(window.confirm).toHaveBeenCalled()
@@ -157,8 +169,11 @@ describe('EntryList', () => {
       props: { entries, addLabel: 'Add Item', entryTitle },
     })
 
-    const addBtn = wrapper.find('.entry-list__add-btn')
-    // The add button should exist
+    // The add button is the last button element
+    const buttons = wrapper.findAll('button')
+    const addBtn = buttons[buttons.length - 1]
     expect(addBtn.exists()).toBe(true)
+    // Verify it's the add button by checking text starts with '+'
+    expect(addBtn.text()).toContain('+')
   })
 })

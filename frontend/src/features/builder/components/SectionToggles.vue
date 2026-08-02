@@ -1,24 +1,24 @@
 <template>
-  <div class="section-toggles">
-    <h3 class="section-toggles__title">Sections</h3>
-    <ul class="section-toggles__list">
+  <div class="mb-6">
+    <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-500 m-0 mb-3">Sections</h3>
+    <ul class="list-none p-0 m-0 flex flex-col gap-2">
       <li
         v-for="section in orderedSections"
         :key="section.type"
-        class="section-toggles__item"
-        :class="{ 'section-toggles__item--disabled': !section.enabled }"
+        class="flex items-center gap-2 p-2 rounded-md bg-gray-50 cursor-default transition-opacity"
+        :class="{ 'opacity-55': !section.enabled }"
       >
-        <label class="section-toggles__toggle" @click.stop="emit('select', section.type)">
+        <label class="flex items-center gap-2 flex-1 cursor-pointer" @click.stop="emit('select', section.type)">
           <input
             type="checkbox"
             :checked="section.enabled"
             @change="emit('toggle', section.type)"
-            class="section-toggles__checkbox"
+            class="peer absolute opacity-0 w-0 h-0"
           />
-          <span class="section-toggles__slider"></span>
+          <span class="relative w-9 h-5 bg-gray-300 rounded-[10px] shrink-0 transition-colors peer-checked:bg-blue-500 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:w-4 after:h-4 after:bg-white after:rounded-full after:transition-transform peer-checked:after:translate-x-4"></span>
           <span
-            class="section-toggles__label-text"
-            :class="{ 'section-toggles__label-text--selected': section.type === selectedSectionId }"
+            class="text-[0.8125rem] cursor-pointer"
+            :class="section.type === selectedSectionId ? 'font-semibold text-blue-500' : section.enabled ? 'text-gray-900' : 'text-gray-400'"
           >{{ section.label }}</span>
         </label>
 
@@ -26,7 +26,7 @@
           v-if="layout === 'column2-1' && section.enabled"
           :value="section.column"
           @change="emit('setColumn', section.type, ($event.target as HTMLSelectElement).value as 'left' | 'right')"
-          class="section-toggles__column-select"
+          class="text-xs py-1 px-2 border border-gray-300 rounded-sm bg-white text-gray-900 font-[inherit]"
           aria-label="Column assignment for {{ section.label }}"
         >
           <option value="left">Left</option>
@@ -35,7 +35,7 @@
 
         <button
           v-if="section.enabled"
-          class="section-toggles__move-btn"
+          class="w-7 h-7 flex items-center justify-center border-none bg-transparent text-gray-400 cursor-grab rounded-sm text-sm hover:bg-gray-200 hover:text-gray-900 active:cursor-grabbing"
           title="Drag to reorder"
           @mousedown.prevent="onDragStart($event, section.type)"
           aria-label="Reorder {{ section.label }}"
@@ -107,11 +107,10 @@ function onDragStart(event: MouseEvent, sectionType: SectionType) {
 
     // Find the target element under the mouse
     const target = document.elementFromPoint(e.clientX, e.clientY)
-    const targetItem = target?.closest('.section-toggles__item') as HTMLElement | null
+    const targetItem = target?.closest('li') as HTMLElement | null
     if (targetItem) {
-      const targetType = targetItem
-        .querySelector('.section-toggles__label-text')
-        ?.textContent?.trim()
+      const labelSpan = targetItem.querySelector('label span:last-child')
+      const targetType = labelSpan?.textContent?.trim()
       const targetSection = SECTION_TYPES.find(
         (t) => SECTION_LABELS[t] === targetType,
       )
@@ -137,135 +136,3 @@ function onDragStart(event: MouseEvent, sectionType: SectionType) {
   document.addEventListener('mouseup', onMouseUp)
 }
 </script>
-
-<style scoped>
-.section-toggles {
-  margin-bottom: 1.5rem;
-}
-
-.section-toggles__title {
-  font-size: 0.875rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--color-text-muted, #6b7280);
-  margin: 0 0 0.75rem;
-}
-
-.section-toggles__list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.section-toggles__item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem;
-  border-radius: 0.375rem;
-  background: var(--color-background-soft, #f9fafb);
-  cursor: default;
-  transition: opacity 0.15s;
-}
-
-.section-toggles__item--disabled {
-  opacity: 0.55;
-}
-
-.section-toggles__toggle {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex: 1;
-  cursor: pointer;
-}
-
-.section-toggles__checkbox {
-  position: absolute;
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.section-toggles__slider {
-  position: relative;
-  width: 36px;
-  height: 20px;
-  background: var(--color-border, #d1d5db);
-  border-radius: 10px;
-  flex-shrink: 0;
-  transition: background 0.15s;
-}
-
-.section-toggles__slider::after {
-  content: '';
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  background: white;
-  border-radius: 50%;
-  transition: transform 0.15s;
-}
-
-.section-toggles__checkbox:checked + .section-toggles__slider {
-  background: var(--color-primary, #3b82f6);
-}
-
-.section-toggles__checkbox:checked + .section-toggles__slider::after {
-  transform: translateX(16px);
-}
-
-.section-toggles__label-text {
-  font-size: 0.8125rem;
-  color: var(--color-text, #111827);
-  cursor: pointer;
-}
-
-.section-toggles__label-text--selected {
-  font-weight: 600;
-  color: var(--color-primary, #3b82f6);
-}
-
-.section-toggles__checkbox:not(:checked) ~ .section-toggles__label-text {
-  color: var(--color-text-muted, #9ca3af);
-}
-
-.section-toggles__column-select {
-  font-size: 0.75rem;
-  padding: 0.25rem 0.5rem;
-  border: 1px solid var(--color-border, #d1d5db);
-  border-radius: 0.25rem;
-  background: var(--color-background, #fff);
-  color: var(--color-text, #111827);
-  font-family: inherit;
-}
-
-.section-toggles__move-btn {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  color: var(--color-text-muted, #9ca3af);
-  cursor: grab;
-  border-radius: 0.25rem;
-  font-size: 0.875rem;
-}
-
-.section-toggles__move-btn:hover {
-  background: var(--color-background-muted, #e5e7eb);
-  color: var(--color-text, #111827);
-}
-
-.section-toggles__move-btn:active {
-  cursor: grabbing;
-}
-</style>

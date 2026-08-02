@@ -26,7 +26,7 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=3000
-      - DATABASE_URL=${DATABASE_URL:-file:./dev.db}
+      - DATABASE_URL=${DATABASE_URL:-file:./db/dev.db}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:${FRONTEND_PORT:-5173}}
       - RESUME_FIELD_ENCRYPTION_KEY=${RESUME_FIELD_ENCRYPTION_KEY:-}
       - SESSION_ENCRYPTION_KEY=${SESSION_ENCRYPTION_KEY:-}
@@ -40,8 +40,8 @@ services:
       - ./backend/tsconfig.build.json:/app/tsconfig.build.json:ro
       # Anonymous volume to prevent host node_modules from overwriting container's
       - /app/node_modules
-      # Database persistence
-      - backend-db:/app/prisma
+      # Database persistence (only persist the DB file, not the entire prisma dir)
+      - backend-db:/app/prisma/db
     networks:
       - resume-net
     restart: unless-stopped
@@ -71,6 +71,8 @@ services:
       - ./frontend/tsconfig.app.json:/app/tsconfig.app.json:ro
       - ./frontend/tsconfig.node.json:/app/tsconfig.node.json:ro
       - ./frontend/env.d.ts:/app/env.d.ts:ro
+      # Mount package.json for dependency updates without full rebuild
+      - ./frontend/package.json:/app/package.json:ro
       # Anonymous volume to prevent host node_modules from overwriting container's
       - /app/node_modules
     networks:

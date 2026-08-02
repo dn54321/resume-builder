@@ -13,9 +13,10 @@ COPY backend/package.json backend/pnpm-lock.yaml ./
 # Install dependencies
 RUN pnpm install --frozen-lockfile
 
-# Copy Prisma schema and generate client
+# Copy Prisma schema and generate client (patched for CJS compatibility)
 COPY backend/prisma ./prisma
-RUN pnpm prisma generate
+COPY backend/scripts ./scripts
+RUN pnpm run prisma:generate
 
 # Copy remaining config files (source is mounted at runtime)
 COPY backend/nest-cli.json backend/tsconfig.json backend/tsconfig.build.json ./

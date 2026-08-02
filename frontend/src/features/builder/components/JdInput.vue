@@ -1,54 +1,54 @@
 <template>
-  <div class="jd-input">
-    <div class="jd-input__header">
-      <h3 class="jd-input__title">Tailor to Job Description</h3>
-      <span v-if="store.isFiltered" class="jd-input__badge">Filtered</span>
+  <div class="p-4">
+    <div class="flex items-center gap-2 mb-3">
+      <h3 class="text-[0.9375rem] font-semibold m-0 text-gray-900">Tailor to Job Description</h3>
+      <span v-if="store.isFiltered" class="text-[0.6875rem] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-100 text-blue-500">Filtered</span>
     </div>
 
     <textarea
       v-model="localJd"
-      class="jd-input__textarea"
-      :class="{ 'jd-input__textarea--error': tailorError }"
+      class="w-full min-h-[150px] px-3 py-2.5 border border-gray-300 rounded-md text-[0.8125rem] font-[inherit] text-gray-900 bg-white resize-y box-border transition-colors focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
+      :class="{ 'border-red-600!': tailorError }"
       placeholder="Paste a job description here to find the most relevant experience and skills..."
       :disabled="isTailoring"
       rows="5"
       data-testid="jd-textarea"
     ></textarea>
 
-    <div v-if="tailorError" class="jd-input__error" data-testid="jd-error">
+    <div v-if="tailorError" class="mt-2 px-3 py-2 rounded-sm bg-red-50 text-red-600 text-[0.8125rem] leading-relaxed" data-testid="jd-error">
       {{ tailorError }}
     </div>
 
-    <div v-if="store.isFiltered && !tailorError" class="jd-input__info">
+    <div v-if="store.isFiltered && !tailorError" class="mt-2 flex items-start gap-1.5 px-3 py-2 rounded-sm bg-gray-100 text-gray-500 text-xs leading-relaxed">
       <template v-if="store.isFiltered">
-        <span class="jd-input__info-icon">&#9432;</span>
+        <span class="shrink-0 mt-px">&#9432;</span>
         <span>
           Showing relevant bullets (max {{ bulletCap }} per entry)
           &mdash;
-          <button class="jd-input__info-reset" @click="resetFilter">
+          <button class="p-0 border-none bg-transparent text-blue-500 cursor-pointer text-xs font-[inherit] underline hover:text-blue-600" @click="resetFilter">
             Reset to show all
           </button>
         </span>
       </template>
     </div>
 
-    <div class="jd-input__actions">
+    <div class="mt-3 flex gap-2">
       <button
-        class="jd-input__btn jd-input__btn--primary"
+        class="px-4 py-2 rounded-md text-[0.8125rem] font-[inherit] font-medium cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 border border-blue-500 bg-blue-500 text-white hover:not-disabled:bg-blue-600 hover:not-disabled:border-blue-600"
         :disabled="isTailoring || !localJd.trim()"
         @click="onTailor"
         data-testid="tailor-btn"
       >
         <span
           v-if="isTailoring"
-          class="jd-input__spinner"
+          class="inline-block w-[14px] h-[14px] border-2 border-white/30 border-t-white rounded-full animate-spin"
           aria-label="Loading"
         ></span>
         <span v-else>Tailor Resume</span>
       </button>
       <button
         v-if="store.isFiltered"
-        class="jd-input__btn jd-input__btn--secondary"
+        class="px-4 py-2 rounded-md text-[0.8125rem] font-[inherit] font-medium cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-gray-300 bg-white text-gray-900 hover:not-disabled:bg-gray-100"
         :disabled="isTailoring"
         @click="resetFilter"
         data-testid="reset-btn"
@@ -84,167 +84,4 @@ async function onTailor() {
 }
 </script>
 
-<style scoped>
-.jd-input {
-  padding: 1rem;
-}
 
-.jd-input__header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-}
-
-.jd-input__title {
-  font-size: 0.9375rem;
-  font-weight: 600;
-  margin: 0;
-  color: var(--color-text, #111827);
-}
-
-.jd-input__badge {
-  font-size: 0.6875rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 0.125rem 0.5rem;
-  border-radius: 999px;
-  background: var(--color-primary-bg, #e0f2fe);
-  color: var(--color-primary, #3b82f6);
-}
-
-.jd-input__textarea {
-  width: 100%;
-  min-height: 150px;
-  padding: 0.625rem 0.75rem;
-  border: 1px solid var(--color-border, #d1d5db);
-  border-radius: 0.375rem;
-  font-size: 0.8125rem;
-  font-family: inherit;
-  color: var(--color-text, #111827);
-  background: var(--color-background, #fff);
-  resize: vertical;
-  box-sizing: border-box;
-  transition: border-color 0.15s;
-}
-
-.jd-input__textarea:focus {
-  outline: none;
-  border-color: var(--color-primary, #3b82f6);
-  box-shadow: 0 0 0 1px var(--color-primary, #3b82f6);
-}
-
-.jd-input__textarea:disabled {
-  background: var(--color-background-soft, #f3f4f6);
-  color: var(--color-text-muted, #9ca3af);
-}
-
-.jd-input__textarea--error {
-  border-color: var(--color-error, #dc2626);
-}
-
-.jd-input__error {
-  margin-top: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: 0.25rem;
-  background: var(--color-error-bg, #fef2f2);
-  color: var(--color-error, #dc2626);
-  font-size: 0.8125rem;
-  line-height: 1.4;
-}
-
-.jd-input__info {
-  margin-top: 0.5rem;
-  display: flex;
-  align-items: flex-start;
-  gap: 0.375rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: 0.25rem;
-  background: var(--color-background-soft, #f3f4f6);
-  color: var(--color-text-muted, #6b7280);
-  font-size: 0.75rem;
-  line-height: 1.5;
-}
-
-.jd-input__info-icon {
-  flex-shrink: 0;
-  margin-top: 0.0625rem;
-}
-
-.jd-input__info-reset {
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--color-primary, #3b82f6);
-  cursor: pointer;
-  font-size: 0.75rem;
-  font-family: inherit;
-  text-decoration: underline;
-}
-
-.jd-input__info-reset:hover {
-  color: var(--color-primary-hover, #2563eb);
-}
-
-.jd-input__actions {
-  margin-top: 0.75rem;
-  display: flex;
-  gap: 0.5rem;
-}
-
-.jd-input__btn {
-  padding: 0.5rem 1rem;
-  border-radius: 0.375rem;
-  font-size: 0.8125rem;
-  font-family: inherit;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
-}
-
-.jd-input__btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.jd-input__btn--primary {
-  border: 1px solid var(--color-primary, #3b82f6);
-  background: var(--color-primary, #3b82f6);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.jd-input__btn--primary:hover:not(:disabled) {
-  background: var(--color-primary-hover, #2563eb);
-  border-color: var(--color-primary-hover, #2563eb);
-}
-
-.jd-input__btn--secondary {
-  border: 1px solid var(--color-border, #d1d5db);
-  background: var(--color-background, #fff);
-  color: var(--color-text, #111827);
-}
-
-.jd-input__btn--secondary:hover:not(:disabled) {
-  background: var(--color-background-soft, #f3f4f6);
-}
-
-.jd-input__spinner {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: jd-spin 0.6s linear infinite;
-}
-
-@keyframes jd-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

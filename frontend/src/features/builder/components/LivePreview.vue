@@ -1,5 +1,5 @@
 <template>
-  <div class="live-preview">
+  <div class="live-preview flex justify-center items-start h-full overflow-y-auto py-3 bg-gray-200">
     <div
       id="resume-preview"
       class="live-preview__paper"
@@ -64,16 +64,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.live-preview {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  height: 100%;
-  overflow-y: auto;
-  padding: 12px 0;
-  background: var(--color-background-soft, #e5e7eb);
-}
-
+/* Paper dimension & print styles — kept as scoped CSS for physical units (px, in) */
 .live-preview__paper {
   width: 816px;
   height: 1056px;
@@ -84,7 +75,6 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-/* Print styles: render at actual size, remove shadows */
 @media print {
   .live-preview {
     background: none;

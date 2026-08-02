@@ -8,7 +8,7 @@ describe('LayoutPicker', () => {
       props: { modelValue: 'standard' },
     })
 
-    const cards = wrapper.findAll('.layout-picker__card')
+    const cards = wrapper.findAll('button')
     expect(cards).toHaveLength(2)
     expect(cards[0]!.text()).toContain('Standard')
     expect(cards[1]!.text()).toContain('2:1 Column')
@@ -19,11 +19,11 @@ describe('LayoutPicker', () => {
       props: { modelValue: 'standard' },
     })
 
-    const standardCard = wrapper.findAll('.layout-picker__card')[0]!
-    const columnCard = wrapper.findAll('.layout-picker__card')[1]!
+    const standardCard = wrapper.findAll('button')[0]!
+    const columnCard = wrapper.findAll('button')[1]!
 
-    expect(standardCard.classes()).toContain('layout-picker__card--selected')
-    expect(columnCard.classes()).not.toContain('layout-picker__card--selected')
+    expect(standardCard.classes()).toContain('border-blue-500!')
+    expect(columnCard.classes()).not.toContain('border-blue-500!')
   })
 
   it('highlights the selected card (column2-1)', () => {
@@ -31,11 +31,11 @@ describe('LayoutPicker', () => {
       props: { modelValue: 'column2-1' },
     })
 
-    const standardCard = wrapper.findAll('.layout-picker__card')[0]!
-    const columnCard = wrapper.findAll('.layout-picker__card')[1]!
+    const standardCard = wrapper.findAll('button')[0]!
+    const columnCard = wrapper.findAll('button')[1]!
 
-    expect(standardCard.classes()).not.toContain('layout-picker__card--selected')
-    expect(columnCard.classes()).toContain('layout-picker__card--selected')
+    expect(standardCard.classes()).not.toContain('border-blue-500!')
+    expect(columnCard.classes()).toContain('border-blue-500!')
   })
 
   it('emits update:modelValue when Standard is clicked', async () => {
@@ -43,7 +43,7 @@ describe('LayoutPicker', () => {
       props: { modelValue: 'column2-1' },
     })
 
-    await wrapper.findAll('.layout-picker__card')[0]!.trigger('click')
+    await wrapper.findAll('button')[0]!.trigger('click')
 
     expect(wrapper.emitted('update:modelValue')).toBeTruthy()
     expect(wrapper.emitted('update:modelValue')![0]).toEqual(['standard'])
@@ -54,7 +54,7 @@ describe('LayoutPicker', () => {
       props: { modelValue: 'standard' },
     })
 
-    await wrapper.findAll('.layout-picker__card')[1]!.trigger('click')
+    await wrapper.findAll('button')[1]!.trigger('click')
 
     expect(wrapper.emitted('update:modelValue')).toBeTruthy()
     expect(wrapper.emitted('update:modelValue')![0]).toEqual(['column2-1'])

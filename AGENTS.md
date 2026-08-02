@@ -101,6 +101,42 @@ Empirical verification catches what code review misses.
 - Render the component with themed (ANSI-wrapped) strings and measure
   visible line widths against the target column width
 
+## Agent-to-Agent Warnings
+
+### If you discover a catastrophic path, leave a warning
+
+When you encounter a change or approach that causes silent breakage,
+cascading failures, or a revert of previous work, you MUST leave a
+warning for the next agent. Otherwise the same trap will be discovered
+again by someone else, wastes cycles, and damages trust in the system.
+
+**What counts as catastrophic:**
+- A change that compiles and passes tests but crashes at runtime
+- A configuration tweak that was already tried and reverted (check git log)
+- A generated file that gets silently wiped by a tool, undoing a fix
+- An approach that looks correct on inspection but is empirically wrong
+
+**How to warn:**
+1. Add a **conspicuous block comment** at the top of the affected file
+   explaining what was tried, why it failed, and what the correct
+   approach is. Start the block with `⚠️ WARNING` so it stands out.
+2. Update this AGENTS.md if the trap is a recurring pattern across files.
+3. Reference the commit(s) where the approach was tried and reverted.
+
+**Example of a good warning:**
+```
+/*
+ * ⚠️ WARNING — DO NOT add "type": "module" to package.json.
+ *
+ * Prisma 7 generates ESM-only code (import.meta.url), so it's tempting to
+ * switch the whole project to ESM. This was tried in RES-12 and reverted in
+ * commit 4d48f39. It requires .js extensions on ~80 relative imports and
+ * breaks ts-jest module resolution. The working fix is in
+ * scripts/patch-prisma-client.js — run `pnpm prisma:generate` instead of
+ * bare `prisma generate`.
+ */
+```
+
 ## Ticket Agent System
 
 The ticket agent system (`agent.sh` + `.pi/extensions/ticket/`) spawns

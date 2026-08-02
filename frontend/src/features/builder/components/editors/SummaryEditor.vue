@@ -1,16 +1,16 @@
 <template>
-  <div class="summary-editor">
-    <h3 class="summary-editor__title">Summary</h3>
-    <div class="summary-editor__field">
+  <div class="p-4">
+    <h3 class="text-base font-semibold m-0 mb-4 text-gray-900">Summary</h3>
+    <div class="flex flex-col gap-1.5">
       <textarea
         :value="summaryText"
         @input="update(($event.target as HTMLTextAreaElement).value)"
-        class="summary-editor__textarea"
+        class="px-3 py-2 border border-gray-300 rounded-md text-sm font-[inherit] text-gray-900 bg-white resize-y min-h-[120px] focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
         rows="6"
         placeholder="Write a brief professional summary..."
         maxlength="2000"
       ></textarea>
-      <span class="summary-editor__char-count">{{ characterCount }} / 2000</span>
+      <span class="text-xs text-gray-400 text-right">{{ characterCount }} / 2000</span>
     </div>
   </div>
 </template>
@@ -46,45 +46,4 @@ function update(value: string) {
 }
 </script>
 
-<style scoped>
-.summary-editor {
-  padding: 1rem;
-}
 
-.summary-editor__title {
-  font-size: 1rem;
-  font-weight: 600;
-  margin: 0 0 1rem;
-  color: var(--color-text, #111827);
-}
-
-.summary-editor__field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-}
-
-.summary-editor__textarea {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--color-border, #d1d5db);
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  font-family: inherit;
-  color: var(--color-text, #111827);
-  background: var(--color-background, #fff);
-  resize: vertical;
-  min-height: 120px;
-}
-
-.summary-editor__textarea:focus {
-  outline: none;
-  border-color: var(--color-primary, #3b82f6);
-  box-shadow: 0 0 0 1px var(--color-primary, #3b82f6);
-}
-
-.summary-editor__char-count {
-  font-size: 0.75rem;
-  color: var(--color-text-muted, #9ca3af);
-  text-align: right;
-}
-</style>

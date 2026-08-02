@@ -1,31 +1,31 @@
 <template>
-  <div class="entry-list">
+  <div class="flex flex-col gap-2">
     <div
       v-for="(entry, index) in entries"
       :key="entry.id"
-      class="entry-list__panel"
-      :class="{ 'entry-list__panel--expanded': isExpanded(entry.id) }"
+      class="border border-gray-300 rounded-md overflow-hidden"
+      data-entry-panel
     >
-      <div class="entry-list__header" @click="toggleEntry(entry.id)">
+      <div class="flex items-center gap-2 px-3 py-2 bg-gray-50 cursor-pointer select-none hover:bg-gray-200" @click="toggleEntry(entry.id)">
         <span
-          class="entry-list__drag-handle"
+          class="cursor-grab text-gray-400 text-sm p-0.5 shrink-0 active:cursor-grabbing"
           @mousedown.prevent="onDragStart($event, index)"
           title="Drag to reorder"
         >&#x2630;</span>
-        <span class="entry-list__title">{{ entryTitle(entry, index) }}</span>
+        <span class="flex-1 text-[0.8125rem] font-medium text-gray-900 overflow-hidden text-ellipsis whitespace-nowrap">{{ entryTitle(entry, index) }}</span>
         <button
-          class="entry-list__remove-btn"
+          class="w-6 h-6 flex items-center justify-center border-none bg-transparent text-gray-400 cursor-pointer rounded-sm text-lg leading-none shrink-0 hover:bg-red-50 hover:text-red-600"
           @click.stop="onRemove(entry.id)"
           title="Remove entry"
           aria-label="Remove entry"
         >&times;</button>
-        <span class="entry-list__collapse-icon">{{ isExpanded(entry.id) ? '&#x25B2;' : '&#x25BC;' }}</span>
+        <span class="text-[0.625rem] text-gray-400 shrink-0">{{ isExpanded(entry.id) ? '&#x25B2;' : '&#x25BC;' }}</span>
       </div>
-      <div v-if="isExpanded(entry.id)" class="entry-list__body">
+      <div v-if="isExpanded(entry.id)" class="p-3 border-t border-gray-300 flex flex-col gap-2.5">
         <slot name="fields" :entry="entry" :index="index" />
       </div>
     </div>
-    <button class="entry-list__add-btn" @click="$emit('add')">
+    <button class="px-4 py-2 border border-dashed border-gray-300 rounded-md bg-transparent text-gray-500 cursor-pointer text-[0.8125rem] font-[inherit] transition-colors hover:border-blue-500 hover:text-blue-500" @click="$emit('add')">
       + {{ addLabel }}
     </button>
   </div>
@@ -107,10 +107,11 @@ function onDragStart(event: MouseEvent, index: number) {
     if (dragIndex.value === null) return
 
     const target = document.elementFromPoint(e.clientX, e.clientY)
-    const targetPanel = target?.closest('.entry-list__panel') as HTMLElement | null
-    if (targetPanel) {
+    // Find the closest entry panel (div with border, rounded-md, overflow-hidden)
+    const targetPanel = target?.closest('[data-entry-panel]') as HTMLElement | null
+    if (targetPanel && targetPanel.parentElement) {
       const panels = Array.from(
-        targetPanel.parentElement!.querySelectorAll('.entry-list__panel'),
+        targetPanel.parentElement.querySelectorAll('[data-entry-panel]'),
       )
       const targetIndex = panels.indexOf(targetPanel)
       if (targetIndex !== -1 && targetIndex !== dragIndex.value) {
@@ -134,104 +135,4 @@ function onRemove(id: string) {
 }
 </script>
 
-<style scoped>
-.entry-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
 
-.entry-list__panel {
-  border: 1px solid var(--color-border, #d1d5db);
-  border-radius: 0.375rem;
-  overflow: hidden;
-}
-
-.entry-list__header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  background: var(--color-background-soft, #f9fafb);
-  cursor: pointer;
-  user-select: none;
-}
-
-.entry-list__header:hover {
-  background: var(--color-background-muted, #e5e7eb);
-}
-
-.entry-list__drag-handle {
-  cursor: grab;
-  color: var(--color-text-muted, #9ca3af);
-  font-size: 0.875rem;
-  padding: 0.125rem;
-  flex-shrink: 0;
-}
-
-.entry-list__drag-handle:active {
-  cursor: grabbing;
-}
-
-.entry-list__title {
-  flex: 1;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: var(--color-text, #111827);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.entry-list__remove-btn {
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  color: var(--color-text-muted, #9ca3af);
-  cursor: pointer;
-  border-radius: 0.25rem;
-  font-size: 1.125rem;
-  line-height: 1;
-  flex-shrink: 0;
-}
-
-.entry-list__remove-btn:hover {
-  background: var(--color-error-bg, #fef2f2);
-  color: var(--color-error, #dc2626);
-}
-
-.entry-list__collapse-icon {
-  font-size: 0.625rem;
-  color: var(--color-text-muted, #9ca3af);
-  flex-shrink: 0;
-}
-
-.entry-list__body {
-  padding: 0.75rem;
-  border-top: 1px solid var(--color-border, #d1d5db);
-  display: flex;
-  flex-direction: column;
-  gap: 0.625rem;
-}
-
-.entry-list__add-btn {
-  padding: 0.5rem 1rem;
-  border: 1px dashed var(--color-border, #d1d5db);
-  border-radius: 0.375rem;
-  background: transparent;
-  color: var(--color-text-muted, #6b7280);
-  cursor: pointer;
-  font-size: 0.8125rem;
-  font-family: inherit;
-  transition: border-color 0.15s, color 0.15s;
-}
-
-.entry-list__add-btn:hover {
-  border-color: var(--color-primary, #3b82f6);
-  color: var(--color-primary, #3b82f6);
-}
-</style>

@@ -78,7 +78,7 @@ describe('JdInput', () => {
     const textarea = wrapper.find('textarea')
     await textarea.setValue('React developer')
 
-    const spinner = wrapper.find('.jd-input__spinner')
+    const spinner = wrapper.find('span[aria-label="Loading"]')
     expect(spinner.exists()).toBe(true)
   })
 
@@ -108,10 +108,9 @@ describe('JdInput', () => {
     })
 
     const wrapper = mountComponent()
-    // Should show the filtered info badge
-    const badge = wrapper.find('.jd-input__badge')
-    expect(badge.exists()).toBe(true)
-    expect(badge.text()).toBe('Filtered')
+    // Should show the filtered info
+    expect(wrapper.text()).toContain('Filtered')
+    expect(wrapper.text()).toContain('Showing relevant bullets')
   })
 
   it('shows badge when filter is active', async () => {
@@ -123,8 +122,7 @@ describe('JdInput', () => {
     })
 
     const wrapper = mountComponent()
-    const badge = wrapper.find('.jd-input__badge')
-    expect(badge.exists()).toBe(true)
+    expect(wrapper.text()).toContain('Filtered')
   })
 
   it('calls tailorResume on button click', async () => {
@@ -179,6 +177,6 @@ describe('JdInput', () => {
 
     const wrapper = mountComponent()
     const textarea = wrapper.find('textarea')
-    expect(textarea.classes()).toContain('jd-input__textarea--error')
+    expect(textarea.classes()).toContain('border-red-600!')
   })
 })

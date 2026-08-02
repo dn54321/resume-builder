@@ -1,14 +1,14 @@
 <template>
-  <div class="pdf-export">
+  <div class="flex items-center gap-2">
     <button
-      class="pdf-export__button"
+      class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium border border-gray-300 rounded-md bg-white text-gray-900 cursor-pointer transition-colors hover:not-disabled:bg-gray-100 hover:not-disabled:border-gray-400 disabled:opacity-60 disabled:cursor-not-allowed"
       :disabled="isExporting"
       @click="handleExport"
     >
-      <span v-if="isExporting" class="pdf-export__spinner" aria-hidden="true" />
+      <span v-if="isExporting" class="inline-block w-[1em] h-[1em] border-2 border-gray-300 border-t-gray-900 rounded-full animate-spin" aria-hidden="true" />
       <span>{{ isExporting ? 'Exporting...' : 'Download PDF' }}</span>
     </button>
-    <p v-if="exportError" class="pdf-export__error" role="alert">
+    <p v-if="exportError" class="m-0 text-xs text-red-600" role="alert">
       {{ exportError }}
     </p>
   </div>
@@ -27,57 +27,4 @@ async function handleExport(): Promise<void> {
 }
 </script>
 
-<style scoped>
-.pdf-export {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
 
-.pdf-export__button {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  border: 1px solid var(--color-border, #d1d5db);
-  border-radius: 0.375rem;
-  background: var(--color-background, #fff);
-  color: var(--color-text, #111827);
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.pdf-export__button:hover:not(:disabled) {
-  background: var(--color-background-soft, #f3f4f6);
-  border-color: var(--color-text-muted, #9ca3af);
-}
-
-.pdf-export__button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.pdf-export__spinner {
-  display: inline-block;
-  width: 1em;
-  height: 1em;
-  border: 2px solid var(--color-border, #d1d5db);
-  border-top-color: var(--color-text, #111827);
-  border-radius: 50%;
-  animation: pdf-export-spin 0.6s linear infinite;
-}
-
-@keyframes pdf-export-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.pdf-export__error {
-  margin: 0;
-  font-size: 0.75rem;
-  color: var(--color-error, #dc2626);
-}
-</style>

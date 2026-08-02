@@ -1,17 +1,17 @@
 <template>
-  <div v-if="visible" class="anonymous-banner">
-    <div class="anonymous-banner__content">
-      <span class="anonymous-banner__icon">&#9888;</span>
-      <span class="anonymous-banner__text">
+  <div v-if="visible" class="flex items-center justify-between px-4 py-2.5 bg-amber-100 border border-amber-300 rounded-md mb-4">
+    <div class="flex items-center gap-2 text-[0.8125rem] text-amber-800">
+      <span class="shrink-0 text-base">&#9888;</span>
+      <span>
         You are not signed in. Your resume is saved only in this browser.
-        <RouterLink to="/signup" class="anonymous-banner__link">Sign Up</RouterLink>
+        <RouterLink to="/signup" class="text-blue-500 font-semibold underline">Sign Up</RouterLink>
         or
-        <RouterLink to="/login" class="anonymous-banner__link">Log In</RouterLink>
+        <RouterLink to="/login" class="text-blue-500 font-semibold underline">Log In</RouterLink>
         to save it permanently.
       </span>
     </div>
     <button
-      class="anonymous-banner__dismiss"
+      class="shrink-0 w-6 h-6 flex items-center justify-center border-none bg-transparent cursor-pointer text-xl leading-none text-amber-800 rounded-sm hover:bg-black/10"
       @click="dismiss"
       aria-label="Dismiss notice"
     >
@@ -37,54 +37,4 @@ function dismiss() {
 }
 </script>
 
-<style scoped>
-.anonymous-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.625rem 1rem;
-  background: var(--color-warning-bg, #fef3c7);
-  border: 1px solid var(--color-warning-border, #fcd34d);
-  border-radius: 0.375rem;
-  margin-bottom: 1rem;
-}
 
-.anonymous-banner__content {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8125rem;
-  color: var(--color-warning-text, #92400e);
-}
-
-.anonymous-banner__icon {
-  flex-shrink: 0;
-  font-size: 1rem;
-}
-
-.anonymous-banner__link {
-  color: var(--color-primary, #3b82f6);
-  font-weight: 600;
-  text-decoration: underline;
-}
-
-.anonymous-banner__dismiss {
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-size: 1.25rem;
-  line-height: 1;
-  color: var(--color-warning-text, #92400e);
-  border-radius: 0.25rem;
-}
-
-.anonymous-banner__dismiss:hover {
-  background: rgba(0, 0, 0, 0.1);
-}
-</style>

@@ -53,32 +53,32 @@ describe('AnonymousBanner', () => {
 
   it('is visible by default', async () => {
     const wrapper = await mountBanner()
-    expect(wrapper.find('.anonymous-banner').exists()).toBe(true)
+    expect(wrapper.text()).toContain('You are not signed in')
   })
 
   it('hides when dismiss button is clicked', async () => {
     const wrapper = await mountBanner()
-    await wrapper.find('.anonymous-banner__dismiss').trigger('click')
-    expect(wrapper.find('.anonymous-banner').exists()).toBe(false)
+    await wrapper.find('button[aria-label="Dismiss notice"]').trigger('click')
+    expect(wrapper.text()).not.toContain('You are not signed in')
   })
 
   it('stays hidden across remounts within the session', async () => {
     const wrapper1 = await mountBanner()
-    await wrapper1.find('.anonymous-banner__dismiss').trigger('click')
+    await wrapper1.find('button[aria-label="Dismiss notice"]').trigger('click')
     wrapper1.unmount()
 
     const wrapper2 = await mountBanner()
-    expect(wrapper2.find('.anonymous-banner').exists()).toBe(false)
+    expect(wrapper2.text()).not.toContain('You are not signed in')
   })
 
   it('reappears after clearing sessionStorage', async () => {
     const wrapper1 = await mountBanner()
-    await wrapper1.find('.anonymous-banner__dismiss').trigger('click')
+    await wrapper1.find('button[aria-label="Dismiss notice"]').trigger('click')
     wrapper1.unmount()
 
     sessionStorage.clear()
 
     const wrapper2 = await mountBanner()
-    expect(wrapper2.find('.anonymous-banner').exists()).toBe(true)
+    expect(wrapper2.text()).toContain('You are not signed in')
   })
 })
