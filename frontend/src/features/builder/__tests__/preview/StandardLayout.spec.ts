@@ -21,7 +21,6 @@ describe('StandardLayout', () => {
       const wrapper = mount(StandardLayout, {
         props: {
           sections: store.sections,
-          name: store.name,
         },
       })
 
@@ -34,7 +33,6 @@ describe('StandardLayout', () => {
       const wrapper = mount(StandardLayout, {
         props: {
           sections: [],
-          name: '',
         },
       })
 
@@ -49,7 +47,6 @@ describe('StandardLayout', () => {
       store.initializeDefaults()
       store.loadFromPayload({
         layout: 'standard',
-        name: 'John Doe',
         sections: [
           {
             sectionId: 'name_contact',
@@ -76,7 +73,6 @@ describe('StandardLayout', () => {
       const wrapper = mount(StandardLayout, {
         props: {
           sections: store.sections,
-          name: store.name,
         },
       })
 
@@ -98,7 +94,6 @@ describe('StandardLayout', () => {
       store.initializeDefaults()
       store.loadFromPayload({
         layout: 'standard',
-        name: '',
         sections: [
           {
             sectionId: 'name_contact',
@@ -119,7 +114,7 @@ describe('StandardLayout', () => {
       })
 
       const wrapper = mount(StandardLayout, {
-        props: { sections: store.sections, name: store.name },
+        props: { sections: store.sections },
       })
 
       const name = wrapper.find('.standard-layout__name')
@@ -132,7 +127,6 @@ describe('StandardLayout', () => {
       const store = makeStore()
       store.loadFromPayload({
         layout: 'standard',
-        name: '',
         sections: [
           {
             sectionId: 'summary',
@@ -150,7 +144,7 @@ describe('StandardLayout', () => {
       })
 
       const wrapper = mount(StandardLayout, {
-        props: { sections: store.sections, name: store.name },
+        props: { sections: store.sections },
       })
 
       const heading = wrapper.find('.preview-section__heading')
@@ -162,7 +156,6 @@ describe('StandardLayout', () => {
       const store = makeStore()
       store.loadFromPayload({
         layout: 'standard',
-        name: '',
         sections: [
           {
             sectionId: 'summary',
@@ -174,7 +167,7 @@ describe('StandardLayout', () => {
       })
 
       const wrapper = mount(StandardLayout, {
-        props: { sections: store.sections, name: store.name },
+        props: { sections: store.sections },
       })
 
       // Should show watermark since no non-empty sections
@@ -187,7 +180,6 @@ describe('StandardLayout', () => {
       const store = makeStore()
       store.loadFromPayload({
         layout: 'standard',
-        name: '',
         sections: [
           {
             sectionId: 'experience',
@@ -212,7 +204,7 @@ describe('StandardLayout', () => {
       })
 
       const wrapper = mount(StandardLayout, {
-        props: { sections: store.sections, name: store.name },
+        props: { sections: store.sections },
       })
 
       const heading = wrapper.findAll('.preview-section__heading')
@@ -256,7 +248,7 @@ describe('StandardLayout', () => {
       })
 
       const wrapper = mount(StandardLayout, {
-        props: { sections: store.sections, name: store.name },
+        props: { sections: store.sections },
       })
 
       const heading = wrapper.findAll('.preview-section__heading')
@@ -305,7 +297,7 @@ describe('StandardLayout', () => {
       })
 
       const wrapper = mount(StandardLayout, {
-        props: { sections: store.sections, name: store.name },
+        props: { sections: store.sections },
       })
 
       const dates = wrapper.find('.standard-layout__dates')
@@ -334,7 +326,7 @@ describe('StandardLayout', () => {
       })
 
       const wrapper = mount(StandardLayout, {
-        props: { sections: store.sections, name: store.name },
+        props: { sections: store.sections },
       })
 
       const heading = wrapper.findAll('.preview-section__heading')
@@ -379,7 +371,7 @@ describe('StandardLayout', () => {
       })
 
       const wrapper = mount(StandardLayout, {
-        props: { sections: store.sections, name: store.name },
+        props: { sections: store.sections },
       })
 
       const skills = wrapper.find('.standard-layout__skills-text')
@@ -406,7 +398,7 @@ describe('StandardLayout', () => {
       })
 
       const wrapper = mount(StandardLayout, {
-        props: { sections: store.sections, name: store.name },
+        props: { sections: store.sections },
       })
 
       const heading = wrapper.findAll('.preview-section__heading')
@@ -445,7 +437,7 @@ describe('StandardLayout', () => {
       })
 
       const wrapper = mount(StandardLayout, {
-        props: { sections: store.sections, name: store.name },
+        props: { sections: store.sections },
       })
 
       const heading = wrapper.findAll('.preview-section__heading')
@@ -472,7 +464,7 @@ describe('StandardLayout', () => {
       })
 
       const wrapper = mount(StandardLayout, {
-        props: { sections: store.sections, name: store.name },
+        props: { sections: store.sections },
       })
 
       const text = wrapper.find('.standard-layout__languages-text')
@@ -498,7 +490,7 @@ describe('StandardLayout', () => {
       })
 
       const wrapper = mount(StandardLayout, {
-        props: { sections: store.sections, name: store.name },
+        props: { sections: store.sections },
       })
 
       const heading = wrapper.findAll('.preview-section__heading')
@@ -537,7 +529,7 @@ describe('StandardLayout', () => {
       })
 
       const wrapper = mount(StandardLayout, {
-        props: { sections: store.sections, name: store.name },
+        props: { sections: store.sections },
       })
 
       const heading = wrapper.findAll('.preview-section__heading')
@@ -578,7 +570,7 @@ describe('StandardLayout', () => {
       })
 
       const wrapper = mount(StandardLayout, {
-        props: { sections: store.sections, name: store.name },
+        props: { sections: store.sections },
       })
 
       const heading = wrapper.findAll('.preview-section__heading')
@@ -610,7 +602,7 @@ describe('StandardLayout', () => {
       store.sections = [skillSection, hobbySection]
 
       const wrapper = mount(StandardLayout, {
-        props: { sections: store.sections, name: store.name },
+        props: { sections: store.sections },
       })
 
       const headings = wrapper.findAll('.preview-section__heading')
@@ -625,7 +617,7 @@ describe('StandardLayout', () => {
       store.initializeDefaults()
       // All defaults have empty entries, so should show watermark
       const wrapper = mount(StandardLayout, {
-        props: { sections: store.sections, name: store.name },
+        props: { sections: store.sections },
       })
 
       expect(wrapper.find('.standard-layout__watermark').exists()).toBe(true)

@@ -55,10 +55,6 @@ export class CreateResumeDto {
   @IsOptional()
   layout?: string;
 
-  @IsString()
-  @IsOptional()
-  name?: string;
-
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => ResumeSectionDto)

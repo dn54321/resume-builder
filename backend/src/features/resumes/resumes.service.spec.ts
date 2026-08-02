@@ -22,7 +22,6 @@ interface ResumeRow {
   id: string;
   userId: string;
   layout: string;
-  name: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -59,7 +58,6 @@ interface ResumeTreeRow {
   id: string;
   userId: string;
   layout: string;
-  name: string | null;
   createdAt: Date;
   updatedAt: Date;
   sections: ResumeSectionRow[];
@@ -128,7 +126,6 @@ describe('ResumesService', () => {
       id: resumeId,
       userId,
       layout: 'standard',
-      name: null,
       createdAt: new Date(),
       updatedAt: new Date(),
       sections: [
@@ -210,7 +207,6 @@ describe('ResumesService', () => {
           id: 'r1',
           userId,
           layout: 'standard',
-          name: 'My Resume',
           createdAt: new Date(),
           updatedAt: new Date(),
         },
@@ -218,7 +214,6 @@ describe('ResumesService', () => {
           id: 'r2',
           userId,
           layout: 'compact',
-          name: null,
           createdAt: new Date(),
           updatedAt: new Date(),
         },
@@ -232,7 +227,6 @@ describe('ResumesService', () => {
         select: {
           id: true,
           layout: true,
-          name: true,
           createdAt: true,
           updatedAt: true,
         },
@@ -353,7 +347,6 @@ describe('ResumesService', () => {
   describe('create', () => {
     const dto: CreateResumeDto = {
       layout: 'standard',
-      name: 'My Resume',
       sections: [
         {
           sectionId: 'summary',
@@ -384,7 +377,6 @@ describe('ResumesService', () => {
         id: resumeId,
         userId,
         layout: 'standard',
-        name: 'My Resume',
       };
       const createdSection = {
         id: 'rs-1',
@@ -451,19 +443,17 @@ describe('ResumesService', () => {
   });
 
   describe('update', () => {
-    it('updates layout and name when provided', async () => {
+    it('updates layout when provided', async () => {
       const existingResume: ResumeRow = {
         id: resumeId,
         userId,
         layout: 'standard',
-        name: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
       const existingSections = [{ id: 'rs-1' }];
       const updatedResume = makeResumeResponse({
         layout: 'compact',
-        name: 'Updated',
       });
 
       mockPrisma.$transaction.mockImplementation(
@@ -510,14 +500,12 @@ describe('ResumesService', () => {
 
       const dto: UpdateResumeDto = {
         layout: 'compact',
-        name: 'Updated',
         sections: [],
       };
 
       const result = await service.update(resumeId, userId, dto);
 
       expect(result.layout).toBe('compact');
-      expect(result.name).toBe('Updated');
     });
 
     it('replaces all sections atomically when sections provided', async () => {
@@ -525,7 +513,6 @@ describe('ResumesService', () => {
         id: resumeId,
         userId,
         layout: 'standard',
-        name: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -609,7 +596,7 @@ describe('ResumesService', () => {
       );
 
       await expect(
-        service.update('nonexistent', userId, { name: 'Test' }),
+        service.update('nonexistent', userId, { layout: 'compact' }),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -628,7 +615,7 @@ describe('ResumesService', () => {
       );
 
       await expect(
-        service.update(resumeId, userId, { name: 'Test' }),
+        service.update(resumeId, userId, { layout: 'compact' }),
       ).rejects.toThrow(NotFoundException);
     });
   });

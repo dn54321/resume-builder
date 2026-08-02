@@ -16,7 +16,6 @@ describe('useResumeStore', () => {
       expect(store.id).toBeTruthy()
       expect(typeof store.id).toBe('string')
       expect(store.layout).toBe('standard')
-      expect(store.name).toBe('')
       expect(store.sections).toHaveLength(10)
 
       // All 10 section types present
@@ -183,7 +182,6 @@ describe('useResumeStore', () => {
 
       const payload = {
         layout: 'column2-1' as const,
-        name: 'My Resume',
         sections: [
           {
             sectionId: 'name_contact',
@@ -226,7 +224,6 @@ describe('useResumeStore', () => {
 
       store.loadFromPayload(payload)
       expect(store.layout).toBe('column2-1')
-      expect(store.name).toBe('My Resume')
       expect(store.sections).toHaveLength(2)
 
       const contactSection = store.sections.find((s) => s.sectionType === 'name_contact')
@@ -243,7 +240,6 @@ describe('useResumeStore', () => {
       // Round-trip
       const output = store.toPayload()
       expect(output.layout).toBe('column2-1')
-      expect(output.name).toBe('My Resume')
       expect(output.sections).toHaveLength(2)
       expect(output.sections[0]!.sectionId).toBe('name_contact')
       expect(output.sections[0]!.entries[0]!.fields[0]!.value).toBe('John')
@@ -256,7 +252,6 @@ describe('useResumeStore', () => {
       const store = useResumeStore()
       const payload = store.toPayload()
       expect(payload.layout).toBe('standard')
-      expect(payload.name).toBe('')
       expect(payload.sections).toEqual([])
     })
 

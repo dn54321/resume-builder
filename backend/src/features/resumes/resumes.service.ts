@@ -43,7 +43,6 @@ export class ResumesService {
       select: {
         id: true,
         layout: true,
-        name: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -61,7 +60,7 @@ export class ResumesService {
       throw new NotFoundException('Resume not found');
     }
 
-    return this.decryptResumeFields(resume!);
+    return this.decryptResumeFields(resume);
   }
 
   async create(userId: string, dto: CreateResumeDto): Promise<ResumeTree> {
@@ -70,7 +69,6 @@ export class ResumesService {
         data: {
           userId,
           layout: dto.layout ?? 'standard',
-          name: dto.name ?? null,
         },
       });
 
@@ -107,13 +105,10 @@ export class ResumesService {
         throw new NotFoundException('Resume not found');
       }
 
-      if (dto.layout !== undefined || dto.name !== undefined) {
+      if (dto.layout !== undefined) {
         await tx.resume.update({
           where: { id },
-          data: {
-            ...(dto.layout !== undefined ? { layout: dto.layout } : {}),
-            ...(dto.name !== undefined ? { name: dto.name } : {}),
-          },
+          data: { layout: dto.layout },
         });
       }
 

@@ -37,7 +37,6 @@ export interface ResumeSectionState {
 
 export interface ResumePayload {
   layout: 'standard' | 'column2-1'
-  name: string
   sections: {
     sectionId: string
     column: 'left' | 'right'

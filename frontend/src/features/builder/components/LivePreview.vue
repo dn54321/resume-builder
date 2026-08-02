@@ -8,12 +8,10 @@
       <StandardLayout
         v-if="store.layout === 'standard'"
         :sections="store.sections"
-        :name="store.name"
       />
       <TwoColumnLayout
         v-else
         :sections="store.sections"
-        :name="store.name"
       />
     </div>
   </div>

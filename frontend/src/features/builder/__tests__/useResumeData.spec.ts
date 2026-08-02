@@ -40,7 +40,6 @@ describe('useResumeData', () => {
 
       const localPayload = {
         layout: 'column2-1',
-        name: 'My Local Resume',
         sections: [
           {
             sectionId: 'name_contact',
@@ -65,7 +64,6 @@ describe('useResumeData', () => {
       await loadResume()
 
       expect(store.layout).toBe('column2-1')
-      expect(store.name).toBe('My Local Resume')
       expect(store.sections).toHaveLength(1)
       expect(store.sections[0]!.sectionType).toBe('name_contact')
       expect(store.sections[0]!.column).toBe('left')
@@ -86,7 +84,6 @@ describe('useResumeData', () => {
 
       // Defaults initialize all 10 sections
       expect(store.layout).toBe('standard')
-      expect(store.name).toBe('')
       expect(store.sections).toHaveLength(10)
     })
 
@@ -123,7 +120,6 @@ describe('useResumeData', () => {
 
       const stored = JSON.parse(localStorage.getItem('resume_data')!)
       expect(stored.layout).toBe('column2-1')
-      expect(stored.name).toBe('')
       expect(stored.sections).toHaveLength(9)
       expect(stored.sections.map((s: { sectionId: string }) => s.sectionId)).not.toContain('hobbies')
     })
@@ -142,7 +138,6 @@ describe('useResumeData', () => {
         createFetchResponse({
           id: 'resume-1',
           layout: 'column2-1',
-          name: 'API Resume',
           sections: [
             {
               sectionId: 'name_contact',
@@ -162,7 +157,6 @@ describe('useResumeData', () => {
       await loadResume()
 
       expect(store.layout).toBe('column2-1')
-      expect(store.name).toBe('API Resume')
       expect(store.sections).toHaveLength(1)
       expect(store.sections[0]!.sectionType).toBe('name_contact')
     })
@@ -202,7 +196,7 @@ describe('useResumeData', () => {
       // Reset mock to ignore login API calls
       mockFetch.mockClear()
       mockFetch.mockResolvedValueOnce(
-        createFetchResponse({ id: 'resume-1', layout: 'standard', name: '', sections: [] }),
+        createFetchResponse({ id: 'resume-1', layout: 'standard', sections: [] }),
       )
 
       const store = useResumeStore()
@@ -232,7 +226,7 @@ describe('useResumeData', () => {
       )
       // Second call (POST) succeeds
       mockFetch.mockResolvedValueOnce(
-        createFetchResponse({ id: 'resume-1', layout: 'standard', name: '', sections: [] }),
+        createFetchResponse({ id: 'resume-1', layout: 'standard', sections: [] }),
       )
 
       const store = useResumeStore()

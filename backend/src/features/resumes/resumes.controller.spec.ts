@@ -20,7 +20,6 @@ import { AuthGuard } from '../../common/guards/auth.guard';
 interface ResumeBody {
   id: string;
   layout: string;
-  name: string | null;
   sections?: SectionBody[];
 }
 
@@ -107,7 +106,7 @@ describe('ResumesController', () => {
   describe('GET /api/v1/resumes', () => {
     it('returns resume summaries for authenticated user', async () => {
       mockResumesService.findAll.mockResolvedValue([
-        { id: 'r1', layout: 'standard', name: 'My Resume' },
+        { id: 'r1', layout: 'standard' },
       ]);
 
       const response = await request(app.getHttpServer())
@@ -132,7 +131,6 @@ describe('ResumesController', () => {
       const resume: ResumeBody = {
         id: 'r1',
         layout: 'standard',
-        name: 'My Resume',
         sections: [
           {
             id: 'rs-1',
@@ -181,7 +179,6 @@ describe('ResumesController', () => {
   describe('POST /api/v1/resumes', () => {
     const validDto = {
       layout: 'standard',
-      name: 'My Resume',
       sections: [
         {
           sectionId: 'summary',
@@ -202,7 +199,6 @@ describe('ResumesController', () => {
       const created: ResumeBody = {
         id: 'new-resume',
         layout: 'standard',
-        name: 'My Resume',
         sections: [
           {
             id: 'rs-1',
@@ -269,14 +265,13 @@ describe('ResumesController', () => {
       const updated: ResumeBody = {
         id: 'r1',
         layout: 'compact',
-        name: 'Updated Resume',
         sections: [],
       };
       mockResumesService.update.mockResolvedValue(updated);
 
       const response = await request(app.getHttpServer())
         .put('/api/v1/resumes/r1')
-        .send({ layout: 'compact', name: 'Updated Resume' })
+        .send({ layout: 'compact' })
         .expect(200);
 
       const body = response.body as ResumeBody;
@@ -295,7 +290,7 @@ describe('ResumesController', () => {
 
       await request(app.getHttpServer())
         .put('/api/v1/resumes/nonexistent')
-        .send({ name: 'Test' })
+        .send({ layout: 'compact' })
         .expect(404);
     });
 
@@ -311,7 +306,7 @@ describe('ResumesController', () => {
 
       await request(app.getHttpServer())
         .put('/api/v1/resumes/r1')
-        .send({ name: 'Test' })
+        .send({ layout: 'compact' })
         .expect(401);
     });
   });

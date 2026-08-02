@@ -83,11 +83,10 @@ describe('LivePreview', () => {
     expect(wrapper.findComponent({ name: 'StandardLayout' }).exists()).toBe(false)
   })
 
-  it('passes store sections and name to layout components', () => {
+  it('passes store sections to layout components', () => {
     const store = makeStore()
     store.loadFromPayload({
       layout: 'standard',
-      name: 'Test Name',
       sections: [
         {
           sectionId: 'summary',
@@ -108,7 +107,6 @@ describe('LivePreview', () => {
     const standardLayout = wrapper.findComponent({ name: 'StandardLayout' })
     expect(standardLayout.exists()).toBe(true)
     expect(standardLayout.props('sections')).toEqual(store.sections)
-    expect(standardLayout.props('name')).toBe('Test Name')
   })
 
   it('applies scale transform to paper based on container width', () => {

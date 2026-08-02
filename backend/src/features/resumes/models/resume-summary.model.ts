@@ -4,7 +4,6 @@
 export interface ResumeSummary {
   id: string;
   layout: string;
-  name: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

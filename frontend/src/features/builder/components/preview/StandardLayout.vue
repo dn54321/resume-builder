@@ -121,7 +121,6 @@ import type { ResumeSectionState, SectionEntryState } from '@/features/builder/t
 
 const props = defineProps<{
   sections: ResumeSectionState[]
-  name: string
 }>()
 
 interface ContactDetail {

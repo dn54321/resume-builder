@@ -31,7 +31,6 @@ model Resume {
   id        String   @id @default(uuid())
   userId    String
   layout    String   @default("standard")
-  name      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

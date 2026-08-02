@@ -7,10 +7,6 @@ export class UpdateResumeDto {
   @IsOptional()
   layout?: string;
 
-  @IsString()
-  @IsOptional()
-  name?: string;
-
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })

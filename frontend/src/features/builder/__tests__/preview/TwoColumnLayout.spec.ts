@@ -21,7 +21,6 @@ describe('TwoColumnLayout', () => {
       const wrapper = mount(TwoColumnLayout, {
         props: {
           sections: store.sections,
-          name: store.name,
         },
       })
 
@@ -34,7 +33,6 @@ describe('TwoColumnLayout', () => {
       const wrapper = mount(TwoColumnLayout, {
         props: {
           sections: [],
-          name: '',
         },
       })
 
@@ -48,7 +46,6 @@ describe('TwoColumnLayout', () => {
       // Summary in left, Experience in right
       store.loadFromPayload({
         layout: 'column2-1',
-        name: '',
         sections: [
           {
             sectionId: 'summary',
@@ -85,7 +82,7 @@ describe('TwoColumnLayout', () => {
       })
 
       const wrapper = mount(TwoColumnLayout, {
-        props: { sections: store.sections, name: store.name },
+        props: { sections: store.sections },
       })
 
       // Both columns should exist
@@ -106,7 +103,6 @@ describe('TwoColumnLayout', () => {
       const store = makeStore()
       store.loadFromPayload({
         layout: 'column2-1',
-        name: 'Jane Smith',
         sections: [
           {
             sectionId: 'name_contact',
@@ -131,7 +127,7 @@ describe('TwoColumnLayout', () => {
       })
 
       const wrapper = mount(TwoColumnLayout, {
-        props: { sections: store.sections, name: store.name },
+        props: { sections: store.sections },
       })
 
       const name = wrapper.find('.two-col-name')
@@ -152,7 +148,6 @@ describe('TwoColumnLayout', () => {
       const store = makeStore()
       store.loadFromPayload({
         layout: 'column2-1',
-        name: '',
         sections: [
           {
             sectionId: 'summary',
@@ -170,7 +165,7 @@ describe('TwoColumnLayout', () => {
       })
 
       const wrapper = mount(TwoColumnLayout, {
-        props: { sections: store.sections, name: store.name },
+        props: { sections: store.sections },
       })
 
       const heading = wrapper.find('.preview-section__heading')
@@ -182,7 +177,6 @@ describe('TwoColumnLayout', () => {
       const store = makeStore()
       store.loadFromPayload({
         layout: 'column2-1',
-        name: '',
         sections: [
           {
             sectionId: 'summary',
@@ -194,7 +188,7 @@ describe('TwoColumnLayout', () => {
       })
 
       const wrapper = mount(TwoColumnLayout, {
-        props: { sections: store.sections, name: store.name },
+        props: { sections: store.sections },
       })
 
       expect(wrapper.find('.two-column-layout__watermark').exists()).toBe(true)
@@ -206,7 +200,6 @@ describe('TwoColumnLayout', () => {
       const store = makeStore()
       store.loadFromPayload({
         layout: 'column2-1',
-        name: '',
         sections: [
           {
             sectionId: 'experience',
@@ -231,7 +224,7 @@ describe('TwoColumnLayout', () => {
       })
 
       const wrapper = mount(TwoColumnLayout, {
-        props: { sections: store.sections, name: store.name },
+        props: { sections: store.sections },
       })
 
       const heading = wrapper.findAll('.preview-section__heading')
@@ -243,7 +236,6 @@ describe('TwoColumnLayout', () => {
       const store = makeStore()
       store.loadFromPayload({
         layout: 'column2-1',
-        name: '',
         sections: [
           {
             sectionId: 'experience',
@@ -268,7 +260,7 @@ describe('TwoColumnLayout', () => {
       })
 
       const wrapper = mount(TwoColumnLayout, {
-        props: { sections: store.sections, name: store.name },
+        props: { sections: store.sections },
       })
 
       const dates = wrapper.find('.two-col-dates')
@@ -282,7 +274,6 @@ describe('TwoColumnLayout', () => {
       const store = makeStore()
       store.loadFromPayload({
         layout: 'column2-1',
-        name: '',
         sections: [
           {
             sectionId: 'education',
@@ -306,7 +297,7 @@ describe('TwoColumnLayout', () => {
       })
 
       const wrapper = mount(TwoColumnLayout, {
-        props: { sections: store.sections, name: store.name },
+        props: { sections: store.sections },
       })
 
       const heading = wrapper.findAll('.preview-section__heading')
@@ -322,7 +313,6 @@ describe('TwoColumnLayout', () => {
       const store = makeStore()
       store.loadFromPayload({
         layout: 'column2-1',
-        name: '',
         sections: [
           {
             sectionId: 'hard_skills',
@@ -337,7 +327,7 @@ describe('TwoColumnLayout', () => {
       })
 
       const wrapper = mount(TwoColumnLayout, {
-        props: { sections: store.sections, name: store.name },
+        props: { sections: store.sections },
       })
 
       const heading = wrapper.findAll('.preview-section__heading')
@@ -354,7 +344,6 @@ describe('TwoColumnLayout', () => {
       const store = makeStore()
       store.loadFromPayload({
         layout: 'column2-1',
-        name: '',
         sections: [
           {
             sectionId: 'languages',
@@ -375,7 +364,7 @@ describe('TwoColumnLayout', () => {
       })
 
       const wrapper = mount(TwoColumnLayout, {
-        props: { sections: store.sections, name: store.name },
+        props: { sections: store.sections },
       })
 
       const left = wrapper.find('.two-column-layout__left')
@@ -388,7 +377,6 @@ describe('TwoColumnLayout', () => {
       const store = makeStore()
       store.loadFromPayload({
         layout: 'column2-1',
-        name: '',
         sections: [
           {
             sectionId: 'certifications',
@@ -410,7 +398,7 @@ describe('TwoColumnLayout', () => {
       })
 
       const wrapper = mount(TwoColumnLayout, {
-        props: { sections: store.sections, name: store.name },
+        props: { sections: store.sections },
       })
 
       const right = wrapper.find('.two-column-layout__right')
@@ -425,7 +413,6 @@ describe('TwoColumnLayout', () => {
       const store = makeStore()
       store.loadFromPayload({
         layout: 'column2-1',
-        name: '',
         sections: [
           {
             sectionId: 'projects',
@@ -447,7 +434,7 @@ describe('TwoColumnLayout', () => {
       })
 
       const wrapper = mount(TwoColumnLayout, {
-        props: { sections: store.sections, name: store.name },
+        props: { sections: store.sections },
       })
 
       const heading = wrapper.findAll('.preview-section__heading')
@@ -465,7 +452,6 @@ describe('TwoColumnLayout', () => {
       const store = makeStore()
       store.loadFromPayload({
         layout: 'column2-1',
-        name: '',
         sections: [
           {
             sectionId: 'hobbies',
@@ -480,7 +466,7 @@ describe('TwoColumnLayout', () => {
       })
 
       const wrapper = mount(TwoColumnLayout, {
-        props: { sections: store.sections, name: store.name },
+        props: { sections: store.sections },
       })
 
       const heading = wrapper.findAll('.preview-section__heading')
@@ -498,7 +484,7 @@ describe('TwoColumnLayout', () => {
       store.initializeDefaults()
 
       const wrapper = mount(TwoColumnLayout, {
-        props: { sections: store.sections, name: store.name },
+        props: { sections: store.sections },
       })
 
       expect(wrapper.find('.two-column-layout__watermark').exists()).toBe(true)

@@ -59,7 +59,6 @@ async function run(): Promise<void> {
         "id" TEXT NOT NULL PRIMARY KEY,
         "userId" TEXT NOT NULL,
         "layout" TEXT NOT NULL DEFAULT 'standard',
-        "name" TEXT,
         "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         "updatedAt" DATETIME NOT NULL,
         CONSTRAINT "Resume_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
@@ -123,16 +122,15 @@ async function run(): Promise<void> {
     console.log('  ──────────────');
 
     const resume = await prisma.resume.create({
-      data: { userId: user.id, name: 'My Resume' },
+      data: { userId: user.id },
     });
     assert(resume.layout === 'standard', 'Resume.layout defaults to "standard"');
-    assert(resume.name === 'My Resume', 'Resume.name matches');
     assert(resume.userId === user.id, 'Resume.userId FK matches User.id');
     assert(resume.createdAt instanceof Date, 'Resume.createdAt is a Date');
     assert(resume.updatedAt instanceof Date, 'Resume.updatedAt is a Date');
 
     await assertRejects(
-      () => prisma.resume.create({ data: { userId: 'nonexistent', name: 'Bad' } }),
+      () => prisma.resume.create({ data: { userId: 'nonexistent' } }),
       'Resume FK constraint enforced (invalid userId)',
     );
 

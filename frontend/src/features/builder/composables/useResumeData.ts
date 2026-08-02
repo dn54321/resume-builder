@@ -47,13 +47,12 @@ export function useResumeData() {
   async function loadResume() {
     if (isAuthenticated) {
       try {
-        const data = await api.get<{ id: string; layout: string; name: string; sections: unknown[] }>(
+        const data = await api.get<{ id: string; layout: string; sections: unknown[] }>(
           '/api/v1/resumes',
         )
         if (data.sections?.length > 0) {
           store.loadFromPayload({
             layout: data.layout as 'standard' | 'column2-1',
-            name: data.name ?? '',
             sections: data.sections as ResumePayload['sections'],
           })
           return
@@ -70,11 +69,10 @@ export function useResumeData() {
     // Anonymous or authenticated user with no resume: try localStorage
     const local = readFromLocalStorage()
     if (local && typeof local === 'object' && local !== null) {
-      const payload = local as { layout?: string; name?: string; sections?: unknown[] }
+      const payload = local as { layout?: string; sections?: unknown[] }
       if (payload.sections && Array.isArray(payload.sections) && payload.sections.length > 0) {
         store.loadFromPayload({
           layout: (payload.layout as 'standard' | 'column2-1') ?? 'standard',
-          name: payload.name ?? '',
           sections: payload.sections as ResumePayload['sections'],
         })
         return

@@ -34,7 +34,6 @@ function createDefaultSection(sectionType: SectionType, order: number): ResumeSe
 export const useResumeStore = defineStore('resume', () => {
   const id = ref<string | null>(null)
   const layout = ref<LayoutType>('standard')
-  const name = ref('')
   const sections = ref<ResumeSectionState[]>([])
 
   // ─── Tailor / Filter state ───────────────────────────────────────
@@ -66,7 +65,6 @@ export const useResumeStore = defineStore('resume', () => {
   function initializeDefaults() {
     id.value = generateId()
     layout.value = 'standard'
-    name.value = ''
     sections.value = SECTION_TYPES.map((type, i) => createDefaultSection(type, i))
   }
 
@@ -140,7 +138,6 @@ export const useResumeStore = defineStore('resume', () => {
    */
   function loadFromPayload(payload: ResumePayload) {
     layout.value = payload.layout
-    name.value = payload.name
     sections.value = payload.sections.map((s) => {
       const sectionType = s.sectionId as SectionType
       return {
@@ -168,7 +165,6 @@ export const useResumeStore = defineStore('resume', () => {
   function toPayload(): ResumePayload {
     return {
       layout: layout.value,
-      name: name.value,
       sections: sections.value.map((s) => ({
         sectionId: s.sectionId,
         column: s.column,
@@ -285,7 +281,6 @@ export const useResumeStore = defineStore('resume', () => {
   return {
     id,
     layout,
-    name,
     sections,
     enabledSections,
     leftColumnSections,

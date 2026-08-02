@@ -10,14 +10,14 @@
       <!-- Left Column -->
       <div class="two-column-layout__left">
         <template v-for="section in leftSections" :key="section.sectionId">
-          <component :is="getSectionRenderer(section.sectionType)" :section="section" :name="name" />
+          <component :is="getSectionRenderer(section.sectionType)" :section="section" />
         </template>
       </div>
 
       <!-- Right Column -->
       <div class="two-column-layout__right">
         <template v-for="section in rightSections" :key="section.sectionId">
-          <component :is="getSectionRenderer(section.sectionType)" :section="section" :name="name" />
+          <component :is="getSectionRenderer(section.sectionType)" :section="section" />
         </template>
       </div>
     </div>
@@ -32,7 +32,6 @@ import type { ResumeSectionState, SectionEntryState, SectionType } from '@/featu
 
 const props = defineProps<{
   sections: ResumeSectionState[]
-  name: string
 }>()
 
 /**
@@ -197,14 +196,14 @@ function getSectionRenderer(sectionType: SectionType): ReturnType<typeof defineC
 
 const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
   default: defineComponent({
-    props: { section: Object, name: String },
+    props: { section: Object },
     setup() {
       return () => h('div')
     },
   }),
 
   name_contact: defineComponent({
-    props: { section: Object as () => ResumeSectionState, name: String },
+    props: { section: Object as () => ResumeSectionState },
     setup(p) {
       const section: ResumeSectionState = p.section!
       const entry = computed(() => section.entries[0])
@@ -249,7 +248,7 @@ const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
   }),
 
   summary: defineComponent({
-    props: { section: Object as () => ResumeSectionState, name: String },
+    props: { section: Object as () => ResumeSectionState },
     setup(p) {
       const section: ResumeSectionState = p.section!
       const text = computed(() => {
@@ -265,7 +264,7 @@ const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
   }),
 
   experience: defineComponent({
-    props: { section: Object as () => ResumeSectionState, name: String },
+    props: { section: Object as () => ResumeSectionState },
     setup(p) {
       const section: ResumeSectionState = p.section!
       const entries = computed(() =>
@@ -296,7 +295,7 @@ const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
   }),
 
   education: defineComponent({
-    props: { section: Object as () => ResumeSectionState, name: String },
+    props: { section: Object as () => ResumeSectionState },
     setup(p) {
       const section: ResumeSectionState = p.section!
       const entries = computed(() =>
@@ -325,7 +324,7 @@ const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
   }),
 
   hard_skills: defineComponent({
-    props: { section: Object as () => ResumeSectionState, name: String },
+    props: { section: Object as () => ResumeSectionState },
     setup(p) {
       const section: ResumeSectionState = p.section!
       const text = computed(() => commaList(section))
@@ -337,7 +336,7 @@ const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
   }),
 
   soft_skills: defineComponent({
-    props: { section: Object as () => ResumeSectionState, name: String },
+    props: { section: Object as () => ResumeSectionState },
     setup(p) {
       const section: ResumeSectionState = p.section!
       const text = computed(() => commaList(section))
@@ -349,7 +348,7 @@ const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
   }),
 
   projects: defineComponent({
-    props: { section: Object as () => ResumeSectionState, name: String },
+    props: { section: Object as () => ResumeSectionState },
     setup(p) {
       const section: ResumeSectionState = p.section!
       const entries = computed(() =>
@@ -382,7 +381,7 @@ const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
   }),
 
   certifications: defineComponent({
-    props: { section: Object as () => ResumeSectionState, name: String },
+    props: { section: Object as () => ResumeSectionState },
     setup(p) {
       const section: ResumeSectionState = p.section!
       const entries = computed(() =>
@@ -407,7 +406,7 @@ const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
   }),
 
   languages: defineComponent({
-    props: { section: Object as () => ResumeSectionState, name: String },
+    props: { section: Object as () => ResumeSectionState },
     setup(p) {
       const section: ResumeSectionState = p.section!
       const text = computed(() => {
@@ -429,7 +428,7 @@ const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
   }),
 
   hobbies: defineComponent({
-    props: { section: Object as () => ResumeSectionState, name: String },
+    props: { section: Object as () => ResumeSectionState },
     setup(p) {
       const section: ResumeSectionState = p.section!
       const text = computed(() => commaList(section))

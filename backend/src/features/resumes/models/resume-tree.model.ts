@@ -9,7 +9,6 @@ export interface ResumeTree {
   id: string;
   userId: string;
   layout: string;
-  name: string | null;
   sections: ResumeSection[];
   [key: string]: unknown;
 }
