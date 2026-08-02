@@ -1,18 +1,18 @@
 <template>
-  <div class="standard-layout">
+  <div class="standard-layout p-[48pt] min-h-[960pt]">
     <!-- Empty state watermark -->
-    <div v-if="isEmpty" class="standard-layout__watermark">
+    <div v-if="isEmpty" class="standard-layout__watermark flex items-center justify-center min-h-[600pt] text-[16pt] text-gray-400 italic select-none">
       Your resume preview will appear here.
     </div>
 
     <!-- Rendered sections -->
     <template v-for="section in nonEmptySections" :key="section.sectionId">
       <!-- name_contact -->
-      <div v-if="section.sectionType === 'name_contact'" class="standard-layout__name-contact">
-        <h1 class="standard-layout__name">{{ nameValue(section, 'fullName') || 'Your Name' }}</h1>
-        <p class="standard-layout__contact-line">
+      <div v-if="section.sectionType === 'name_contact'" class="standard-layout__name-contact text-center mb-[14pt]">
+        <h1 class="standard-layout__name text-[18pt] font-bold text-black m-0 mb-[4pt]">{{ nameValue(section, 'fullName') || 'Your Name' }}</h1>
+        <p class="standard-layout__contact-line text-[10pt] text-black m-0 leading-[1.4]">
           <template v-for="(detail, di) in contactDetails(section)" :key="detail.key">
-            <span v-if="di > 0" class="standard-layout__pipe">|</span>
+            <span v-if="di > 0" class="standard-layout__pipe mx-[6pt] text-black">|</span>
             <span>{{ detail.value }}</span>
           </template>
         </p>
@@ -20,20 +20,20 @@
 
       <!-- summary -->
       <PreviewSection v-else-if="section.sectionType === 'summary'" heading="Summary">
-        <p class="standard-layout__summary-text">{{ summaryText(section) }}</p>
+        <p class="standard-layout__summary-text text-[10pt] text-black m-0 leading-[1.4]">{{ summaryText(section) }}</p>
       </PreviewSection>
 
       <!-- experience -->
       <PreviewSection v-else-if="section.sectionType === 'experience'" heading="Experience">
-        <div v-for="entry in topLevelEntries(section)" :key="entry.id" class="standard-layout__experience-entry">
-          <div class="standard-layout__experience-header">
-            <span class="standard-layout__company">{{ fieldValue(section, entry.id, 'company') }}</span>
-            <span class="standard-layout__dates">{{ formatDateRange(section, entry.id) }}</span>
+        <div v-for="entry in topLevelEntries(section)" :key="entry.id" class="standard-layout__experience-entry mb-[8pt]">
+          <div class="standard-layout__experience-header flex justify-between items-baseline">
+            <span class="standard-layout__company text-[10pt] font-bold text-black">{{ fieldValue(section, entry.id, 'company') }}</span>
+            <span class="standard-layout__dates text-[10pt] text-gray-700 whitespace-nowrap">{{ formatDateRange(section, entry.id) }}</span>
           </div>
-          <p v-if="fieldValue(section, entry.id, 'title')" class="standard-layout__experience-title">
+          <p v-if="fieldValue(section, entry.id, 'title')" class="standard-layout__experience-title text-[10pt] italic text-black mt-[1pt]">
             {{ fieldValue(section, entry.id, 'title') }}
           </p>
-          <p v-if="fieldValue(section, entry.id, 'location')" class="standard-layout__experience-location">
+          <p v-if="fieldValue(section, entry.id, 'location')" class="standard-layout__experience-location text-[10pt] text-gray-700 mt-[1pt]">
             {{ fieldValue(section, entry.id, 'location') }}
           </p>
           <PreviewBulletList :bullets="entryBullets(section, entry.id)" />
@@ -42,12 +42,12 @@
 
       <!-- education -->
       <PreviewSection v-else-if="section.sectionType === 'education'" heading="Education">
-        <div v-for="entry in topLevelEntries(section)" :key="entry.id" class="standard-layout__education-entry">
-          <div class="standard-layout__education-header">
-            <span class="standard-layout__school">{{ fieldValue(section, entry.id, 'school') }}</span>
-            <span class="standard-layout__dates">{{ formatDateRange(section, entry.id) }}</span>
+        <div v-for="entry in topLevelEntries(section)" :key="entry.id" class="standard-layout__education-entry mb-[6pt]">
+          <div class="standard-layout__education-header flex justify-between items-baseline">
+            <span class="standard-layout__school text-[10pt] font-bold text-black">{{ fieldValue(section, entry.id, 'school') }}</span>
+            <span class="standard-layout__dates text-[10pt] text-gray-700 whitespace-nowrap">{{ formatDateRange(section, entry.id) }}</span>
           </div>
-          <p v-if="fieldValue(section, entry.id, 'degree')" class="standard-layout__education-degree">
+          <p v-if="fieldValue(section, entry.id, 'degree')" class="standard-layout__education-degree text-[10pt] text-black mt-[1pt]">
             {{ fieldValue(section, entry.id, 'degree') }}
             <template v-if="fieldValue(section, entry.id, 'fieldOfStudy')">
               , {{ fieldValue(section, entry.id, 'fieldOfStudy') }}
@@ -58,27 +58,27 @@
 
       <!-- hard_skills -->
       <PreviewSection v-else-if="section.sectionType === 'hard_skills'" heading="Hard Skills">
-        <p class="standard-layout__skills-text">{{ commaList(section) }}</p>
+        <p class="standard-layout__skills-text text-[10pt] text-black m-0 leading-[1.4]">{{ commaList(section) }}</p>
       </PreviewSection>
 
       <!-- soft_skills -->
       <PreviewSection v-else-if="section.sectionType === 'soft_skills'" heading="Soft Skills">
-        <p class="standard-layout__skills-text">{{ commaList(section) }}</p>
+        <p class="standard-layout__skills-text text-[10pt] text-black m-0 leading-[1.4]">{{ commaList(section) }}</p>
       </PreviewSection>
 
       <!-- projects -->
       <PreviewSection v-else-if="section.sectionType === 'projects'" heading="Projects">
-        <div v-for="entry in topLevelEntries(section)" :key="entry.id" class="standard-layout__project-entry">
-          <p class="standard-layout__project-name">
+        <div v-for="entry in topLevelEntries(section)" :key="entry.id" class="standard-layout__project-entry mb-[8pt]">
+          <p class="standard-layout__project-name text-[10pt] text-black m-0">
             <strong>{{ fieldValue(section, entry.id, 'name') }}</strong>
             <template v-if="fieldValue(section, entry.id, 'startDate') || fieldValue(section, entry.id, 'endDate')">
-              <span class="standard-layout__dates"> | {{ formatDateRange(section, entry.id) }}</span>
+              <span class="standard-layout__dates text-[10pt] text-gray-700 whitespace-nowrap"> | {{ formatDateRange(section, entry.id) }}</span>
             </template>
           </p>
-          <p v-if="fieldValue(section, entry.id, 'description')" class="standard-layout__project-description">
+          <p v-if="fieldValue(section, entry.id, 'description')" class="standard-layout__project-description text-[10pt] text-black mt-[2pt] leading-[1.4]">
             {{ fieldValue(section, entry.id, 'description') }}
           </p>
-          <p v-if="fieldValue(section, entry.id, 'url')" class="standard-layout__project-url">
+          <p v-if="fieldValue(section, entry.id, 'url')" class="standard-layout__project-url text-[10pt] text-gray-700 mt-[2pt] break-all">
             {{ fieldValue(section, entry.id, 'url') }}
           </p>
           <PreviewBulletList :bullets="entryBullets(section, entry.id)" />
@@ -87,14 +87,14 @@
 
       <!-- certifications -->
       <PreviewSection v-else-if="section.sectionType === 'certifications'" heading="Certifications">
-        <div v-for="entry in topLevelEntries(section)" :key="entry.id" class="standard-layout__cert-entry">
-          <p class="standard-layout__cert-name">
+        <div v-for="entry in topLevelEntries(section)" :key="entry.id" class="standard-layout__cert-entry mb-[3pt]">
+          <p class="standard-layout__cert-name text-[10pt] text-black m-0">
             <strong>{{ fieldValue(section, entry.id, 'name') }}</strong>
             <template v-if="fieldValue(section, entry.id, 'issuer')">
               &mdash; {{ fieldValue(section, entry.id, 'issuer') }}
             </template>
             <template v-if="fieldValue(section, entry.id, 'date')">
-              <span class="standard-layout__dates"> | {{ formatMonth(fieldValue(section, entry.id, 'date')) }}</span>
+              <span class="standard-layout__dates text-[10pt] text-gray-700 whitespace-nowrap"> | {{ formatMonth(fieldValue(section, entry.id, 'date')) }}</span>
             </template>
           </p>
         </div>
@@ -102,12 +102,12 @@
 
       <!-- languages -->
       <PreviewSection v-else-if="section.sectionType === 'languages'" heading="Languages">
-        <p class="standard-layout__languages-text">{{ languagesList(section) }}</p>
+        <p class="standard-layout__languages-text text-[10pt] text-black m-0 leading-[1.4]">{{ languagesList(section) }}</p>
       </PreviewSection>
 
       <!-- hobbies -->
       <PreviewSection v-else-if="section.sectionType === 'hobbies'" heading="Hobbies">
-        <p class="standard-layout__skills-text">{{ commaList(section) }}</p>
+        <p class="standard-layout__skills-text text-[10pt] text-black m-0 leading-[1.4]">{{ commaList(section) }}</p>
       </PreviewSection>
     </template>
   </div>
@@ -328,189 +328,31 @@ function entryBullets(section: ResumeSectionState, parentId: string) {
 </script>
 
 <style scoped>
-.standard-layout {
-  padding: 48pt 48pt 48pt 48pt;
-  min-height: 960pt;
-}
-
-.standard-layout__watermark {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 600pt;
-  font-family: var(--preview-font, 'Georgia', 'Times New Roman', serif);
-  font-size: 16pt;
-  color: #9ca3af;
-  font-style: italic;
-  user-select: none;
-}
-
-/* ─── Name & Contact ─── */
-
-.standard-layout__name-contact {
-  text-align: center;
-  margin-bottom: 14pt;
-}
-
-.standard-layout__name {
-  font-family: var(--preview-font, 'Georgia', 'Times New Roman', serif);
-  font-size: 18pt;
-  font-weight: 700;
-  color: #000;
-  margin: 0 0 4pt;
-}
-
-.standard-layout__contact-line {
-  font-family: var(--preview-font, 'Georgia', 'Times New Roman', serif);
-  font-size: 10pt;
-  color: #000;
-  margin: 0;
-  line-height: 1.4;
-}
-
-.standard-layout__pipe {
-  margin: 0 6pt;
-  color: #000;
-}
-
-/* ─── Summary ─── */
-
-.standard-layout__summary-text {
-  font-family: var(--preview-font, 'Georgia', 'Times New Roman', serif);
-  font-size: 10pt;
-  color: #000;
-  margin: 0;
-  line-height: 1.4;
-}
-
-/* ─── Experience ─── */
-
-.standard-layout__experience-entry {
-  margin-bottom: 8pt;
-}
-
-.standard-layout__experience-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-}
-
-.standard-layout__company {
-  font-family: var(--preview-font, 'Georgia', 'Times New Roman', serif);
-  font-size: 10pt;
-  font-weight: 700;
-  color: #000;
-}
-
-.standard-layout__experience-title {
-  font-family: var(--preview-font, 'Georgia', 'Times New Roman', serif);
-  font-size: 10pt;
-  font-style: italic;
-  color: #000;
-  margin: 1pt 0 0;
-}
-
-.standard-layout__experience-location {
-  font-family: var(--preview-font, 'Georgia', 'Times New Roman', serif);
-  font-size: 10pt;
-  color: #333;
-  margin: 1pt 0 0;
-}
-
-/* ─── Education ─── */
-
-.standard-layout__education-entry {
-  margin-bottom: 6pt;
-}
-
-.standard-layout__education-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-}
-
-.standard-layout__school {
-  font-family: var(--preview-font, 'Georgia', 'Times New Roman', serif);
-  font-size: 10pt;
-  font-weight: 700;
-  color: #000;
-}
-
-.standard-layout__education-degree {
-  font-family: var(--preview-font, 'Georgia', 'Times New Roman', serif);
-  font-size: 10pt;
-  color: #000;
-  margin: 1pt 0 0;
-}
-
-/* ─── Dates (shared) ─── */
-
-.standard-layout__dates {
-  font-family: var(--preview-font, 'Georgia', 'Times New Roman', serif);
-  font-size: 10pt;
-  color: #333;
-  white-space: nowrap;
-}
-
-/* ─── Skills & Hobbies ─── */
-
-.standard-layout__skills-text {
-  font-family: var(--preview-font, 'Georgia', 'Times New Roman', serif);
-  font-size: 10pt;
-  color: #000;
-  margin: 0;
-  line-height: 1.4;
-}
-
-/* ─── Projects ─── */
-
-.standard-layout__project-entry {
-  margin-bottom: 8pt;
-}
-
-.standard-layout__project-name {
-  font-family: var(--preview-font, 'Georgia', 'Times New Roman', serif);
-  font-size: 10pt;
-  color: #000;
-  margin: 0;
-}
-
-.standard-layout__project-description {
-  font-family: var(--preview-font, 'Georgia', 'Times New Roman', serif);
-  font-size: 10pt;
-  color: #000;
-  margin: 2pt 0 0;
-  line-height: 1.4;
-}
-
-.standard-layout__project-url {
-  font-family: var(--preview-font, 'Georgia', 'Times New Roman', serif);
-  font-size: 10pt;
-  color: #333;
-  margin: 2pt 0 0;
-  word-break: break-all;
-}
-
-/* ─── Certifications ─── */
-
-.standard-layout__cert-entry {
-  margin-bottom: 3pt;
-}
-
-.standard-layout__cert-name {
-  font-family: var(--preview-font, 'Georgia', 'Times New Roman', serif);
-  font-size: 10pt;
-  color: #000;
-  margin: 0;
-}
-
-/* ─── Languages ─── */
-
+/*
+ * Font-family with CSS variable fallback chain — kept as scoped CSS because
+ * the var() call with complex fallback values (quoted font names with spaces)
+ * cannot be reliably expressed in Tailwind arbitrary value syntax.
+ *
+ * All other styling (pt spacing, font sizes, colors, layout) uses Tailwind.
+ */
+.standard-layout,
+.standard-layout__watermark,
+.standard-layout__name,
+.standard-layout__contact-line,
+.standard-layout__pipe,
+.standard-layout__summary-text,
+.standard-layout__company,
+.standard-layout__experience-title,
+.standard-layout__experience-location,
+.standard-layout__school,
+.standard-layout__education-degree,
+.standard-layout__dates,
+.standard-layout__skills-text,
+.standard-layout__project-name,
+.standard-layout__project-description,
+.standard-layout__project-url,
+.standard-layout__cert-name,
 .standard-layout__languages-text {
   font-family: var(--preview-font, 'Georgia', 'Times New Roman', serif);
-  font-size: 10pt;
-  color: #000;
-  margin: 0;
-  line-height: 1.4;
 }
 </style>

@@ -5,6 +5,7 @@
       <div
         v-for="(entry, index) in languageEntries"
         :key="entry.id"
+        data-drag-row="language"
         class="flex items-center gap-1.5"
       >
         <span
@@ -126,10 +127,10 @@ function onDragStart(event: MouseEvent, index: number) {
     if (dragIndex.value === null) return
 
     const target = document.elementFromPoint(e.clientX, e.clientY)
-    const targetRow = target?.closest('.languages-editor__row') as HTMLElement | null
+    const targetRow = target?.closest('[data-drag-row="language"]') as HTMLElement | null
     if (targetRow) {
       const rows = Array.from(
-        targetRow.parentElement!.querySelectorAll('.languages-editor__row'),
+        targetRow.parentElement!.querySelectorAll('[data-drag-row="language"]'),
       )
       const targetIndex = rows.indexOf(targetRow)
       if (targetIndex !== -1 && targetIndex !== dragIndex.value) {

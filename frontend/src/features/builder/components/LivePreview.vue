@@ -64,7 +64,13 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* Paper dimension & print styles — kept as scoped CSS for physical units (px, in) */
+/*
+ * Paper dimension & print styles — kept as scoped CSS for:
+ * - Physical paper size (816px × 1056px at 96 DPI, 8.5×11in for print)
+ * - Print media query rules (no-print background, page breaks)
+ * - Transform origin needed for scale-based responsive preview
+ * - Box shadow (multi-layer shadow not expressible as single Tailwind utility)
+ */
 .live-preview__paper {
   width: 816px;
   height: 1056px;

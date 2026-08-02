@@ -1,6 +1,13 @@
 <template>
-  <ul class="preview-bullet-list">
-    <li v-for="bullet in bullets" :key="bullet.id" class="preview-bullet-list__item">
+  <ul
+    class="preview-bullet-list mt-[2pt] pl-[18pt] list-disc"
+    style="font-family: var(--preview-font, 'Georgia', 'Times New Roman', serif)"
+  >
+    <li
+      v-for="bullet in bullets"
+      :key="bullet.id"
+      class="preview-bullet-list__item text-[10pt] text-black leading-[1.35] mb-[1pt]"
+    >
       {{ bullet.value }}
     </li>
   </ul>
@@ -16,19 +23,3 @@ defineProps<{
   bullets: PreviewBullet[]
 }>()
 </script>
-
-<style scoped>
-.preview-bullet-list {
-  margin: 2pt 0 0;
-  padding-left: 18pt;
-  list-style-type: disc;
-}
-
-.preview-bullet-list__item {
-  font-family: var(--preview-font, 'Georgia', 'Times New Roman', serif);
-  font-size: 10pt;
-  color: #000;
-  line-height: 1.35;
-  margin-bottom: 1pt;
-}
-</style>

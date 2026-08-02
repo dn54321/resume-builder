@@ -3,6 +3,7 @@
     <div
       v-for="(bullet, index) in bullets"
       :key="bullet.id"
+      data-drag-row="bullet"
       class="flex items-center gap-1.5 transition-opacity"
       :class="{ 'opacity-45': bullet.dimmed }"
     >
@@ -77,10 +78,10 @@ function onDragStart(event: MouseEvent, index: number) {
     if (dragIndex.value === null) return
 
     const target = document.elementFromPoint(e.clientX, e.clientY)
-    const targetRow = target?.closest('.bullet-list__row') as HTMLElement | null
+    const targetRow = target?.closest('[data-drag-row="bullet"]') as HTMLElement | null
     if (targetRow) {
       const rows = Array.from(
-        targetRow.parentElement!.querySelectorAll('.bullet-list__row'),
+        targetRow.parentElement!.querySelectorAll('[data-drag-row="bullet"]'),
       )
       const targetIndex = rows.indexOf(targetRow)
       if (targetIndex !== -1 && targetIndex !== dragIndex.value) {

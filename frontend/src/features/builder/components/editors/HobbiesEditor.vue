@@ -5,6 +5,7 @@
       <div
         v-for="(entry, index) in hobbyEntries"
         :key="entry.id"
+        data-drag-row="hobby"
         class="flex items-center gap-1.5"
       >
         <span
@@ -98,10 +99,10 @@ function onDragStart(event: MouseEvent, index: number) {
     if (dragIndex.value === null) return
 
     const target = document.elementFromPoint(e.clientX, e.clientY)
-    const targetRow = target?.closest('.hobbies-editor__row') as HTMLElement | null
+    const targetRow = target?.closest('[data-drag-row="hobby"]') as HTMLElement | null
     if (targetRow) {
       const rows = Array.from(
-        targetRow.parentElement!.querySelectorAll('.hobbies-editor__row'),
+        targetRow.parentElement!.querySelectorAll('[data-drag-row="hobby"]'),
       )
       const targetIndex = rows.indexOf(targetRow)
       if (targetIndex !== -1 && targetIndex !== dragIndex.value) {

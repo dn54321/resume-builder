@@ -1,21 +1,21 @@
 <template>
-  <div class="two-column-layout">
+  <div class="two-column-layout p-[48pt] pb-[36pt] min-h-[960pt]">
     <!-- Empty state watermark -->
-    <div v-if="isEmpty" class="two-column-layout__watermark">
+    <div v-if="isEmpty" class="two-column-layout__watermark flex items-center justify-center min-h-[600pt] text-[16pt] text-gray-400 italic select-none">
       Your resume preview will appear here.
     </div>
 
     <!-- Two-column grid -->
-    <div v-else class="two-column-layout__grid">
+    <div v-else class="two-column-layout__grid flex gap-[20pt] items-start">
       <!-- Left Column -->
-      <div class="two-column-layout__left">
+      <div class="two-column-layout__left w-1/3 shrink-0">
         <template v-for="section in leftSections" :key="section.sectionId">
           <component :is="getSectionRenderer(section.sectionType)" :section="section" />
         </template>
       </div>
 
       <!-- Right Column -->
-      <div class="two-column-layout__right">
+      <div class="two-column-layout__right flex-1 min-w-0">
         <template v-for="section in rightSections" :key="section.sectionId">
           <component :is="getSectionRenderer(section.sectionType)" :section="section" />
         </template>
@@ -185,6 +185,7 @@ function entryBullets(section: ResumeSectionState, parentId: string) {
 
 // ─── Section renderers ───
 // Each returns a VNode tree for the given section, avoiding a giant conditional template.
+// Tailwind classes added alongside BEM class names for styling.
 
 /**
  * Get the render function component for a given section type.
@@ -232,14 +233,14 @@ const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
       })
 
       return () =>
-        h('div', { class: 'two-col-name-contact' }, [
-          h('h1', { class: 'two-col-name' }, fullName.value),
+        h('div', { class: 'two-col-name-contact text-left mb-[14pt]' }, [
+          h('h1', { class: 'two-col-name text-[18pt] font-bold text-black m-0 mb-[4pt]' }, fullName.value),
           h(
             'p',
-            { class: 'two-col-contact-line' },
+            { class: 'two-col-contact-line text-[10pt] text-black m-0 leading-[1.4]' },
             contactDetails.value.flatMap((d, i) => {
               const els: ReturnType<typeof h>[] = []
-              if (i > 0) els.push(h('span', { class: 'two-col-pipe' }, '|'))
+              if (i > 0) els.push(h('span', { class: 'two-col-pipe mx-[6pt]' }, '|'))
               els.push(h('span', d.value))
               return els
             }),
@@ -259,7 +260,7 @@ const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
       })
       return () =>
         h(PreviewSection, { heading: 'Summary' }, () =>
-          h('p', { class: 'two-col-body-text' }, text.value),
+          h('p', { class: 'two-col-body-text text-[10pt] text-black m-0 leading-[1.4]' }, text.value),
         )
     },
   }),
@@ -277,16 +278,16 @@ const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
         h(PreviewSection, { heading: 'Experience' }, () =>
           entries.value.map((entry) => {
             const bullets = entryBullets(section, entry.id)
-            return h('div', { class: 'two-col-entry', key: entry.id }, [
-              h('div', { class: 'two-col-entry-header' }, [
-                h('span', { class: 'two-col-bold' }, fieldValue(section, entry.id, 'company')),
-                h('span', { class: 'two-col-dates' }, formatDateRange(section, entry.id)),
+            return h('div', { class: 'two-col-entry mb-[8pt]', key: entry.id }, [
+              h('div', { class: 'two-col-entry-header flex justify-between items-baseline' }, [
+                h('span', { class: 'two-col-bold text-[10pt] font-bold text-black' }, fieldValue(section, entry.id, 'company')),
+                h('span', { class: 'two-col-dates text-[10pt] text-gray-700 whitespace-nowrap' }, formatDateRange(section, entry.id)),
               ]),
               fieldValue(section, entry.id, 'title')
-                ? h('p', { class: 'two-col-italic' }, fieldValue(section, entry.id, 'title'))
+                ? h('p', { class: 'two-col-italic text-[10pt] italic text-black mt-[1pt]' }, fieldValue(section, entry.id, 'title'))
                 : null,
               fieldValue(section, entry.id, 'location')
-                ? h('p', { class: 'two-col-location' }, fieldValue(section, entry.id, 'location'))
+                ? h('p', { class: 'two-col-location text-[10pt] text-gray-700 mt-[1pt]' }, fieldValue(section, entry.id, 'location'))
                 : null,
               bullets.length > 0 ? h(PreviewBulletList, { bullets }) : null,
             ])
@@ -310,13 +311,13 @@ const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
             const degree = fieldValue(section, entry.id, 'degree')
             const fieldOfStudy = fieldValue(section, entry.id, 'fieldOfStudy')
             const degreeLine = [degree, fieldOfStudy].filter(Boolean).join(', ')
-            return h('div', { class: 'two-col-entry', key: entry.id }, [
-              h('div', { class: 'two-col-entry-header' }, [
-                h('span', { class: 'two-col-bold' }, fieldValue(section, entry.id, 'school')),
-                h('span', { class: 'two-col-dates' }, formatDateRange(section, entry.id)),
+            return h('div', { class: 'two-col-entry mb-[8pt]', key: entry.id }, [
+              h('div', { class: 'two-col-entry-header flex justify-between items-baseline' }, [
+                h('span', { class: 'two-col-bold text-[10pt] font-bold text-black' }, fieldValue(section, entry.id, 'school')),
+                h('span', { class: 'two-col-dates text-[10pt] text-gray-700 whitespace-nowrap' }, formatDateRange(section, entry.id)),
               ]),
               degreeLine
-                ? h('p', { class: 'two-col-body-text' }, degreeLine)
+                ? h('p', { class: 'two-col-body-text text-[10pt] text-black m-0 leading-[1.4]' }, degreeLine)
                 : null,
             ])
           }),
@@ -331,7 +332,7 @@ const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
       const text = computed(() => commaList(section))
       return () =>
         h(PreviewSection, { heading: 'Hard Skills' }, () =>
-          h('p', { class: 'two-col-body-text' }, text.value),
+          h('p', { class: 'two-col-body-text text-[10pt] text-black m-0 leading-[1.4]' }, text.value),
         )
     },
   }),
@@ -343,7 +344,7 @@ const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
       const text = computed(() => commaList(section))
       return () =>
         h(PreviewSection, { heading: 'Soft Skills' }, () =>
-          h('p', { class: 'two-col-body-text' }, text.value),
+          h('p', { class: 'two-col-body-text text-[10pt] text-black m-0 leading-[1.4]' }, text.value),
         )
     },
   }),
@@ -363,16 +364,16 @@ const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
             const bullets = entryBullets(section, entry.id)
             const name = fieldValue(section, entry.id, 'name')
             const dr = formatDateRange(section, entry.id)
-            return h('div', { class: 'two-col-entry', key: entry.id }, [
-              h('p', { class: 'two-col-body-text' }, [
+            return h('div', { class: 'two-col-entry mb-[8pt]', key: entry.id }, [
+              h('p', { class: 'two-col-body-text text-[10pt] text-black m-0 leading-[1.4]' }, [
                 h('strong', name),
-                dr ? [' | ', h('span', { class: 'two-col-dates' }, dr)] : null,
+                dr ? [' | ', h('span', { class: 'two-col-dates text-[10pt] text-gray-700 whitespace-nowrap' }, dr)] : null,
               ]),
               fieldValue(section, entry.id, 'description')
-                ? h('p', { class: 'two-col-body-text' }, fieldValue(section, entry.id, 'description'))
+                ? h('p', { class: 'two-col-body-text text-[10pt] text-black m-0 leading-[1.4]' }, fieldValue(section, entry.id, 'description'))
                 : null,
               fieldValue(section, entry.id, 'url')
-                ? h('p', { class: 'two-col-url' }, fieldValue(section, entry.id, 'url'))
+                ? h('p', { class: 'two-col-url text-[10pt] text-gray-700 mt-[2pt] break-all' }, fieldValue(section, entry.id, 'url'))
                 : null,
               bullets.length > 0 ? h(PreviewBulletList, { bullets }) : null,
             ])
@@ -396,7 +397,7 @@ const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
             const nameVal = fieldValue(section, entry.id, 'name')
             const issuer = fieldValue(section, entry.id, 'issuer')
             const date = fieldValue(section, entry.id, 'date')
-            return h('p', { class: 'two-col-body-text', key: entry.id }, [
+            return h('p', { class: 'two-col-body-text text-[10pt] text-black m-0 leading-[1.4]', key: entry.id }, [
               h('strong', nameVal),
               issuer ? ` \u2014 ${issuer}` : '',
               date ? ` | ${formatMonth(date)}` : '',
@@ -423,7 +424,7 @@ const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
       })
       return () =>
         h(PreviewSection, { heading: 'Languages' }, () =>
-          h('p', { class: 'two-col-body-text' }, text.value),
+          h('p', { class: 'two-col-body-text text-[10pt] text-black m-0 leading-[1.4]' }, text.value),
         )
     },
   }),
@@ -435,7 +436,7 @@ const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
       const text = computed(() => commaList(section))
       return () =>
         h(PreviewSection, { heading: 'Hobbies' }, () =>
-          h('p', { class: 'two-col-body-text' }, text.value),
+          h('p', { class: 'two-col-body-text text-[10pt] text-black m-0 leading-[1.4]' }, text.value),
         )
     },
   }),
@@ -443,120 +444,24 @@ const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
 </script>
 
 <style scoped>
-.two-column-layout {
-  padding: 48pt 48pt 36pt 48pt;
-  min-height: 960pt;
-}
-
-.two-column-layout__watermark {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 600pt;
-  font-family: var(--preview-font, 'Georgia', 'Times New Roman', serif);
-  font-size: 16pt;
-  color: #9ca3af;
-  font-style: italic;
-  user-select: none;
-}
-
-.two-column-layout__grid {
-  display: flex;
-  gap: 20pt;
-  align-items: flex-start;
-}
-
-.two-column-layout__left {
-  width: 33.333%;
-  flex-shrink: 0;
-}
-
-.two-column-layout__right {
-  flex: 1;
-  min-width: 0;
-}
-
-/* ─── Name & Contact ─── */
-
-.two-col-name-contact {
-  text-align: left;
-  margin-bottom: 14pt;
-}
-
-.two-col-name {
-  font-family: var(--preview-font, 'Georgia', 'Times New Roman', serif);
-  font-size: 18pt;
-  font-weight: 700;
-  color: #000;
-  margin: 0 0 4pt;
-}
-
-.two-col-contact-line {
-  font-family: var(--preview-font, 'Georgia', 'Times New Roman', serif);
-  font-size: 10pt;
-  color: #000;
-  margin: 0;
-  line-height: 1.4;
-}
-
-.two-col-pipe {
-  margin: 0 6pt;
-}
-
-/* ─── Shared entry styles ─── */
-
-.two-col-entry {
-  margin-bottom: 8pt;
-}
-
-.two-col-entry-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-}
-
-.two-col-bold {
-  font-family: var(--preview-font, 'Georgia', 'Times New Roman', serif);
-  font-size: 10pt;
-  font-weight: 700;
-  color: #000;
-}
-
-.two-col-dates {
-  font-family: var(--preview-font, 'Georgia', 'Times New Roman', serif);
-  font-size: 10pt;
-  color: #333;
-  white-space: nowrap;
-}
-
-.two-col-italic {
-  font-family: var(--preview-font, 'Georgia', 'Times New Roman', serif);
-  font-size: 10pt;
-  font-style: italic;
-  color: #000;
-  margin: 1pt 0 0;
-}
-
-.two-col-location {
-  font-family: var(--preview-font, 'Georgia', 'Times New Roman', serif);
-  font-size: 10pt;
-  color: #333;
-  margin: 1pt 0 0;
-}
-
-.two-col-body-text {
-  font-family: var(--preview-font, 'Georgia', 'Times New Roman', serif);
-  font-size: 10pt;
-  color: #000;
-  margin: 0;
-  line-height: 1.4;
-}
-
+/*
+ * Font-family with CSS variable fallback chain — kept as scoped CSS because
+ * the var() call with complex fallback values (quoted font names with spaces)
+ * cannot be reliably expressed in Tailwind arbitrary value syntax.
+ *
+ * All other styling (pt spacing, font sizes, colors, layout) uses Tailwind.
+ */
+.two-column-layout,
+.two-column-layout__watermark,
+.two-col-name,
+.two-col-contact-line,
+.two-col-pipe,
+.two-col-bold,
+.two-col-dates,
+.two-col-italic,
+.two-col-location,
+.two-col-body-text,
 .two-col-url {
   font-family: var(--preview-font, 'Georgia', 'Times New Roman', serif);
-  font-size: 10pt;
-  color: #333;
-  margin: 2pt 0 0;
-  word-break: break-all;
 }
 </style>

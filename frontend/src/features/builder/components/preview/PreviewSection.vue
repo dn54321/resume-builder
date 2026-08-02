@@ -1,8 +1,13 @@
 <template>
-  <div class="preview-section">
-    <h2 class="preview-section__heading">{{ heading }}</h2>
-    <hr class="preview-section__rule" />
-    <div class="preview-section__body">
+  <div
+    class="preview-section mb-[10pt]"
+    style="font-family: var(--preview-font, 'Georgia', 'Times New Roman', serif)"
+  >
+    <h2 class="preview-section__heading text-[12pt] font-bold text-black m-0 mb-[2pt] uppercase tracking-[0.5pt]">
+      {{ heading }}
+    </h2>
+    <hr class="preview-section__rule border-none border-t border-black m-0 mb-[6pt]" />
+    <div class="preview-section__body text-[10pt] text-black leading-[1.4]">
       <slot />
     </div>
   </div>
@@ -13,32 +18,3 @@ defineProps<{
   heading: string
 }>()
 </script>
-
-<style scoped>
-.preview-section {
-  margin-bottom: 10pt;
-}
-
-.preview-section__heading {
-  font-family: var(--preview-font, 'Georgia', 'Times New Roman', serif);
-  font-size: 12pt;
-  font-weight: 700;
-  color: #000;
-  margin: 0 0 2pt;
-  text-transform: uppercase;
-  letter-spacing: 0.5pt;
-}
-
-.preview-section__rule {
-  border: none;
-  border-top: 1pt solid #000;
-  margin: 0 0 6pt;
-}
-
-.preview-section__body {
-  font-family: var(--preview-font, 'Georgia', 'Times New Roman', serif);
-  font-size: 10pt;
-  color: #000;
-  line-height: 1.4;
-}
-</style>

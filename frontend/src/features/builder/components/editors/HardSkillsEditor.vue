@@ -13,6 +13,7 @@
       <div
         v-for="(entry, index) in skillEntries"
         :key="entry.id"
+        data-drag-row="skill"
         class="flex items-center gap-1.5 transition-opacity"
         :class="{ 'opacity-45': entry.dimmed }"
       >
@@ -130,10 +131,10 @@ function onDragStart(event: MouseEvent, index: number) {
     if (dragIndex.value === null) return
 
     const target = document.elementFromPoint(e.clientX, e.clientY)
-    const targetRow = target?.closest('.skills-editor__row') as HTMLElement | null
+    const targetRow = target?.closest('[data-drag-row="skill"]') as HTMLElement | null
     if (targetRow) {
       const rows = Array.from(
-        targetRow.parentElement!.querySelectorAll('.skills-editor__row'),
+        targetRow.parentElement!.querySelectorAll('[data-drag-row="skill"]'),
       )
       const targetIndex = rows.indexOf(targetRow)
       if (targetIndex !== -1 && targetIndex !== dragIndex.value) {
