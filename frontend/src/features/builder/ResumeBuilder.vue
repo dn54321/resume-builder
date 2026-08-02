@@ -60,7 +60,7 @@
       <PdfExportButton />
     </header>
 
-    <div class="grid grid-cols-[220px_1fr_260px] gap-4 flex-1 min-h-0 max-[1024px]:grid-cols-1 max-[1024px]:grid-rows-[auto_1fr_1fr]">
+    <div class="grid grid-cols-[240px_1fr_2fr] gap-4 flex-1 min-h-0 max-[1024px]:grid-cols-1 max-[1024px]:grid-rows-[auto_1fr_1fr]">
       <!-- Left sidebar: LayoutPicker + SectionToggles -->
       <aside class="overflow-y-auto p-4 border border-gray-300 rounded-lg bg-white">
         <LayoutPicker v-model="store.layout" />
