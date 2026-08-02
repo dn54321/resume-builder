@@ -233,7 +233,7 @@ function writeDashboard(): void {
   }
 
   lines.push(`══ Ticket Agents Dashboard ${now.padStart(30 - now.length + 21)} ══`);
-  lines.push(`${totalEpics} epic(s) · ${totalTickets} tickets · ${totalRunning} running · ${totalDone} done · ${totalFailed} failed · ${idleAgents.size} idle`);
+  lines.push(`${totalEpics} epic(s) · ${totalTickets} tickets · ${totalRunning} running · ${totalDone} done · ${totalFailed} failed · ${spawnedProcesses.size} active`);
   lines.push('');
 
   // Per-epic breakdown
