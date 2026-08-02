@@ -4,11 +4,12 @@
 3. Implement the changes described in the ticket.
 4. Write tests for your changes.
 5. **Report your status** — write your current task to the file `agent-status.txt` in the worktree root. Update it whenever you start a new phase (e.g. "Reading codebase", "Implementing X", "Writing tests", "Running validation"). One line, plain text. This lets the dashboard show what you're doing.
-6. **Test once before finishing** — run the full test suite once at the end to confirm everything works. Do not re-run tests after every small change — CI pipelines will catch regressions once the PR is created.
+6. **Test before finishing** — run the full test suite once at the end. The pre-push hook runs lint, type-check, and test:cov — your push will be rejected if any fail.
    - Backend: \`pnpm type-check && pnpm lint && pnpm test\`
    - Frontend: \`pnpm type-check && pnpm lint && pnpm test:unit\`
+   - Before marking work complete, use the \`e2e-test\` skill to run end-to-end tests. If you changed API routes, auth, forms, navigation, or shared components, e2e tests are REQUIRED.
    - If you made a risky change or fixed a bug, run tests for that area specifically before the final pass.
-   - Never run \`pnpm build\`, \`prisma migrate dev\`, \`prisma db push\`, or \`pnpm format\` during validation.
+   - Never run \`prisma migrate dev\`, \`prisma db push\`, or \`pnpm format\` during validation.
 7. **VERIFY RENDERED OUTPUT, NOT JUST EVENTS** — This is the #1 cause of false passes. A component that correctly emits events is NOT necessarily correct. You MUST:
    - Test that the component **renders data from the store/props**, not just that it emits.
    - If data flows component → store → component (e.g. drag-and-drop reorder), test the **full round-trip**: store updates → component re-renders with new data. Testing only the emit is insufficient.
