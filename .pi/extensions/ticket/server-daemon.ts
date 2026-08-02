@@ -875,7 +875,10 @@ async function main(): Promise<void> {
       // Track the mapping so IDLE messages from subagent-chat-* sessions work.
       // Store by agentName (not session id) so multiple workers can't overwrite each other.
       agentSessionMap.set(agentName, { id: from.id, name: senderName });
-      idleAgents.add(agentName);
+      // Don't mark as idle if the agent was already assigned work (e.g. via spawn)
+      if (!workerAssignment.has(agentName)) {
+        idleAgents.add(agentName);
+      }
       writeDashboard();
       launchReady();
     } else if (text === 'IDLE' || text === 'idle') {
