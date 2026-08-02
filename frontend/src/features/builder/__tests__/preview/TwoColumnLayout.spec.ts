@@ -4,6 +4,9 @@ import { setActivePinia, createPinia } from 'pinia'
 import { useResumeStore } from '@/features/builder/stores/resume'
 import TwoColumnLayout from '@/features/builder/components/preview/TwoColumnLayout.vue'
 
+/**
+ *
+ */
 function makeStore() {
   setActivePinia(createPinia())
   return useResumeStore()
