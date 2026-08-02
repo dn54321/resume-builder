@@ -49,6 +49,7 @@ describe('AuthController (e2e)', () => {
     }).compile();
 
     app = module.createNestApplication();
+    app.setGlobalPrefix('api/v1');
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
