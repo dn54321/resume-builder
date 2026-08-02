@@ -37,5 +37,14 @@ export default defineConfigWithVueTs(
 
   jsdoc.configs['flat/recommended'],
 
+  // shadcn-vue components use single-word names (Button, Card, etc.)
+  {
+    name: 'app/shadcn-ui',
+    files: ['src/components/ui/**/*.vue'],
+    rules: {
+      'vue/multi-word-component-names': 'off',
+    },
+  },
+
   skipFormatting,
 )
