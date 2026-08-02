@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none" role="img" aria-label="Live preview illustration">
+  <defs>
+    <linearGradient id="previewGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="var(--color-amber-400, #fbbf24)"/>
+      <stop offset="100%" stop-color="var(--color-amber-500, #f59e0b)"/>
+    </linearGradient>
+    <linearGradient id="previewGrad2" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="var(--color-rose-400, #fb7185)"/>
+      <stop offset="100%" stop-color="var(--color-rose-300, #fda4af)"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="100" cy="95" r="75" fill="url(#previewGrad1)" opacity="0.08"/>
+
+  <!-- Document being previewed -->
+  <rect x="55" y="48" width="90" height="110" rx="5" fill="currentColor" stroke="url(#previewGrad1)" stroke-width="2"/>
+  <!-- Document top accent -->
+  <rect x="55" y="48" width="90" height="4" rx="2" fill="url(#previewGrad1)"/>
+
+  <!-- Content lines -->
+  <rect x="66" y="64" width="68" height="4" rx="1.5" fill="var(--color-muted-foreground, #a8a29e)" opacity="0.5"/>
+  <rect x="66" y="74" width="50" height="3" rx="1" fill="var(--color-muted-foreground, #a8a29e)" opacity="0.35"/>
+  <rect x="66" y="86" width="68" height="2.5" rx="1" fill="var(--color-muted-foreground, #a8a29e)" opacity="0.3"/>
+  <rect x="66" y="94" width="68" height="2.5" rx="1" fill="var(--color-muted-foreground, #a8a29e)" opacity="0.3"/>
+  <rect x="66" y="102" width="60" height="2.5" rx="1" fill="var(--color-muted-foreground, #a8a29e)" opacity="0.3"/>
+
+  <!-- Sub-section header -->
+  <rect x="66" y="115" width="30" height="3.5" rx="1.5" fill="url(#previewGrad2)" opacity="0.6"/>
+
+  <!-- More content -->
+  <rect x="66" y="125" width="68" height="2.5" rx="1" fill="var(--color-muted-foreground, #a8a29e)" opacity="0.25"/>
+  <rect x="66" y="133" width="52" height="2.5" rx="1" fill="var(--color-muted-foreground, #a8a29e)" opacity="0.25"/>
+  <rect x="66" y="141" width="58" height="2.5" rx="1" fill="var(--color-muted-foreground, #a8a29e)" opacity="0.25"/>
+
+  <!-- Eye with a beam scanning/magnifying -->
+  <g>
+    <!-- Eye outer -->
+    <ellipse cx="130" cy="142" rx="22" ry="14" fill="none" stroke="url(#previewGrad2)" stroke-width="2"/>
+    <!-- Eye iris -->
+    <circle cx="130" cy="140" r="7" fill="currentColor" stroke="url(#previewGrad2)" stroke-width="1.5"/>
+    <!-- Eye pupil -->
+    <circle cx="130" cy="140" r="3" fill="url(#previewGrad2)"/>
+
+    <!-- Eyelashes / brow -->
+    <path d="M112 131c-3-4-4-8-2-11" stroke="url(#previewGrad2)" stroke-width="1.5" stroke-linecap="round"/>
+    <path d="M148 131c3-4 4-8 2-11" stroke="url(#previewGrad2)" stroke-width="1.5" stroke-linecap="round"/>
+
+    <!-- Glint/reflection in eye -->
+    <circle cx="127" cy="138" r="1.5" fill="white" opacity="0.8"/>
+  </g>
+
+  <!-- Vision/scan beam from eye to document -->
+  <path d="M115 148l-15 12" stroke="url(#previewGrad1)" stroke-width="1.5" stroke-dasharray="3 2" opacity="0.4" stroke-linecap="round"/>
+</svg>

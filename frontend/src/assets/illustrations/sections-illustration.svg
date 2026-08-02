@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none" role="img" aria-label="Customizable sections illustration">
+  <defs>
+    <linearGradient id="sectGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="var(--color-amber-400, #fbbf24)"/>
+      <stop offset="100%" stop-color="var(--color-amber-500, #f59e0b)"/>
+    </linearGradient>
+    <linearGradient id="sectGrad2" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="var(--color-rose-400, #fb7185)"/>
+      <stop offset="100%" stop-color="var(--color-rose-300, #fda4af)"/>
+    </linearGradient>
+    <linearGradient id="sectGrad3" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="var(--color-amber-300, #fcd34d)"/>
+      <stop offset="100%" stop-color="var(--color-rose-300, #fda4af)"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="100" cy="95" r="75" fill="url(#sectGrad1)" opacity="0.08"/>
+
+  <!-- Puzzle pieces / building blocks -->
+  <g>
+    <!-- Piece 1 — top-left (amber) -->
+    <rect x="35" y="30" width="70" height="8" rx="3" fill="url(#sectGrad1)" opacity="0.7"/>
+    <!-- Piece 2 — top-right (coral) -->
+    <rect x="110" y="30" width="55" height="8" rx="3" fill="url(#sectGrad2)" opacity="0.6"/>
+    <!-- Piece 3 — middle (blend) -->
+    <rect x="35" y="48" width="130" height="8" rx="3" fill="url(#sectGrad3)" opacity="0.5"/>
+    <!-- Piece 4 — bottom-left (amber) -->
+    <rect x="35" y="66" width="80" height="8" rx="3" fill="url(#sectGrad1)" opacity="0.6"/>
+    <!-- Piece 5 — bottom-right (rose) -->
+    <rect x="120" y="66" width="45" height="8" rx="3" fill="url(#sectGrad2)" opacity="0.5"/>
+
+    <!-- Content lines on pieces -->
+    <rect x="42" y="34" width="20" height="3" rx="1" fill="var(--color-background, white)" opacity="0.6"/>
+    <rect x="42" y="52" width="35" height="2.5" rx="1" fill="var(--color-background, white)" opacity="0.5"/>
+    <rect x="42" y="70" width="25" height="2.5" rx="1" fill="var(--color-background, white)" opacity="0.5"/>
+    <rect x="117" y="34" width="15" height="3" rx="1" fill="var(--color-background, white)" opacity="0.5"/>
+  </g>
+
+  <!-- Puzzle connectors (tabs) -->
+  <circle cx="70" cy="38" r="4" fill="url(#sectGrad1)"/>
+  <circle cx="160" cy="38" r="4" fill="url(#sectGrad2)"/>
+  <circle cx="45" cy="56" r="4" fill="url(#sectGrad3)"/>
+  <circle cx="155" cy="56" r="4" fill="url(#sectGrad3)"/>
+  <circle cx="85" cy="74" r="4" fill="url(#sectGrad1)"/>
+
+  <!-- Checkmark indicating assembled -->
+  <circle cx="100" cy="115" r="16" fill="url(#sectGrad1)" opacity="0.8"/>
+  <path d="M92 115l5 5 10-10" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Assembly arrows -->
+  <path d="M42 88l-8 0v30h8" stroke="var(--color-amber-400, #fbbf24)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+  <path d="M158 88l8 0v30h-8" stroke="var(--color-rose-400, #fb7185)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+</svg>
