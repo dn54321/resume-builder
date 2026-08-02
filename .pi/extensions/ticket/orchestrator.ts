@@ -307,12 +307,19 @@ export async function buildGraph(
       }
     }
     if (node.state.status === 'failed' && node.state.retryCount <= config.maxRetries) {
-      node.state.status = 'pending';
-      node.state.error = null;
-      node.state.pid = null;
-      node.state.finishedAt = null;
-      // retryCount is NOT incremented here — it's incremented in spawnWorker
-      // so we can track per-spawn-attempt, not per-buildGraph-call.
+      // If the worktree already has commits, the work was done and the
+      // failure is spurious (e.g., server shutdown). Don't retry.
+      if (node.state.worktreePath && hasExistingWork(node.state.worktreePath, getDefaultBranch())) {
+        node.state.status = 'done';
+        node.state.error = 'Work exists despite failed status — marking done';
+      } else {
+        node.state.status = 'pending';
+        node.state.error = null;
+        node.state.pid = null;
+        node.state.finishedAt = null;
+        // retryCount is NOT incremented here — it's incremented in spawnWorker
+        // so we can track per-spawn-attempt, not per-buildGraph-call.
+      }
     }
     if (node.state.status === 'pending' || node.state.status === 'blocked') {
       const allDepsDone = node.dependencies.every(
