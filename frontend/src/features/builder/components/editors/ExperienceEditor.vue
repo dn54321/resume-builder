@@ -1,6 +1,14 @@
 <template>
   <div class="experience-editor">
-    <h3 class="experience-editor__title">Experience</h3>
+    <h3 class="experience-editor__title">
+      Experience
+      <span
+        v-if="store.isFiltered"
+        class="experience-editor__filter-info"
+      >
+        &mdash; Showing {{ filteredCount.visible }} of {{ filteredCount.total }} bullets
+      </span>
+    </h3>
     <EntryList
       :entries="editor.entries.value.filter((e) => !e.parentId)"
       add-label="Add Job"
@@ -9,7 +17,7 @@
       @remove="onRemoveJob"
       @reorder="editor.reorderEntries"
     >
-      <template #fields="{ entry }">
+      <template #fields="{ entry, index: entryIndex }">
         <div class="experience-editor__fields">
           <div class="experience-editor__field">
             <label class="experience-editor__label">Company</label>
@@ -74,12 +82,26 @@
           <div class="experience-editor__bullets">
             <label class="experience-editor__label">Bullet Points</label>
             <BulletList
-              :bullets="bulletStates(entry.id)"
+              :bullets="bulletStates(entry.id, entryIndex)"
               @add="editor.addBullet(entry.id)"
               @remove="editor.removeBullet"
               @update="(idx: number, val: string) => onBulletUpdate(entry.id, idx, val)"
               @reorder="(from: number, to: number) => editor.reorderBullets(entry.id, from, to)"
-            />
+            >
+              <template #bullet="{ index: bulletIndex }">
+                <span
+                  v-if="store.isFiltered"
+                  class="experience-editor__relevance"
+                  :class="{
+                    'experience-editor__relevance--yes': store.isBulletRelevant('experience', entryIndex, bulletIndex),
+                    'experience-editor__relevance--no': !store.isBulletRelevant('experience', entryIndex, bulletIndex),
+                  }"
+                  :title="store.isBulletRelevant('experience', entryIndex, bulletIndex) ? 'Relevant' : 'Filtered out'"
+                >
+                  {{ store.isBulletRelevant('experience', entryIndex, bulletIndex) ? '&#10003;' : '&#10005;' }}
+                </span>
+              </template>
+            </BulletList>
           </div>
         </div>
       </template>
@@ -88,13 +110,18 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useResumeStore } from '@/features/builder/stores/resume'
 import { useSectionEditor } from '@/features/builder/composables/useSectionEditor'
 import EntryList from '@/features/builder/components/shared/EntryList.vue'
 import BulletList, { type BulletState } from '@/features/builder/components/shared/BulletList.vue'
 
 const editor = useSectionEditor('experience')
+const store = useResumeStore()
 
 const JOB_FIELDS = ['company', 'title', 'startDate', 'endDate', 'location', 'isCurrent']
+
+const filteredCount = computed(() => store.getFilteredBulletCount('experience'))
 
 /**
  *
@@ -151,13 +178,15 @@ function toggleCurrentJob(entryId: string) {
 /**
  *
  * @param parentId
+ * @param entryIndex
  */
-function bulletStates(parentId: string): BulletState[] {
+function bulletStates(parentId: string, entryIndex: number): BulletState[] {
   return editor.getChildren(parentId)
     .sort((a, b) => a.order - b.order)
-    .map((b) => ({
+    .map((b, i) => ({
       id: b.id,
       value: b.fields.find((f) => f.key === 'text')?.value ?? '',
+      dimmed: store.isFiltered && !store.isBulletRelevant('experience', entryIndex, i),
     }))
 }
 
@@ -254,5 +283,27 @@ function onBulletUpdate(parentId: string, index: number, value: string) {
   margin-top: 0.5rem;
   padding-top: 0.5rem;
   border-top: 1px solid var(--color-border, #e5e7eb);
+}
+
+.experience-editor__filter-info {
+  font-weight: 400;
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #6b7280);
+}
+
+.experience-editor__relevance {
+  font-size: 0.6875rem;
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+  cursor: default;
+}
+
+.experience-editor__relevance--yes {
+  color: var(--color-success, #16a34a);
+}
+
+.experience-editor__relevance--no {
+  color: var(--color-text-muted, #d1d5db);
 }
 </style>

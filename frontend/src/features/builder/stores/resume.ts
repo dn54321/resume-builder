@@ -7,6 +7,7 @@ import {
   type LayoutType,
   SECTION_TYPES,
 } from '@/features/builder/types/resume'
+import type { TailorResponse, EntryBulletIndices } from '@/features/builder/models/tailor-response.model'
 
 /**
  *
@@ -22,7 +23,7 @@ function generateId(): string {
  */
 function createDefaultSection(sectionType: SectionType, order: number): ResumeSectionState {
   return {
-    sectionId: sectionType, // temporary client-side id matching the Section.label slug
+    sectionId: sectionType,
     sectionType,
     column: 'right',
     order,
@@ -35,6 +36,14 @@ export const useResumeStore = defineStore('resume', () => {
   const layout = ref<LayoutType>('standard')
   const name = ref('')
   const sections = ref<ResumeSectionState[]>([])
+
+  // ─── Tailor / Filter state ───────────────────────────────────────
+
+  const isFiltered = ref(false)
+  const jdText = ref('')
+  const filteredBulletIndices = ref<Record<string, EntryBulletIndices[]>>({})
+  const filteredHardSkills = ref<string[]>([])
+  const filteredSoftSkills = ref<string[]>([])
 
   // Derived: enabled section types (visible in the resume)
   const enabledSections = computed(() =>
@@ -82,10 +91,8 @@ export const useResumeStore = defineStore('resume', () => {
   function toggleSection(sectionType: SectionType) {
     const existing = sections.value.find((s) => s.sectionType === sectionType)
     if (existing) {
-      // Disable: remove from sections
       sections.value = sections.value.filter((s) => s.sectionType !== sectionType)
     } else {
-      // Enable: add with defaults
       const order = sections.value.length
       sections.value.push(createDefaultSection(sectionType, order))
     }
@@ -179,6 +186,102 @@ export const useResumeStore = defineStore('resume', () => {
     }
   }
 
+  // ─── Tailor filter functions ─────────────────────────────────────
+
+  /**
+   * Apply the tailor response filter to the resume store.
+   * @param response
+   */
+  function applyTailorFilter(response: TailorResponse): void {
+    isFiltered.value = true
+    filteredBulletIndices.value = response.filteredBulletIndices
+    filteredHardSkills.value = response.filteredHardSkills
+    filteredSoftSkills.value = response.filteredSoftSkills
+  }
+
+  /**
+   * Clear all filter state and restore full visibility.
+   */
+  function resetTailorFilter(): void {
+    isFiltered.value = false
+    filteredBulletIndices.value = {}
+    filteredHardSkills.value = []
+    filteredSoftSkills.value = []
+  }
+
+  /**
+   * Check if a bullet point is relevant according to the current filter.
+   * @param sectionId
+   * @param entryIndex - index of the parent entry within top-level entries of the section
+   * @param bulletIndex - index of the bullet within that entry's children
+   * @returns true if relevant or filter is inactive
+   */
+  function isBulletRelevant(
+    sectionId: string,
+    entryIndex: number,
+    bulletIndex: number,
+  ): boolean {
+    if (!isFiltered.value) return true
+
+    const entryIndices = filteredBulletIndices.value[sectionId]
+    if (!entryIndices) return true
+
+    const entry = entryIndices.find((e) => e.entryOrder === entryIndex)
+    if (!entry) return false
+
+    return entry.bulletIndices.includes(bulletIndex)
+  }
+
+  /**
+   * Check if a skill name is relevant according to the current filter.
+   * @param sectionId - 'hard_skills' or 'soft_skills'
+   * @param skillName - the skill name (case-insensitive matching)
+   * @returns true if relevant or filter is inactive
+   */
+  function isSkillRelevant(sectionId: string, skillName: string): boolean {
+    if (!isFiltered.value) return true
+
+    const lowerName = skillName.toLowerCase().trim()
+    if (sectionId === 'hard_skills') {
+      return filteredHardSkills.value.includes(lowerName)
+    }
+    if (sectionId === 'soft_skills') {
+      return filteredSoftSkills.value.includes(lowerName)
+    }
+    return true
+  }
+
+  /**
+   * Get the count of visible bullets for a section when filtered.
+   * Returns an object: { visible: number, total: number }
+   * @param sectionId
+   */
+  function getFilteredBulletCount(sectionId: string): { visible: number; total: number } {
+    const section = sections.value.find((s) => s.sectionId === sectionId)
+    if (!section) return { visible: 0, total: 0 }
+
+    let total = 0
+    const topLevel = section.entries
+      .filter((e) => !e.parentId)
+      .sort((a, b) => a.order - b.order)
+
+    for (const entry of topLevel) {
+      const children = section.entries.filter((e) => e.parentId === entry.id)
+      total += children.length
+    }
+
+    if (!isFiltered.value) return { visible: total, total }
+
+    const entryIndices = filteredBulletIndices.value[sectionId]
+    if (!entryIndices) return { visible: total, total }
+
+    let visible = 0
+    for (const ei of entryIndices) {
+      visible += ei.bulletIndices.length
+    }
+    return { visible, total }
+  }
+
   return {
     id,
     layout,
@@ -187,6 +290,13 @@ export const useResumeStore = defineStore('resume', () => {
     enabledSections,
     leftColumnSections,
     rightColumnSections,
+    // Filter state
+    isFiltered,
+    jdText,
+    filteredBulletIndices,
+    filteredHardSkills,
+    filteredSoftSkills,
+    // Actions
     initializeDefaults,
     setLayout,
     toggleSection,
@@ -195,5 +305,11 @@ export const useResumeStore = defineStore('resume', () => {
     isSectionEnabled,
     loadFromPayload,
     toPayload,
+    // Filter actions
+    applyTailorFilter,
+    resetTailorFilter,
+    isBulletRelevant,
+    isSkillRelevant,
+    getFilteredBulletCount,
   }
 })

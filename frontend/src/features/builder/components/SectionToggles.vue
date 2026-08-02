@@ -7,7 +7,7 @@
         :key="section.type"
         class="section-toggles__item"
       >
-        <label class="section-toggles__toggle">
+        <label class="section-toggles__toggle" @click.stop="emit('select', section.type)">
           <input
             type="checkbox"
             :checked="section.enabled"
@@ -15,7 +15,10 @@
             class="section-toggles__checkbox"
           />
           <span class="section-toggles__slider"></span>
-          <span class="section-toggles__label-text">{{ section.label }}</span>
+          <span
+            class="section-toggles__label-text"
+            :class="{ 'section-toggles__label-text--selected': section.type === selectedSectionId }"
+          >{{ section.label }}</span>
         </label>
 
         <select
@@ -56,12 +59,14 @@ const props = defineProps<{
   layout: LayoutType
   enabledSections: SectionType[]
   columnAssignments: Record<SectionType, 'left' | 'right'>
+  selectedSectionId?: string | null
 }>()
 
 const emit = defineEmits<{
   toggle: [sectionType: SectionType]
   setColumn: [sectionType: SectionType, column: 'left' | 'right']
   reorder: [orderedTypes: SectionType[]]
+  select: [sectionType: SectionType]
 }>()
 
 const dragType = ref<SectionType | null>(null)
@@ -226,6 +231,12 @@ function onDragStart(event: MouseEvent, sectionType: SectionType) {
 .section-toggles__label-text {
   font-size: 0.8125rem;
   color: var(--color-text, #111827);
+  cursor: pointer;
+}
+
+.section-toggles__label-text--selected {
+  font-weight: 600;
+  color: var(--color-primary, #3b82f6);
 }
 
 .section-toggles__checkbox:not(:checked) ~ .section-toggles__label-text {
