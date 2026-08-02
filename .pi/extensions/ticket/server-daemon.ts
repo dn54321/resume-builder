@@ -500,6 +500,7 @@ async function handleCommand(from: string, text: string): Promise<void> {
           found.node.state.status = 'pending';
           found.node.state.error = `Stopped by boss for reassignment`;
         }
+        workers.delete(tid);
         workerAssignment.delete(name);
         break;
       }
