@@ -46,6 +46,7 @@ const isEmpty = computed(() => {
  */
 const nonEmptySections = computed(() => {
   return props.sections
+    .filter((s) => s.enabled !== false)
     .filter((s) => isSectionNonEmpty(s))
     .sort((a, b) => a.order - b.order)
 })

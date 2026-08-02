@@ -27,6 +27,7 @@ function createDefaultSection(sectionType: SectionType, order: number): ResumeSe
     sectionType,
     column: 'right',
     order,
+    enabled: true,
     entries: [],
   }
 }
@@ -46,7 +47,7 @@ export const useResumeStore = defineStore('resume', () => {
 
   // Derived: enabled section types (visible in the resume)
   const enabledSections = computed(() =>
-    sections.value.map((s) => s.sectionType),
+    sections.value.filter((s) => s.enabled).map((s) => s.sectionType),
   )
 
   // Derived: sections assigned to left column (only meaningful for 2:1 layout)
@@ -83,16 +84,14 @@ export const useResumeStore = defineStore('resume', () => {
   }
 
   /**
-   *
+   * Soft-toggle: flip the `enabled` flag without losing entries/fields.
+   * All 10 section types always stay in the array.
    * @param sectionType
    */
   function toggleSection(sectionType: SectionType) {
     const existing = sections.value.find((s) => s.sectionType === sectionType)
     if (existing) {
-      sections.value = sections.value.filter((s) => s.sectionType !== sectionType)
-    } else {
-      const order = sections.value.length
-      sections.value.push(createDefaultSection(sectionType, order))
+      existing.enabled = !existing.enabled
     }
   }
 
@@ -109,18 +108,40 @@ export const useResumeStore = defineStore('resume', () => {
   }
 
   /**
-   *
+   * Reorder only enabled sections; disabled sections stay at the end
+   * preserving their relative order.
    * @param orderedTypes
    */
   function reorderSections(orderedTypes: SectionType[]) {
+    const enabledSectionsList = sections.value.filter((s) => s.enabled)
+    const disabledSectionsList = sections.value.filter((s) => !s.enabled)
+
     const newSections: ResumeSectionState[] = []
+
+    // First, place enabled sections in the requested order
     for (let i = 0; i < orderedTypes.length; i++) {
-      const existing = sections.value.find((s) => s.sectionType === orderedTypes[i])
+      const existing = enabledSectionsList.find((s) => s.sectionType === orderedTypes[i])
       if (existing) {
         existing.order = i
         newSections.push(existing)
       }
     }
+
+    // Append any enabled sections not in orderedTypes (safety net)
+    for (const s of enabledSectionsList) {
+      if (!newSections.includes(s)) {
+        s.order = newSections.length
+        newSections.push(s)
+      }
+    }
+
+    // Append disabled sections at the end, preserving their relative order
+    const disabledBase = newSections.length
+    for (let i = 0; i < disabledSectionsList.length; i++) {
+      disabledSectionsList[i]!.order = disabledBase + i
+      newSections.push(disabledSectionsList[i]!)
+    }
+
     sections.value = newSections
   }
 
@@ -129,7 +150,8 @@ export const useResumeStore = defineStore('resume', () => {
    * @param sectionType
    */
   function isSectionEnabled(sectionType: SectionType): boolean {
-    return sections.value.some((s) => s.sectionType === sectionType)
+    const section = sections.value.find((s) => s.sectionType === sectionType)
+    return section?.enabled ?? false
   }
 
   /**
@@ -145,6 +167,7 @@ export const useResumeStore = defineStore('resume', () => {
         sectionType,
         column: s.column,
         order: s.order,
+        enabled: (s as { enabled?: boolean }).enabled ?? true,
         entries: s.entries.map((e) => ({
           id: generateId(),
           order: e.order,
@@ -169,6 +192,7 @@ export const useResumeStore = defineStore('resume', () => {
         sectionId: s.sectionId,
         column: s.column,
         order: s.order,
+        enabled: s.enabled,
         entries: s.entries.map((e) => ({
           order: e.order,
           parentId: e.parentId,

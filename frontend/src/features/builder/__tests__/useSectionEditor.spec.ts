@@ -166,10 +166,12 @@ describe('useSectionEditor', () => {
       expect(editor.getFieldValue('nonexistent', 'text')).toBe('')
     })
 
-    it('is no-op for missing section type (not enabled)', () => {
+    it('section still accessible when disabled (soft-toggle)', () => {
       store.toggleSection('summary')
       const editor = getEditor('summary')
-      expect(editor.section.value).toBeUndefined()
+      // Section is still in the array, just with enabled: false
+      expect(editor.section.value).toBeDefined()
+      expect(editor.section.value!.enabled).toBe(false)
       expect(editor.entries.value).toEqual([])
     })
   })

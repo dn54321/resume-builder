@@ -52,13 +52,14 @@ describe('useResumeData', () => {
       localStorage.setItem('resume_data', JSON.stringify(localPayload))
 
       const store = useResumeStore()
-      // Ensure store starts empty
+      // Ensure store has sections initialized (all disabled via toggle)
       store.initializeDefaults()
-      // Clear sections
+      // Soft-toggle: disable all sections (they all stay in the array)
       for (const t of SECTION_TYPES) {
         store.toggleSection(t)
       }
-      expect(store.sections).toHaveLength(0)
+      expect(store.sections).toHaveLength(10)
+      expect(store.sections.every((s) => !s.enabled)).toBe(true)
 
       const { loadResume } = useResumeData()
       await loadResume()
@@ -74,15 +75,16 @@ describe('useResumeData', () => {
       auth.logout()
 
       const store = useResumeStore()
-      // Clear all sections
+      // Soft-toggle: disable all sections
       store.initializeDefaults()
       SECTION_TYPES.forEach((t) => store.toggleSection(t))
-      expect(store.sections).toHaveLength(0)
+      expect(store.sections).toHaveLength(10)
+      expect(store.sections.every((s) => !s.enabled)).toBe(true)
 
       const { loadResume } = useResumeData()
       await loadResume()
 
-      // Defaults initialize all 10 sections
+      // Defaults initialize all 10 sections (enabled)
       expect(store.layout).toBe('standard')
       expect(store.sections).toHaveLength(10)
     })
@@ -120,8 +122,11 @@ describe('useResumeData', () => {
 
       const stored = JSON.parse(localStorage.getItem('resume_data')!)
       expect(stored.layout).toBe('column2-1')
-      expect(stored.sections).toHaveLength(9)
-      expect(stored.sections.map((s: { sectionId: string }) => s.sectionId)).not.toContain('hobbies')
+      // All 10 sections serialized; hobbies is disabled
+      expect(stored.sections).toHaveLength(10)
+      const hobbies = stored.sections.find((s: { sectionId: string }) => s.sectionId === 'hobbies')
+      expect(hobbies).toBeDefined()
+      expect(hobbies.enabled).toBe(false)
     })
   })
 

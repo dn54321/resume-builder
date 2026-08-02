@@ -32,6 +32,7 @@ export interface ResumeSectionState {
   sectionType: SectionType
   column: 'left' | 'right'
   order: number
+  enabled: boolean
   entries: SectionEntryState[]
 }
 
@@ -41,6 +42,7 @@ export interface ResumePayload {
     sectionId: string
     column: 'left' | 'right'
     order: number
+    enabled?: boolean
     entries: {
       order: number
       parentId: string | null
