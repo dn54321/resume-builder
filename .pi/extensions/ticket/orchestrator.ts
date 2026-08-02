@@ -924,14 +924,17 @@ function saveStateSnapshot(node: GraphNode): void {
 }
 
 /** Save full state from the graph. */
-export function saveFullState(nodes: Map<string, GraphNode>): void {
+export function saveFullState(nodes: Map<string, GraphNode>, merge?: boolean): void {
   const tickets: Record<string, TicketState> = {};
   for (const [, node] of nodes) {
     tickets[node.ticket.identifier] = { ...node.state };
   }
   const existing = loadState();
+  // Merge with existing tickets so state from previously-processed epics
+  // is preserved when epics are loaded sequentially (avoids wipe-and-respawn).
+  const mergedTickets = merge ? { ...existing?.tickets, ...tickets } : tickets;
   saveState({
-    tickets,
+    tickets: mergedTickets,
     startedAt: existing?.startedAt ?? new Date().toISOString(),
     teamId: existing?.teamId ?? '',
     teamKey: existing?.teamKey ?? '',

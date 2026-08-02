@@ -51,6 +51,7 @@ import {
 import { startWebhookServer, stopWebhookServer, startNgrokTunnel } from './server.js';
 import type { WebhookEvent } from './server.js';
 import { transitionTicket } from './linear.js';
+import { getPaneService, PaneService } from './pane-service.js';
 
 // ─── Intercom ────────────────────────────────────────────────────────
 
@@ -102,13 +103,62 @@ async function tellBoss(msg: string): Promise<void> {
   } catch { /* boss may have disconnected */ }
 }
 
-// ─── Tmux pane management ───────────────────────────────────────────
+// ─── Tmux pane management (delegated to PaneService) ──────────────
+
+let paneService: PaneService | null = null;
 
 /**
- * Read the saved pane ID for an agent from the panes directory.
- * These files are written by agent.sh when the layout is created.
+ * Get or initialize the PaneService.
+ * Returns null if we're not running in a tmux environment.
  */
+function getPaneSvc(): PaneService | null {
+  if (paneService) return paneService;
+  try {
+    // Only initialize if the tmux session exists
+    const sessionName = 'ticket-agents';
+    const hasSession = cp.execSync(
+      `tmux has-session -t "${sessionName}" 2>/dev/null && echo yes || echo no`,
+      { timeout: 3000, encoding: 'utf-8' }
+    ).trim();
+    if (hasSession === 'yes') {
+      const config = getAgentConfig();
+      paneService = getPaneService({
+        sessionName,
+        repoRoot: getRepoRoot(),
+        maxAgents: config.maxAgents,
+      });
+      return paneService;
+    }
+  } catch { /* tmux not available — run headless */ }
+  return null;
+}
+
+function attachToPane(agentName: string, logPath: string, ticketId: string): void {
+  const ps = getPaneSvc();
+  if (!ps) {
+    log(`No pane service — ${agentName} running headless`);
+    return;
+  }
+  ps.attachWorker(agentName, logPath, ticketId);
+}
+
+function resetPane(agentName: string): void {
+  const ps = getPaneSvc();
+  if (!ps) return;
+  ps.resetPane(agentName);
+}
+
+function resetAllPanes(): void {
+  const ps = getPaneSvc();
+  if (!ps) return;
+  ps.resetAllPanes();
+}
+
+/** Backward-compat wrapper for dashboard code that still uses pane file reads. */
 function getPaneIdForAgent(agentName: string): string | null {
+  const ps = getPaneSvc();
+  if (ps) return ps.getPaneId(agentName);
+  // Fallback to file read for headless mode
   const paneFile = path.join(getRepoRoot(), '.pi', 'tickets', 'panes', `${agentName}.pane`);
   try {
     if (fs.existsSync(paneFile)) {
@@ -116,68 +166,6 @@ function getPaneIdForAgent(agentName: string): string | null {
     }
   } catch { /* ignore */ }
   return null;
-}
-
-/**
- * Attach a headless worker's log output to its designated tmux pane.
- * Kills whatever is currently running in the pane and starts tailing the log.
- */
-function attachToPane(agentName: string, logPath: string, ticketId: string): void {
-  const paneId = getPaneIdForAgent(agentName);
-  if (!paneId) {
-    log(`No pane file for ${agentName} — running headless (no pane to attach)`);
-    return;
-  }
-
-  try {
-    // Kill the current process in the pane
-    cp.spawnSync('tmux', ['send-keys', '-t', paneId, 'C-c'], { timeout: 2000 });
-    // Brief pause for the process to die
-    cp.spawnSync('sleep', ['0.3'], { timeout: 1000 });
-    // Start tailing the worker's log — -n +0 shows entire file then follows
-    const cmd = `clear && printf '\\n  ${agentName}: Working on ${ticketId}...\\n\\n' && tail -n +0 -f "${logPath}"`;
-    cp.spawnSync('tmux', ['send-keys', '-t', paneId, cmd, 'Enter'], { timeout: 2000 });
-    log(`Attached ${agentName} to pane ${paneId} (${ticketId})`);
-  } catch (err: any) {
-    log(`Failed to attach ${agentName} to pane: ${err.message}`);
-  }
-}
-
-/**
- * Reset a tmux pane to show "Waiting for tasks" after a worker finishes.
- */
-function resetPane(agentName: string): void {
-  const paneId = getPaneIdForAgent(agentName);
-  if (!paneId) return;
-
-  try {
-    // Kill the tail process with Ctrl-C
-    cp.spawnSync('tmux', ['send-keys', '-t', paneId, 'C-c'], { timeout: 2000 });
-    cp.spawnSync('sleep', ['0.3'], { timeout: 1000 });
-    // Display the waiting message
-    const cmd = `clear && printf '\\n  Waiting for tasks... (${agentName})\\n\\n'`;
-    cp.spawnSync('tmux', ['send-keys', '-t', paneId, cmd, 'Enter'], { timeout: 2000 });
-    log(`Reset pane for ${agentName}`);
-  } catch (err: any) {
-    log(`Failed to reset pane for ${agentName}: ${err.message}`);
-  }
-}
-
-/** Reset all known agent panes to "Waiting for tasks" on server startup. */
-function resetAllPanes(): void {
-  const config = getAgentConfig();
-  for (let i = 1; i <= config.maxAgents; i++) {
-    const agentName = `agent-${i}`;
-    const paneId = getPaneIdForAgent(agentName);
-    if (paneId) {
-      try {
-        cp.spawnSync('tmux', ['send-keys', '-t', paneId, 'C-c'], { timeout: 2000 });
-        cp.spawnSync('sleep', ['0.2'], { timeout: 1000 });
-        const cmd = `clear && printf '\\n  Waiting for tasks... (${agentName})\\n\\n'`;
-        cp.spawnSync('tmux', ['send-keys', '-t', paneId, cmd, 'Enter'], { timeout: 2000 });
-      } catch { /* ignore */ }
-    }
-  }
 }
 
 // ─── Dashboard output ────────────────────────────────────────────────
@@ -370,7 +358,9 @@ function saveAllState(): void {
       allNodes.set(id, node);
     }
   }
-  saveFullState(allNodes);
+  // Merge with existing state so tickets from previously-loaded epics
+  // are preserved when epics are loaded sequentially.
+  saveFullState(allNodes, true);
   // Also persist the list of managed epic roots
   try {
     const existing = loadState();
@@ -891,15 +881,17 @@ async function main(): Promise<void> {
   }, 10_000);
 
   // Cleanup
-  process.on('SIGINT', async () => {
-    log('Shutting down...');
+  const cleanup = async () => {
+    if (paneService) { paneService.shutdown(); }
     for (const [, epic] of epicGraphs) { killAllWorkers(epic.nodes); }
     saveAllState();
     stopWebhookServer();
     try { await unregisterWebhooks(); } catch { /* ignore */ }
     try { await intercom.disconnect(); } catch { /* ignore */ }
     process.exit(0);
-  });
+  };
+  process.on('SIGINT', () => { cleanup(); });
+  process.on('SIGTERM', () => { cleanup(); });
 
   // Auto-start: pick up saved state or wait for boss
   await autoStart();
