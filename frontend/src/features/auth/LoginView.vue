@@ -85,7 +85,9 @@ async function handleSubmit() {
                 type="email"
                 autocomplete="email"
                 :disabled="submitting"
+                @blur="onEmailBlur"
               />
+              <p v-if="emailError" class="text-sm text-destructive">{{ emailError }}</p>
             </div>
 
             <div class="grid gap-2">

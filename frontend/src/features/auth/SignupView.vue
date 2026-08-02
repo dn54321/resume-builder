@@ -16,9 +16,20 @@ const email = ref('')
 const password = ref('')
 const confirmPassword = ref('')
 const errors = ref<string[]>([])
+const emailError = ref('')
 const submitting = ref(false)
 
 const hasErrors = computed(() => errors.value.length > 0)
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function onEmailBlur() {
+  if (email.value.trim() && !EMAIL_RE.test(email.value)) {
+    emailError.value = 'Please enter a valid email address'
+  } else {
+    emailError.value = ''
+  }
+}
 
 onMounted(() => {
   if (isAuthenticated) {
@@ -61,7 +72,7 @@ async function handleSubmit() {
         errors.value.push(err.message)
       }
     } else {
-      errors.value.push('Something went wrong. Please try again.')
+      errors.value.push('An unexpected error occurred. Please try again.')
     }
   } finally {
     submitting.value = false
@@ -87,7 +98,9 @@ async function handleSubmit() {
                 autocomplete="email"
                 placeholder="you@example.com"
                 :disabled="submitting"
+                @blur="onEmailBlur"
               />
+              <p v-if="emailError" class="text-sm text-destructive">{{ emailError }}</p>
             </div>
             <div class="grid gap-2">
               <Label for="signup-password">Password</Label>
