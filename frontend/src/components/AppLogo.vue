@@ -1,39 +1,85 @@
 <script setup lang="ts">
 /**
- * AppLogo — inline SVG icon (document with checkmark) for the app brand.
- * 24×24, uses currentColor for theme-aware rendering.
+ * AppLogo — stacked document pages icon for the app brand.
+ * 32×32 viewBox, uses currentColor for theme-aware rendering.
+ *
+ * The mark consists of two offset rounded-rect pages with content
+ * lines on the front page — a clear resume/document metaphor that
+ * reads well at favicon sizes.
+ *
+ * Color strategy:
+ *   - Page bodies: `currentColor` (inherits foreground, adapts to light/dark)
+ *   - Content lines: `var(--color-background)` (inverts against the page)
+ *   - Accent bar: `var(--color-primary)` (always amber/gold #f59e0b)
  */
 </script>
 
 <template>
   <svg
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
+    width="32"
+    height="32"
+    viewBox="0 0 32 32"
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
     aria-hidden="true"
+    role="img"
   >
-    <path
-      d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
+    <!-- Back page (offset behind front) -->
+    <rect
+      x="2"
+      y="1"
+      width="26"
+      height="28"
+      rx="3"
+      fill="currentColor"
+      opacity="0.25"
     />
-    <path
-      d="M14 2V8H20"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
+    <!-- Front page -->
+    <rect
+      x="4"
+      y="3"
+      width="26"
+      height="28"
+      rx="3"
+      fill="currentColor"
+      opacity="0.9"
     />
-    <path
-      d="M9 15L11 17L16 12"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
+    <!-- Content lines (background color — inverts against the page) -->
+    <rect
+      x="9"
+      y="9"
+      width="12"
+      height="2"
+      rx="1"
+      fill="var(--color-background, #fafaf9)"
+      opacity="0.9"
+    />
+    <rect
+      x="9"
+      y="14"
+      width="16"
+      height="2"
+      rx="1"
+      fill="var(--color-background, #fafaf9)"
+      opacity="0.6"
+    />
+    <rect
+      x="9"
+      y="19"
+      width="10"
+      height="2"
+      rx="1"
+      fill="var(--color-background, #fafaf9)"
+      opacity="0.6"
+    />
+    <!-- Accent bar (brand primary — always warm) -->
+    <rect
+      x="9"
+      y="3"
+      width="4"
+      height="3"
+      rx="1"
+      fill="var(--color-primary, #f59e0b)"
     />
   </svg>
 </template>
