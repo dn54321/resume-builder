@@ -41,6 +41,7 @@ Assign a 2-4 letter uppercase tag to each distinct feature area. Tags appear in 
 - Infrastructure / setup / config → `[INFRA]`
 - Database / schema → `[DB]`
 - Encryption / security → `[CRYPTO]`
+- End-to-end / integration tests → `[E2E]`
 
 Derive new tags as needed from the feature area. Keep tags short (2-6 chars), uppercase, and consistent across all tickets in the milestone.
 
@@ -57,8 +58,64 @@ Each **user story** from the spec becomes an **Epic** in Linear. An epic represe
 Tickets implement either:
 - **A backend feature** (a module, an endpoint group, a service, or a schema migration)
 - **A frontend page or feature** (a route/view, a major component, or a composable group)
+- **An e2e test** (a Playwright or supertest-based test covering a complete user flow end-to-end with real database and browser)
 
 Every ticket **must** be self-contained — all information needed to implement it is in the ticket description. A developer should not need to cross-reference the spec.
+
+### Core Flow E2E Tickets (REQUIRED)
+
+Every milestone that introduces or modifies a **user-facing flow** MUST include e2e test tickets. Core flows are paths through the application that a user takes to accomplish a goal:
+
+| Core Flow | Requires E2E Test |
+|-----------|-------------------|
+| Sign up / Register | ✅ Always |
+| Log in / Log out | ✅ Always |
+| Session persistence (me, token refresh) | ✅ Always |
+| Create resource (resume, document, etc.) | ✅ If new resource type |
+| Edit / Update resource | ✅ If new editor |
+| Delete resource | ✅ If new deletion flow |
+| Export / Download | ✅ If new export format |
+| Navigation (routing, protected routes) | ✅ If new routes |
+| Error states (404, 500, validation) | ✅ If new error handling |
+
+E2e tickets follow this naming convention: `[E2E] <flow description>`
+
+Example e2e tickets:
+- `[E2E] Signup and login flow with real database`
+- `[E2E] Session persistence and logout across page reloads`
+- `[E2E] Resume CRUD lifecycle (create → edit → export → delete)`
+
+**E2e ticket description format:**
+
+```markdown
+ref: <all tickets that implement the flow being tested>
+
+## Summary
+End-to-end test covering the complete <flow-name> flow using <supertest|Playwright> with a real database.
+
+## What to Build
+- Test file: `<path/to/test.e2e.spec.ts>` or `<path/to/test.spec.ts>`
+- Uses real database (SQLite in-memory or test file)
+- Covers all states: success, validation errors, auth errors, edge cases
+
+### Flow Steps
+1. <step 1>
+2. <step 2>
+...
+
+## Acceptance Criteria
+- [ ] All flow steps pass with real database
+- [ ] Covers happy path (201/200)
+- [ ] Covers error states (400, 401, 409)
+- [ ] Covers edge cases (duplicate, invalid token, expired session)
+- [ ] Database state verified after each mutation
+- [ ] ≥90% coverage on tested endpoints
+
+## Technical Notes
+- Use supertest for backend flows, Playwright for browser flows
+- Clean up test data in afterAll/afterEach
+- Use unique emails/timestamps to avoid collisions
+```
 
 **Ticket naming:** `[TAG] Verb-first action-oriented title`
 
@@ -110,6 +167,8 @@ Tickets are ordered so that foundational work comes first:
 5. Integration / polish
 
 Within each epic, tickets follow the same foundational-first ordering.
+E2e test tickets always come LAST in their epic — they depend on
+all implementation tickets being complete.
 
 ### Plan File Format
 

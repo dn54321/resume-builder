@@ -60,7 +60,10 @@ describe('Auth Flow (integration)', () => {
 
     it('signup → verify → login → verify → logout → verify dead', async () => {
       // 1. Signup
-      svc.signup.mockResolvedValueOnce({ user: makeUser(uid, email), sessionToken: t1 });
+      svc.signup.mockResolvedValueOnce({
+        user: makeUser(uid, email),
+        sessionToken: t1,
+      });
       const r1 = await request(app.getHttpServer())
         .post('/api/v1/auth/signup')
         .send({ email, password: pw })
@@ -69,7 +72,10 @@ describe('Auth Flow (integration)', () => {
       expect(body(r1).sessionToken).toBe(t1);
 
       // 2. Me with signup token
-      svc.validateSession.mockResolvedValueOnce({ user: makeUser(uid, email), sessionToken: t1 });
+      svc.validateSession.mockResolvedValueOnce({
+        user: makeUser(uid, email),
+        sessionToken: t1,
+      });
       const r2 = await request(app.getHttpServer())
         .get('/api/v1/auth/me')
         .set('Authorization', `Bearer ${t1}`)
@@ -77,7 +83,10 @@ describe('Auth Flow (integration)', () => {
       expect(body(r2).user?.email).toBe(email);
 
       // 3. Login (new session)
-      svc.login.mockResolvedValueOnce({ user: makeUser(uid, email), sessionToken: t2 });
+      svc.login.mockResolvedValueOnce({
+        user: makeUser(uid, email),
+        sessionToken: t2,
+      });
       const r3 = await request(app.getHttpServer())
         .post('/api/v1/auth/login')
         .send({ email, password: pw })
@@ -85,7 +94,10 @@ describe('Auth Flow (integration)', () => {
       expect(body(r3).sessionToken).toBe(t2);
 
       // 4. Login token works
-      svc.validateSession.mockResolvedValueOnce({ user: makeUser(uid, email), sessionToken: t2 });
+      svc.validateSession.mockResolvedValueOnce({
+        user: makeUser(uid, email),
+        sessionToken: t2,
+      });
       const r4 = await request(app.getHttpServer())
         .get('/api/v1/auth/me')
         .set('Authorization', `Bearer ${t2}`)
@@ -108,7 +120,10 @@ describe('Auth Flow (integration)', () => {
       expect(body(r6).user).toBeNull();
 
       // 7. Login session still alive
-      svc.validateSession.mockResolvedValueOnce({ user: makeUser(uid, email), sessionToken: t2 });
+      svc.validateSession.mockResolvedValueOnce({
+        user: makeUser(uid, email),
+        sessionToken: t2,
+      });
       const r7 = await request(app.getHttpServer())
         .get('/api/v1/auth/me')
         .set('Authorization', `Bearer ${t2}`)
@@ -119,7 +134,9 @@ describe('Auth Flow (integration)', () => {
 
   describe('errors', () => {
     it('409 on duplicate signup', async () => {
-      svc.signup.mockRejectedValueOnce(new ConflictException('Email already exists'));
+      svc.signup.mockRejectedValueOnce(
+        new ConflictException('Email already exists'),
+      );
       const r = await request(app.getHttpServer())
         .post('/api/v1/auth/signup')
         .send({ email: 'x@x.com', password: 'Password1!' })
@@ -128,7 +145,9 @@ describe('Auth Flow (integration)', () => {
     });
 
     it('401 on bad login', async () => {
-      svc.login.mockRejectedValueOnce(new UnauthorizedException('Invalid credentials'));
+      svc.login.mockRejectedValueOnce(
+        new UnauthorizedException('Invalid credentials'),
+      );
       const r = await request(app.getHttpServer())
         .post('/api/v1/auth/login')
         .send({ email: 'x@x.com', password: 'WrongPass1!' })
