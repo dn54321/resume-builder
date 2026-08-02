@@ -52,7 +52,7 @@ describe('EntryList', () => {
 
     // The add button is the last button in the component
     const buttons = wrapper.findAll('button')
-    const addBtn = buttons[buttons.length - 1]
+    const addBtn = buttons[buttons.length - 1]!
     expect(addBtn.exists()).toBe(true)
     expect(addBtn.text()).toBe('+ Add Job')
   })
@@ -171,7 +171,7 @@ describe('EntryList', () => {
 
     // The add button is the last button element
     const buttons = wrapper.findAll('button')
-    const addBtn = buttons[buttons.length - 1]
+    const addBtn = buttons[buttons.length - 1]!
     expect(addBtn.exists()).toBe(true)
     // Verify it's the add button by checking text starts with '+'
     expect(addBtn.text()).toContain('+')
