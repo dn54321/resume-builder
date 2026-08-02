@@ -35,7 +35,7 @@ describe('AppLogo', () => {
     const wrapper = mount(AppLogo)
     const rects = wrapper.findAll('rect')
     // Front page is the second rect (index 1), opacity 0.9
-    const frontPage = rects[1]
+    const frontPage = rects[1]!
     expect(frontPage.attributes('fill')).toBe('currentColor')
     expect(frontPage.attributes('opacity')).toBe('0.9')
   })
@@ -44,7 +44,7 @@ describe('AppLogo', () => {
     const wrapper = mount(AppLogo)
     const rects = wrapper.findAll('rect')
     // Back page is the first rect (index 0), opacity 0.25
-    const backPage = rects[0]
+    const backPage = rects[0]!
     expect(backPage.attributes('fill')).toBe('currentColor')
     expect(backPage.attributes('opacity')).toBe('0.25')
   })
@@ -53,7 +53,7 @@ describe('AppLogo', () => {
     const wrapper = mount(AppLogo)
     const rects = wrapper.findAll('rect')
     // Accent bar is the last rect (index 5)
-    const accentBar = rects[5]
+    const accentBar = rects[5]!
     expect(accentBar.attributes('fill')).toBe('var(--color-primary, #f59e0b)')
   })
 
@@ -62,7 +62,7 @@ describe('AppLogo', () => {
     const rects = wrapper.findAll('rect')
     // Content lines are indices 2, 3, 4
     for (let i = 2; i <= 4; i++) {
-      expect(rects[i].attributes('fill')).toBe(
+      expect(rects[i]!.attributes('fill')).toBe(
         'var(--color-background, #fafaf9)'
       )
     }

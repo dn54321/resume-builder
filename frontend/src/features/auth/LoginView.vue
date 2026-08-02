@@ -16,9 +16,20 @@ const { isAuthenticated, login } = useAuth()
 const email = ref('')
 const password = ref('')
 const errors = ref<string[]>([])
+const emailError = ref('')
 const submitting = ref(false)
 
 const hasErrors = computed(() => errors.value.length > 0)
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function onEmailBlur() {
+  if (email.value.trim() && !EMAIL_RE.test(email.value)) {
+    emailError.value = 'Please enter a valid email address'
+  } else {
+    emailError.value = ''
+  }
+}
 
 onMounted(() => {
   if (isAuthenticated) {

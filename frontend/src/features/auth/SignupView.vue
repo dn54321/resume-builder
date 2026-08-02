@@ -23,6 +23,9 @@ const hasErrors = computed(() => errors.value.length > 0)
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
+/**
+ *
+ */
 function onEmailBlur() {
   if (email.value.trim() && !EMAIL_RE.test(email.value)) {
     emailError.value = 'Please enter a valid email address'
@@ -37,6 +40,9 @@ onMounted(() => {
   }
 })
 
+/**
+ *
+ */
 function validate(): boolean {
   errors.value = []
 
@@ -55,6 +61,9 @@ function validate(): boolean {
   return errors.value.length === 0
 }
 
+/**
+ *
+ */
 async function handleSubmit() {
   if (!validate()) return
 
