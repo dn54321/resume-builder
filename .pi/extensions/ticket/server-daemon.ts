@@ -288,9 +288,28 @@ function writeDashboard(): void {
   } catch { /* best effort */ }
 }
 
+// ─── Check if all epics are complete ────────────────────────────────
+
+function areAllEpicsDone(): boolean {
+  if (epicGraphs.size === 0) return true; // no epics = nothing to do
+  for (const [, epic] of epicGraphs) {
+    for (const [, node] of epic.nodes) {
+      if (node.state.status !== 'done' && node.state.status !== 'merged' && node.state.status !== 'failed') {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 // ─── Launch ready workers ───────────────────────────────────────────
 
 function launchReady(): void {
+  // Don't ping agents if there's nothing to work on
+  if (areAllEpicsDone()) {
+    log('launchReady: all epics done — skipping');
+    return;
+  }
   const allReady: { node: GraphNode; epicId: string }[] = [];
   for (const [epicId, epic] of epicGraphs) {
     for (const node of readyTickets(epic.nodes)) {
@@ -701,14 +720,14 @@ async function closeLinearTicket(identifier: string): Promise<void> {
   if (!issueId || !teamId) throw new Error('Issue not found');
 
   // Find a canceled or done state
-  const q2 = `{ team(id: "${teamId}") { states { id name type } } }`;
+  const q2 = `{ workflowStates(filter: { team: { id: { eq: "${teamId}" } } }) { nodes { id name type } } }`;
   const r2 = await fetch('https://api.linear.app/graphql', {
     method: 'POST',
     headers: { 'Authorization': apiKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({ query: q2 }),
   });
   const j2 = await r2.json() as any;
-  const states: any[] = j2?.data?.team?.states ?? [];
+  const states: any[] = j2?.data?.workflowStates?.nodes ?? [];
   const target = states.find((s: any) => s.type === 'canceled') || states.find((s: any) => s.type === 'completed');
   if (!target) throw new Error('No canceled/done state found');
 
@@ -897,13 +916,30 @@ async function main(): Promise<void> {
     } catch { /* optional */ }
   }
 
+  // Track previous "all done" state to avoid repeated boss notifications
+  let wasAllDone = false;
+
   // Periodic: Linear sync + status display + PR scan
   setInterval(async () => {
     await checkBossAlive();
     await syncLinearStatus();
     logStatus();
+
+    const allDone = areAllEpicsDone();
+
+    if (allDone) {
+      if (!wasAllDone) {
+        wasAllDone = true;
+        log('All epics complete — agents idle, no work to assign.');
+        await tellBoss('All epics complete. No more work to assign. Agents staying idle.');
+      }
+    } else {
+      wasAllDone = false;
+    }
+
     if (epicGraphs.size === 0) return;
     try {
+      // Still scan PRs even when all done — review comments can re-open tickets
       const comments = await scanAllPRComments();
       for (const [tid] of comments) {
         const found = findNode(tid);
@@ -936,7 +972,11 @@ async function main(): Promise<void> {
       }
       saveAllState();
       writeDashboard();
-      launchReady();
+
+      // Only ping agents if there's actual work to do
+      if (!allDone) {
+        launchReady();
+      }
     } catch { /* best effort */ }
   }, 10_000);
 
