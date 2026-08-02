@@ -257,17 +257,30 @@ export async function buildGraph(
         try {
           process.kill(node.state.pid, 0); // signal 0 = check existence
         } catch {
-          // Process not running
-          node.state.status = 'failed';
-          node.state.pid = null;
-          node.state.error = 'Worker process died unexpectedly';
+          // Process not running — check if work was already done
+          if (node.state.worktreePath && hasExistingWork(node.state.worktreePath, getDefaultBranch())) {
+            // Worktree has commits — the worker finished but the server
+            // died before marking it 'done'. Treat as done.
+            node.state.status = 'done';
+            node.state.pid = null;
+            node.state.error = 'Worker process died but work exists — marking done';
+          } else {
+            node.state.status = 'failed';
+            node.state.pid = null;
+            node.state.error = 'Worker process died unexpectedly';
+          }
         }
       } else {
-        // No pid recorded — orphaned assignment, reset to pending
-        node.state.status = 'pending';
-        node.state.pid = null;
-        node.state.workerName = null;
-        node.state.startedAt = null;
+        // No pid recorded — check if work was already committed
+        if (node.state.worktreePath && hasExistingWork(node.state.worktreePath, getDefaultBranch())) {
+          node.state.status = 'done';
+          node.state.error = 'Orphaned assignment but work exists — marking done';
+        } else {
+          node.state.status = 'pending';
+          node.state.pid = null;
+          node.state.workerName = null;
+          node.state.startedAt = null;
+        }
       }
     }
     if (node.state.status === 'failed' && node.state.retryCount <= config.maxRetries) {
@@ -781,7 +794,22 @@ async function onWorkerComplete(
     node.state.error = `Worker killed (signal ${exitCode - 128}) — will resume`;
   } else {
     const config = getAgentConfig();
-    if (node.state.retryCount <= config.maxRetries) {
+    // If the worktree already has commits on this branch, the worker
+    // likely completed its work but hit a non-fatal issue (e.g., PR
+    // already exists). Don't retry — mark as done.
+    if (hasExistingWork(worktreePath, getDefaultBranch())) {
+      node.state.status = 'done';
+      node.state.finishedAt = new Date().toISOString();
+      node.state.pid = null;
+      node.state.error = `Worker exited with code ${exitCode} but work exists — marking done`;
+      if (node.state.assignedPort !== null) {
+        const st = loadState();
+        if (st) {
+          releasePort(st, node.state.assignedPort);
+          saveState(st);
+        }
+      }
+    } else if (node.state.retryCount <= config.maxRetries) {
       node.state.status = 'pending';
       node.state.pid = null;
       node.state.finishedAt = null;
@@ -836,6 +864,22 @@ function isCleanCheck(worktreePath: string): boolean {
     return result.stdout?.trim() === '';
   } catch {
     return true;
+  }
+}
+
+/** Check if the worktree branch has commits not on the base branch.
+ *  Returns true if meaningful work has been committed. */
+function hasExistingWork(worktreePath: string, baseBranch: string): boolean {
+  try {
+    const result = cp.spawnSync(
+      'git',
+      ['rev-list', '--count', `${baseBranch}..HEAD`],
+      { cwd: worktreePath, encoding: 'utf-8', timeout: 5000 },
+    );
+    const count = parseInt(result.stdout?.trim() ?? '0', 10);
+    return !isNaN(count) && count > 0;
+  } catch {
+    return false;
   }
 }
 
