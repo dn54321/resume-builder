@@ -8,7 +8,7 @@
         class="flex items-center gap-2 p-2 rounded-md bg-gray-50 cursor-default transition-opacity"
         :class="{ 'opacity-55': !section.enabled }"
       >
-        <label class="flex items-center gap-2 flex-1 cursor-pointer" @click.stop="emit('select', section.type)">
+        <label class="flex items-center gap-2 flex-1 cursor-pointer" @click.stop="onLabelClick(section)">
           <input
             type="checkbox"
             :checked="section.enabled"
@@ -71,6 +71,18 @@ const emit = defineEmits<{
 }>()
 
 const dragType = ref<SectionType | null>(null)
+
+/**
+ * Handle label click: for disabled sections, toggle first then select.
+ * For enabled sections, just select (scroll to).
+ * @param section
+ */
+function onLabelClick(section: OrderedSection): void {
+  if (!section.enabled) {
+    emit('toggle', section.type)
+  }
+  emit('select', section.type)
+}
 
 interface OrderedSection {
   type: SectionType

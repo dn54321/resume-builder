@@ -192,6 +192,82 @@ describe('SectionToggles', () => {
     expect(labelTexts).toHaveLength(10)
   })
 
+  it('emits select when clicking an enabled section label', async () => {
+    const wrapper = mount(SectionToggles, {
+      props: {
+        layout: 'standard',
+        enabledSections: allEnabled,
+        columnAssignments: noAssignments,
+      },
+    })
+
+    const items = wrapper.findAll('li')
+    const contactItem = items.find((item) =>
+      item.text().includes('Contact'),
+    )
+    const label = contactItem!.find('label')
+    await label.trigger('click')
+
+    expect(wrapper.emitted('select')).toBeTruthy()
+    expect(wrapper.emitted('select')![0]).toEqual(['name_contact' as SectionType])
+  })
+
+  it('emits toggle then select when clicking a disabled section label', async () => {
+    const enabled: SectionType[] = ['name_contact']
+    const wrapper = mount(SectionToggles, {
+      props: {
+        layout: 'standard',
+        enabledSections: enabled,
+        columnAssignments: noAssignments,
+      },
+    })
+
+    // 'summary' is disabled — find its label and click it
+    const items = wrapper.findAll('li')
+    const summaryItem = items.find((item) =>
+      item.text().includes('Summary'),
+    )
+    const label = summaryItem!.find('label')
+    await label.trigger('click')
+
+    // Should emit both toggle and select for summary
+    expect(wrapper.emitted('toggle')).toBeTruthy()
+    expect(wrapper.emitted('toggle')![0]).toEqual(['summary' as SectionType])
+    expect(wrapper.emitted('select')).toBeTruthy()
+    expect(wrapper.emitted('select')![0]).toEqual(['summary' as SectionType])
+  })
+
+  it('does not emit toggle when clicking an enabled section label', async () => {
+    const wrapper = mount(SectionToggles, {
+      props: {
+        layout: 'standard',
+        enabledSections: allEnabled,
+        columnAssignments: noAssignments,
+      },
+    })
+
+    // Clear any existing events by remounting is handled by the factory above.
+    // Record current toggle call count
+    const items = wrapper.findAll('li')
+    const contactItem = items.find((item) =>
+      item.text().includes('Contact'),
+    )
+    const label = contactItem!.find('label')
+
+    // Capture toggle events before clicking
+    const toggleBefore = (wrapper.emitted('toggle') || []).length
+
+    await label.trigger('click')
+
+    // Should emit select
+    expect(wrapper.emitted('select')).toBeTruthy()
+    expect(wrapper.emitted('select')![0]).toEqual(['name_contact' as SectionType])
+
+    // Should NOT emit additional toggle events (only from label click)
+    const toggleAfter = (wrapper.emitted('toggle') || []).length
+    expect(toggleAfter).toBe(toggleBefore)
+  })
+
   it('applies opacity-55 to items that are not enabled', () => {
     const enabled: SectionType[] = ['name_contact']
     const wrapper = mount(SectionToggles, {
