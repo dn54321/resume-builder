@@ -28,15 +28,19 @@ export default mergeConfig(
           'src/main.ts',
           'src/router/index.ts',
 
-          // Vue boilerplate — deleted in RES-29 (UI overhaul milestone)
+          // App shell — teleported DropdownMenu content not measurable in jsdom;
+          // behavior is covered by App.spec.ts, visual state by e2e tests.
           'src/App.vue',
-          'src/components/HelloWorld.vue',
-          'src/components/TheWelcome.vue',
-          'src/components/WelcomeItem.vue',
-          'src/components/icons/**',
-          'src/views/AboutView.vue',
-          'src/views/HomeView.vue',
+
+          // shadcn-vue generated UI components — third-party code
+          'src/components/ui/**',
+
+          // Vue boilerplate — deleted in RES-29 (UI overhaul milestone)
           'src/stores/counter.ts',
+
+          // Views — placeholder or restyled in follow-up tickets
+          'src/views/HomeView.vue',
+          'src/views/DashboardView.vue',
 
           // Builder feature — restyled in RES-37; component tests will be added/updated then.
           // Load-bearing composables (useResumeData, useSectionEditor, usePdfExport, useTailor)
