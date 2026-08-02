@@ -1,9 +1,67 @@
 <template>
   <div class="flex flex-col h-screen max-h-screen overflow-hidden p-4 box-border">
     <AnonymousBanner v-if="!isAuthenticated" />
-    <header class="flex items-center justify-end pb-3 shrink-0">
-      <PdfExportButton />
+
+    <!-- Header with toolbar row -->
+    <header class="flex flex-col gap-2 pb-3 shrink-0">
+      <!-- Top row: PDF export -->
+      <div class="flex items-center justify-end">
+        <PdfExportButton />
+      </div>
+
+      <!-- Toolbar row -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <button
+          class="px-3 py-1.5 rounded-md text-[0.8125rem] font-[inherit] font-medium cursor-pointer transition-colors border border-gray-300 bg-white text-gray-900 hover:bg-gray-100"
+          @click="jdModalOpen = true"
+          data-testid="jd-toolbar-btn"
+        >
+          Job Description
+        </button>
+
+        <div class="relative inline-flex">
+          <button
+            class="px-3 py-1.5 rounded-md text-[0.8125rem] font-[inherit] font-medium cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-blue-500 bg-blue-500 text-white hover:not-disabled:bg-blue-600"
+            :disabled="isTailoring || !store.jdText.trim()"
+            :title="!store.jdText.trim() ? 'Save a job description first' : ''"
+            @click="onTailor"
+            data-testid="toolbar-tailor-btn"
+          >
+            <span
+              v-if="isTailoring"
+              class="inline-block w-[14px] h-[14px] border-2 border-white/30 border-t-white rounded-full animate-spin"
+              aria-label="Loading"
+            ></span>
+            <span v-else>Tailor Resume</span>
+          </button>
+        </div>
+
+        <button
+          v-if="store.isFiltered"
+          class="px-3 py-1.5 rounded-md text-[0.8125rem] font-[inherit] font-medium cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-gray-300 bg-white text-gray-900 hover:not-disabled:bg-gray-100"
+          :disabled="isTailoring"
+          @click="resetFilter"
+          data-testid="toolbar-reset-btn"
+        >
+          Reset Filter
+        </button>
+
+        <!-- Filter status indicator -->
+        <template v-if="store.isFiltered && !tailorError">
+          <span class="text-[0.6875rem] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-100 text-blue-500" data-testid="filtered-badge">
+            Filtered
+          </span>
+          <span class="text-xs text-gray-500">
+            Showing relevant bullets (max {{ bulletCap }} per entry)
+          </span>
+        </template>
+
+        <div v-if="tailorError" class="px-3 py-1.5 rounded-sm bg-red-50 text-red-600 text-[0.8125rem] leading-relaxed" data-testid="toolbar-error">
+          {{ tailorError }}
+        </div>
+      </div>
     </header>
+
     <div class="grid grid-cols-[260px_1fr_300px] gap-4 flex-1 min-h-0 max-[1024px]:grid-cols-1 max-[1024px]:grid-rows-[auto_1fr_1fr]">
       <!-- Left sidebar: LayoutPicker + SectionToggles -->
       <aside class="overflow-y-auto p-4 border border-gray-300 rounded-lg bg-white">
@@ -31,10 +89,8 @@
       </aside>
     </div>
 
-    <!-- Bottom: JD input area -->
-    <footer class="p-0 mt-4 border border-gray-300 rounded-lg bg-white shrink-0 max-h-[35vh] overflow-y-auto">
-      <JdInput />
-    </footer>
+    <!-- JD Modal -->
+    <JdModal v-model="jdModalOpen" />
   </div>
 </template>
 
@@ -46,17 +102,20 @@ import { useAuth } from '@/features/auth/composables/useAuth'
 import LayoutPicker from '@/features/builder/components/LayoutPicker.vue'
 import SectionToggles from '@/features/builder/components/SectionToggles.vue'
 import SectionEditor from '@/features/builder/components/SectionEditor.vue'
-import JdInput from '@/features/builder/components/JdInput.vue'
+import JdModal from '@/features/builder/components/JdModal.vue'
 import AnonymousBanner from '@/features/builder/components/AnonymousBanner.vue'
 import LivePreview from '@/features/builder/components/LivePreview.vue'
 import PdfExportButton from '@/features/builder/components/PdfExportButton.vue'
+import { useTailor } from '@/features/builder/composables/useTailor'
 import type { SectionType } from '@/features/builder/types/resume'
 
 const store = useResumeStore()
 const { isAuthenticated } = useAuth()
 const { loadResume, setupAutoSave, teardownAutoSave } = useResumeData()
+const { isTailoring, tailorError, bulletCap, tailorResume, resetFilter } = useTailor()
 
 const selectedSectionId = ref<string | null>(null)
+const jdModalOpen = ref(false)
 
 const columnAssignments = computed(() => {
   const assignments: Record<SectionType, 'left' | 'right'> = {} as Record<SectionType, 'left' | 'right'>
@@ -74,6 +133,13 @@ onMounted(async () => {
     selectedSectionId.value = store.sections[0]!.sectionType
   }
 })
+
+/**
+ * Trigger tailoring with the current JD text from the store.
+ */
+async function onTailor() {
+  await tailorResume(store.jdText)
+}
 
 onUnmounted(() => {
   teardownAutoSave()
