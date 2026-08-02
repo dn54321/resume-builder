@@ -214,6 +214,18 @@ Current: **SQLite** via `@prisma/adapter-libsql`. Planned migration to PostgreSQ
 - Never expose stack traces in production responses.
 - Store secrets in environment variables (`.env`), never committed.
 
+## Git
+
+### Never use --no-verify
+
+**Never** push with `--no-verify` or `--no-gpg-sign`. If pre-push hooks fail,
+fix the underlying issues rather than bypassing the checks. The hooks enforce:
+- Lint (ESLint) — code must be clean
+- Type checking (tsc / vue-tsc) — no type errors
+- Tests + coverage (Jest / Vitest) — all tests pass, >=90% coverage
+
+Bypassing these checks allows broken code onto the branch. Fix the problem, not the guardrail.
+
 ## Git Workflow
 
 - Feature branches from `main`.

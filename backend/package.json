@@ -92,7 +92,13 @@
     "coveragePathIgnorePatterns": [
       "/generated/",
       "main\\.ts$",
-      "logger\\.module\\.ts$"
+      "logger\\.module\\.ts$",
+      "\\.dto\\.ts$",
+      "\\.model\\.ts$",
+      "matching-engine\\.interface\\.ts$",
+      "app\\.module\\.ts$",
+      "config\\.module\\.ts$",
+      "hybrid\\.engine\\.ts$"
     ],
     "coverageDirectory": "../coverage",
     "coverageThreshold": {

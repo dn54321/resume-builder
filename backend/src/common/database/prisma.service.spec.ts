@@ -97,7 +97,7 @@ describe('PrismaService', () => {
           _getClient: () => Promise<unknown>;
         }
       )._getClient;
-      const result = await getClient.call(service);
+      const result = (await getClient.call(service)) as Record<string, never>;
       expect(result).toBe(mockClient);
     });
 
@@ -112,7 +112,7 @@ describe('PrismaService', () => {
           _getClient: () => Promise<unknown>;
         }
       )._getClient;
-      const result = await getClient.call(service);
+      const result = (await getClient.call(service)) as Record<string, never>;
       expect(result).toBe(mockClient);
     });
   });

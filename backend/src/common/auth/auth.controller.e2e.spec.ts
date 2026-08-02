@@ -7,13 +7,20 @@ import {
   INestApplication,
   ValidationPipe,
   UnauthorizedException,
-  CanActivate,
-  ExecutionContext,
 } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+
+interface AuthResponseBody {
+  user: { id: string; email: string };
+  sessionToken: string;
+}
+
+interface MeResponseBody {
+  user: { id: string; email: string } | null;
+}
 
 describe('AuthController (e2e)', () => {
   let app: INestApplication<App>;
@@ -68,8 +75,9 @@ describe('AuthController (e2e)', () => {
         .send({ email: 'test@test.com', password: 'Password1' })
         .expect(201);
 
-      expect(res.body.user.email).toBe('test@test.com');
-      expect(res.body.sessionToken).toBe('tok-123');
+      const body = res.body as AuthResponseBody;
+      expect(body.user.email).toBe('test@test.com');
+      expect(body.sessionToken).toBe('tok-123');
     });
 
     it('should return 400 for missing fields', async () => {
@@ -92,7 +100,8 @@ describe('AuthController (e2e)', () => {
         .send({ email: 'test@test.com', password: 'Password1' })
         .expect(200);
 
-      expect(res.body.sessionToken).toBe('tok-456');
+      const body = res.body as AuthResponseBody;
+      expect(body.sessionToken).toBe('tok-456');
     });
 
     it('should return 401 for invalid credentials', async () => {
@@ -135,7 +144,8 @@ describe('AuthController (e2e)', () => {
         .set('Authorization', 'Bearer valid-token')
         .expect(200);
 
-      expect(res.body.user.email).toBe('test@test.com');
+      const body = res.body as MeResponseBody;
+      expect(body.user?.email).toBe('test@test.com');
     });
 
     it('should return null user when no token', async () => {
@@ -143,7 +153,8 @@ describe('AuthController (e2e)', () => {
         .get('/api/v1/auth/me')
         .expect(200);
 
-      expect(res.body.user).toBeNull();
+      const body = res.body as MeResponseBody;
+      expect(body.user).toBeNull();
     });
   });
 
