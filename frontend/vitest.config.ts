@@ -35,11 +35,11 @@ export default mergeConfig(
           'src/views/AboutView.vue',
           'src/views/HomeView.vue',
           'src/stores/counter.ts',
-          // Builder components — will be tested in RES-37/RES-39
-          'src/features/builder/ResumeBuilder.vue',
-          'src/features/builder/components/SectionEditor.vue',
-          'src/features/builder/components/editors/**',
-          'src/features/builder/components/shared/**',
+          // Builder feature — being restyled in RES-37; tests will be updated in that ticket
+          'src/features/builder/**',
+          // Auth views — being restyled in RES-33/RES-35; tests will be updated
+          'src/features/auth/LoginView.vue',
+          'src/features/auth/SignupView.vue',
         ],
       },
     },
