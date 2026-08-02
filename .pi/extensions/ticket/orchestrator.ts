@@ -252,7 +252,7 @@ export async function buildGraph(
     // but the worker had already completed the work.
     if (!existing) {
       const candidateWorktree = path.join(worktreesDir(), ticket.identifier);
-      if (fs.existsSync(candidateWorktree) && hasExistingWork(candidateWorktree, getDefaultBranch())) {
+      if (fs.existsSync(candidateWorktree) && hasMeaningfulWork(candidateWorktree, getDefaultBranch())) {
         existing = {
           identifier: ticket.identifier,
           status: 'done',
@@ -310,7 +310,7 @@ export async function buildGraph(
           process.kill(node.state.pid, 0); // signal 0 = check existence
         } catch {
           // Process not running — check if work was already done
-          if (node.state.worktreePath && hasExistingWork(node.state.worktreePath, getDefaultBranch())) {
+          if (node.state.worktreePath && hasMeaningfulWork(node.state.worktreePath, getDefaultBranch())) {
             // Worktree has commits — the worker finished but the server
             // died before marking it 'done'. Treat as done.
             node.state.status = 'done';
@@ -325,7 +325,7 @@ export async function buildGraph(
         }
       } else {
         // No pid recorded — check if work was already committed
-        if (node.state.worktreePath && hasExistingWork(node.state.worktreePath, getDefaultBranch())) {
+        if (node.state.worktreePath && hasMeaningfulWork(node.state.worktreePath, getDefaultBranch())) {
           node.state.status = 'done';
           node.state.error = 'Orphaned assignment but work exists — marking done';
           pruneWorktree(node);
@@ -340,7 +340,7 @@ export async function buildGraph(
     if (node.state.status === 'failed' && node.state.retryCount <= config.maxRetries) {
       // If the worktree already has commits, the work was done and the
       // failure is spurious (e.g., server shutdown). Don't retry.
-      if (node.state.worktreePath && hasExistingWork(node.state.worktreePath, getDefaultBranch())) {
+      if (node.state.worktreePath && hasMeaningfulWork(node.state.worktreePath, getDefaultBranch())) {
         node.state.status = 'done';
         node.state.error = 'Work exists despite failed status — marking done';
         pruneWorktree(node);
@@ -843,6 +843,29 @@ async function onWorkerComplete(
     // Transition Linear ticket to "Done"
     transitionTicket(node.ticket.id, 'Done').catch(() => {});
 
+    // Verify the worker actually changed something meaningful.
+    // Agents that only touch resume.pdf (generated artifact) did no real work.
+    if (!hasMeaningfulWork(worktreePath, getDefaultBranch())) {
+      node.state.status = 'failed';
+      node.state.finishedAt = new Date().toISOString();
+      node.state.pid = null;
+      node.state.error = 'No meaningful changes — only generated files modified (e.g. resume.pdf). The agent did not implement the ticket.';
+
+      updateLinearTicket(
+        node.ticket.id,
+        `❌ Worker exited 0 but only modified generated files — no implementation work detected.`,
+      ).catch(() => {});
+
+      // Write completion note and bail out early (no prune, no port release in done path)
+      const failStream = fs.createWriteStream(node.state.logPath, { flags: 'a' });
+      failStream.write(`\n[${new Date().toISOString()}] Worker finished. Status: failed (no meaningful work)\n`);
+      failStream.end();
+
+      saveStateSnapshot(node);
+      node._onComplete?.({ exitCode, branchPushed: false, prUrl: null, prError: 'No meaningful changes' });
+      return;
+    }
+
     node.state.status = 'done';
     node.state.finishedAt = new Date().toISOString();
     node.state.pid = null;
@@ -869,7 +892,7 @@ async function onWorkerComplete(
     // If the worktree already has commits on this branch, the worker
     // likely completed its work but hit a non-fatal issue (e.g., PR
     // already exists). Don't retry — mark as done.
-    if (hasExistingWork(worktreePath, getDefaultBranch())) {
+    if (hasMeaningfulWork(worktreePath, getDefaultBranch())) {
       node.state.status = 'done';
       node.state.finishedAt = new Date().toISOString();
       node.state.pid = null;
@@ -942,6 +965,8 @@ function isCleanCheck(worktreePath: string): boolean {
 
 /** Check if the worktree branch has commits not on the base branch.
  *  Returns true if meaningful work has been committed. */
+/** Check if the worktree branch has commits not on the base branch.
+ *  Returns true if meaningful work has been committed. */
 function hasExistingWork(worktreePath: string, baseBranch: string): boolean {
   try {
     const result = cp.spawnSync(
@@ -951,6 +976,26 @@ function hasExistingWork(worktreePath: string, baseBranch: string): boolean {
     );
     const count = parseInt(result.stdout?.trim() ?? '0', 10);
     return !isNaN(count) && count > 0;
+  } catch {
+    return false;
+  }
+}
+
+/** Files that are auto-generated and don't count as meaningful work. */
+const GENERATED_FILES = ['frontend/resume.pdf'];
+
+/** Check if the branch contains meaningful changes beyond generated files.
+ *  Returns true if any non-generated file was modified. */
+function hasMeaningfulWork(worktreePath: string, baseBranch: string): boolean {
+  try {
+    const result = cp.spawnSync(
+      'git',
+      ['diff', '--name-only', baseBranch, 'HEAD'],
+      { cwd: worktreePath, encoding: 'utf-8', timeout: 5000 },
+    );
+    const files = (result.stdout ?? '').trim().split('\n').filter(Boolean);
+    const meaningful = files.filter((f) => !GENERATED_FILES.includes(f));
+    return meaningful.length > 0;
   } catch {
     return false;
   }

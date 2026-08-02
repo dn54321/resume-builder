@@ -23,6 +23,9 @@ const hasErrors = computed(() => errors.value.length > 0)
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
+/**
+ *
+ */
 function onEmailBlur() {
   if (email.value.trim() && !EMAIL_RE.test(email.value)) {
     emailError.value = 'Please enter a valid email address'
