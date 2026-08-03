@@ -3,6 +3,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { createRouter, createWebHistory } from 'vue-router'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import DashboardView from '@/views/DashboardView.vue'
 import ConfirmModal from '@/shared/components/ConfirmModal.vue'
 import { useAuthStore } from '@/features/auth/stores/auth'
@@ -520,6 +522,26 @@ describe('DashboardView', () => {
     const card = wrapper.find('.empty-state-card')
     expect(card.exists()).toBe(true)
     expect(card.find('h2').text()).toBe('No resumes yet')
+  })
+
+  it('btn-primary stylesheet uses --color-foreground not --color-text', () => {
+    // JSDOM does not resolve CSS custom property var() references in
+    // getComputedStyle, so we verify the scoped <style> block directly.
+    const sourcePath = resolve(__dirname, '../DashboardView.vue')
+    const source = readFileSync(sourcePath, 'utf-8')
+
+    // Extract the <style scoped> block
+    const styleMatch = source.match(/<style[^>]*>([\s\S]*?)<\/style>/)
+    expect(styleMatch).not.toBeNull()
+    const styleBlock = styleMatch![1]
+
+    // Must use --color-foreground (defined in main.css) for background-color
+    expect(styleBlock).toContain(
+      'background-color: var(--color-foreground)',
+    )
+
+    // Must NOT use --color-text (does not exist → transparent/invisible button)
+    expect(styleBlock).not.toContain('var(--color-text)')
   })
 
   it('disables Create New Resume button while loading', () => {

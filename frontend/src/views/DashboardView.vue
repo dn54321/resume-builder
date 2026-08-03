@@ -238,7 +238,7 @@ async function handleConfirmDelete(): Promise<void> {
   cursor: pointer;
   border: none;
   border-radius: 6px;
-  background-color: var(--color-text);
+  background-color: var(--color-foreground);
   color: var(--color-background);
   font-weight: 500;
 }
