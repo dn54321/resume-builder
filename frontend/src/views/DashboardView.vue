@@ -7,6 +7,7 @@ import ConfirmModal from '@/shared/components/ConfirmModal.vue'
 
 interface ResumeSummary {
   id: string
+  name: string | null
   layout: string
   createdAt: string
   updatedAt: string
@@ -179,11 +180,11 @@ async function handleConfirmDelete(): Promise<void> {
         @keydown.space.prevent="router.push(`/builder/${resume.id}`)"
       >
         <div class="resume-card__header">
-          <h3 class="resume-card__name">{{ resume.layout }}</h3>
+          <h3 class="resume-card__name">{{ resume.name || resume.layout }}</h3>
           <button
             class="resume-card__delete-btn"
             data-testid="delete-btn"
-            :aria-label="`Delete ${resume.layout}`"
+            :aria-label="`Delete ${resume.name || resume.layout}`"
             @click.stop="handleDeleteClick(resume)"
           >
             🗑️
@@ -198,7 +199,7 @@ async function handleConfirmDelete(): Promise<void> {
     <!-- Confirm Delete Modal -->
     <ConfirmModal
       v-model="showConfirmModal"
-      :title="resumeToDelete ? `Delete ${resumeToDelete.layout}?` : 'Delete?'"
+      :title="resumeToDelete ? `Delete ${resumeToDelete.name || resumeToDelete.layout}?` : 'Delete?'"
       description="This action cannot be undone."
       confirm-label="Delete"
       cancel-label="Cancel"

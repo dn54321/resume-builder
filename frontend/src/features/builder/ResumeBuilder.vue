@@ -4,8 +4,20 @@
 
     <!-- Header with toolbar row -->
     <header class="flex items-center justify-between gap-2 pb-3 shrink-0 flex-wrap">
-      <!-- Left: toolbar buttons -->
-      <div class="flex items-center gap-2 flex-wrap">
+      <!-- Left: resume name + toolbar buttons -->
+      <div class="flex items-center gap-3 flex-wrap">
+        <input
+          type="text"
+          :value="store.name"
+          class="resume-name-input"
+          placeholder="Untitled Resume"
+          aria-label="Resume name"
+          data-testid="resume-name-input"
+          @input="onNameInput"
+          @blur="onNameBlur"
+          @keydown.enter="($event.target as HTMLInputElement).blur()"
+        />
+        <div class="flex items-center gap-2 flex-wrap">
         <button
           class="px-3 py-1.5 rounded-md text-[0.8125rem] font-[inherit] font-medium cursor-pointer transition-colors border border-border bg-background text-foreground hover:bg-muted"
           @click="jdModalOpen = true"
@@ -54,6 +66,7 @@
         <div v-if="tailorError" class="px-3 py-1.5 rounded-sm bg-destructive/10 text-destructive text-[0.8125rem] leading-relaxed" data-testid="toolbar-error">
           {{ tailorError }}
         </div>
+      </div>
       </div>
 
       <!-- Right: Save + PDF export -->
@@ -164,6 +177,35 @@ const { isTailoring, tailorError, bulletCap, tailorResume, resetFilter } = useTa
 
 const selectedSectionId = ref<string | null>(null)
 const jdModalOpen = ref(false)
+
+// ─── Resume name editing ───────────────────────────────────────────
+
+const pendingName = ref<string | null>(null)
+
+/**
+ * Track the input value locally without committing to the store on every keystroke.
+ * @param event
+ */
+function onNameInput(event: Event) {
+  pendingName.value = (event.target as HTMLInputElement).value
+}
+
+/**
+ * Commit the name change to the store on blur, then save.
+ */
+async function onNameBlur() {
+  if (pendingName.value !== null && pendingName.value !== store.name) {
+    store.name = pendingName.value
+    pendingName.value = null
+    try {
+      await saveResume()
+      showSavedConfirmation()
+    } catch (err) {
+      console.error('Failed to save resume name:', err)
+    }
+  }
+  pendingName.value = null
+}
 
 const columnAssignments = computed(() => {
   const assignments: Record<SectionType, 'left' | 'right'> = {} as Record<SectionType, 'left' | 'right'>
@@ -389,6 +431,36 @@ function onStay() {
 </script>
 
 <style scoped>
+/* ── Resume name input ─────────────────── */
+.resume-name-input {
+  font-size: 1.25rem;
+  font-weight: 600;
+  font-family: inherit;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 0.25rem 0.5rem;
+  background: transparent;
+  color: var(--foreground);
+  max-width: 320px;
+  width: 100%;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.resume-name-input:hover {
+  border-color: var(--border);
+}
+
+.resume-name-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: var(--background);
+}
+
+.resume-name-input::placeholder {
+  color: var(--muted-foreground);
+  font-weight: 400;
+}
+
 main {
   /* Firefox */
   scrollbar-width: thin;

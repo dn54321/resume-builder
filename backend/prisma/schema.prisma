@@ -34,6 +34,7 @@ model Session {
 model Resume {
   id        String   @id @default(uuid())
   userId    String
+  name      String?
   layout    String   @default("standard")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

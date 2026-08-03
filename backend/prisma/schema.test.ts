@@ -58,6 +58,7 @@ async function run(): Promise<void> {
       CREATE TABLE IF NOT EXISTS "Resume" (
         "id" TEXT NOT NULL PRIMARY KEY,
         "userId" TEXT NOT NULL,
+        "name" TEXT,
         "layout" TEXT NOT NULL DEFAULT 'standard',
         "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         "updatedAt" DATETIME NOT NULL,

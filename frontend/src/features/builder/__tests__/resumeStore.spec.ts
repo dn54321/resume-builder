@@ -9,12 +9,13 @@ describe('useResumeStore', () => {
   })
 
   describe('initializeDefaults', () => {
-    it('sets id, layout, name, and all 10 sections with defaults', () => {
+    it('sets id, layout, name to empty, and all 10 sections with defaults', () => {
       const store = useResumeStore()
       store.initializeDefaults()
 
       expect(store.id).toBeTruthy()
       expect(typeof store.id).toBe('string')
+      expect(store.name).toBe('')
       expect(store.layout).toBe('standard')
       expect(store.sections).toHaveLength(10)
 
@@ -311,6 +312,82 @@ describe('useResumeStore', () => {
       expect(store.sections).toHaveLength(1)
       expect(store.sections[0]!.enabled).toBe(true)
       expect(store.isSectionEnabled('summary')).toBe(true)
+    })
+
+    it('round-trips name field in payload', () => {
+      const store = useResumeStore()
+
+      const payload = {
+        name: 'My Awesome Resume',
+        layout: 'standard' as const,
+        sections: [
+          {
+            sectionId: 'summary',
+            column: 'right' as const,
+            order: 0,
+            entries: [{ order: 0, parentId: null, fields: [{ key: 'text', value: 'Hello', order: 0 }] }],
+          },
+        ],
+      }
+
+      store.loadFromPayload(payload)
+      expect(store.name).toBe('My Awesome Resume')
+
+      const output = store.toPayload()
+      expect(output.name).toBe('My Awesome Resume')
+    })
+
+    it('handles null name in payload by defaulting to empty string', () => {
+      const store = useResumeStore()
+
+      const payload = {
+        name: null,
+        layout: 'standard' as const,
+        sections: [
+          {
+            sectionId: 'summary',
+            column: 'right' as const,
+            order: 0,
+            entries: [{ order: 0, parentId: null, fields: [{ key: 'text', value: 'Hello', order: 0 }] }],
+          },
+        ],
+      }
+
+      store.loadFromPayload(payload)
+      expect(store.name).toBe('')
+    })
+
+    it('handles missing name field in payload (backward compat)', () => {
+      const store = useResumeStore()
+
+      // Old payload without name field
+      const payload = {
+        layout: 'standard' as const,
+        sections: [
+          {
+            sectionId: 'summary',
+            column: 'right' as const,
+            order: 0,
+            entries: [{ order: 0, parentId: null, fields: [{ key: 'text', value: 'Hello', order: 0 }] }],
+          },
+        ],
+      }
+
+      store.loadFromPayload(payload)
+      expect(store.name).toBe('')
+
+      const output = store.toPayload()
+      // Empty name → null in payload (since '' || null = null)
+      expect(output.name).toBeNull()
+    })
+
+    it('serializes empty name as null in toPayload', () => {
+      const store = useResumeStore()
+      store.initializeDefaults()
+      store.name = ''
+
+      const payload = store.toPayload()
+      expect(payload.name).toBeNull()
     })
   })
 

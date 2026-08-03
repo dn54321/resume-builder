@@ -5,6 +5,10 @@ import { ResumeSectionDto } from './create-resume.dto';
 export class UpdateResumeDto {
   @IsString()
   @IsOptional()
+  name?: string;
+
+  @IsString()
+  @IsOptional()
   layout?: string;
 
   @IsOptional()

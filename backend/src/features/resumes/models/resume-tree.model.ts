@@ -8,6 +8,7 @@ import type { ResumeSection } from './resume-section.model';
 export interface ResumeTree {
   id: string;
   userId: string;
+  name: string | null;
   layout: string;
   sections: ResumeSection[];
   [key: string]: unknown;

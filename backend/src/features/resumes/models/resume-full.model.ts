@@ -4,6 +4,7 @@
 export interface ResumeFull {
   id: string;
   userId: string;
+  name: string | null;
   layout: string;
   sections: unknown[];
 }

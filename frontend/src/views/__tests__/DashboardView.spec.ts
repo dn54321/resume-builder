@@ -47,12 +47,14 @@ function createAuthenticatedStore() {
 const mockResumes = [
   {
     id: 'resume-1',
+    name: 'Software Engineer Resume',
     layout: 'standard',
     createdAt: '2025-01-15T10:00:00.000Z',
     updatedAt: '2025-03-01T14:30:00.000Z',
   },
   {
     id: 'resume-2',
+    name: null,
     layout: 'modern',
     createdAt: '2025-02-20T08:00:00.000Z',
     updatedAt: '2025-03-10T09:15:00.000Z',
@@ -179,7 +181,7 @@ describe('DashboardView', () => {
 
     const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
     expect(cards.length).toBe(2)
-    expect(cards[0]!.find('.resume-card__name').text()).toBe('standard')
+    expect(cards[0]!.find('.resume-card__name').text()).toBe('Software Engineer Resume')
     expect(cards[1]!.find('.resume-card__name').text()).toBe('modern')
   })
 
@@ -269,7 +271,7 @@ describe('DashboardView', () => {
 
     // ConfirmModal should now be visible with correct props
     expect(modal.props('modelValue')).toBe(true)
-    expect(modal.props('title')).toBe('Delete standard?')
+    expect(modal.props('title')).toBe('Delete Software Engineer Resume?')
     expect(modal.props('description')).toBe('This action cannot be undone.')
     expect(modal.props('variant')).toBe('destructive')
   })

@@ -53,6 +53,10 @@ export class ResumeSectionDto {
 export class CreateResumeDto {
   @IsString()
   @IsOptional()
+  name?: string;
+
+  @IsString()
+  @IsOptional()
   layout?: string;
 
   @IsArray()
