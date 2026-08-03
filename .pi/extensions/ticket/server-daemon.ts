@@ -448,16 +448,20 @@ async function handleCommand(from: string, text: string): Promise<void> {
     dropEpic(ticketId);
     await tellBoss(`Dropped epic ${ticketId}. ${epicGraphs.size} epic(s) remaining.`);
   } else if (trimmed.startsWith('TICKET ') || trimmed.startsWith('ticket ')) {
-    const ticketId = trimmed.split(/\s+/)[1]?.trim();
-    if (!ticketId) return;
-    log(`Boss: add ticket ${ticketId}`);
-    try {
-      await addEpic(ticketId);
-      await tellBoss(`Added ${ticketId}.`);
-    } catch (err: any) {
-      log(`Error: ${err.message}`);
-      await tellBoss(`Error: ${err.message}`);
+    const ids = trimmed.split(/\s+/).slice(1);
+    for (const ticketId of ids) {
+      const id = ticketId.trim();
+      if (!id) continue;
+      log(`Boss: add ticket ${id}`);
+      try {
+        await addEpic(id);
+        await tellBoss(`Added ${id}.`);
+      } catch (err: any) {
+        log(`Error: ${err.message}`);
+        await tellBoss(`Error: ${err.message}`);
+      }
     }
+    await tellBoss(`Managing ${epicGraphs.size} epic(s): ${[...epicGraphs.keys()].join(', ')}`);
   } else if (trimmed === 'STOP' || trimmed === 'stop') {
     log('Boss requested stop');
     for (const [, epic] of epicGraphs) {
@@ -785,6 +789,19 @@ async function main(): Promise<void> {
   }
 
   await initIntercom();
+
+  // Eagerly initialize PaneService to create FIFOs and pane-display.sh
+  // before the tmux layout is created by agent.sh (it needs the script).
+  try {
+    const config = getAgentConfig();
+    const repoRoot = getRepoRoot();
+    getPaneService({
+      sessionName: 'ticket-agents',
+      repoRoot,
+      maxAgents: config.maxAgents,
+    });
+    log('PaneService eagerly initialized (FIFOs + pane-display.sh ready)');
+  } catch { /* non-fatal if tmux not installed */ }
 
   // Reset all agent panes to "Waiting for tasks" on startup
   resetAllPanes();

@@ -195,7 +195,7 @@ while true; do
   #   IDLE                — return to idle state
   #   CLEAR               — clear the screen
   #   TICKET:ticketId     — update the current ticket name in the header
-  read -r line < "${FIFO_DIR}/${AGENT_NAME}.fifo" 2>/dev/null || continue
+  read -r line < "\${FIFO_DIR}/\${AGENT_NAME}.fifo" 2>/dev/null || continue
 
   # Kill any running tail
   kill %1 2>/dev/null || true
@@ -322,8 +322,9 @@ done
         `tmux display-message -t "${paneId}" -p '#{pane_start_command}' 2>/dev/null`,
         { timeout: 2000, encoding: 'utf-8' }
       ).trim();
-      // The start command should contain both the script path and the agent name
-      return startCmd.includes(this.paneScript) && startCmd.includes(agentName);
+      // Accept both pane-display.sh (FIFO-based) and legacy agent-pane.sh scripts
+      const isDisplayScript = startCmd.includes(this.paneScript) || startCmd.includes('agent-pane.sh');
+      return isDisplayScript && startCmd.includes(agentName);
     } catch {
       return false;
     }

@@ -55,57 +55,67 @@ done
 
 [ -f "$REPO_ROOT/.env.agent" ] && { set -a; source "$REPO_ROOT/.env.agent"; set +a; }
 
-# ─── Pick epics ──────────────────────────────────────────────────────
+# ─── Pick tickets ────────────────────────────────────────────────────
 
 echo ""
-echo "  Fetching epics from Linear..."
+echo "  Fetching tickets from Linear..."
 echo ""
 
-EPIC_LIST=""
+TICKET_LIST=""
+SELECTED_IDS=""
+EPIC_IDS=""
+STANDALONE_IDS=""
+
 if [ -n "${LINEAR_API_KEY:-}" ]; then
-  QUERY='{"query":"{ issues(filter: { state: { type: { in: [\"started\", \"unstarted\", \"backlog\"] } } } first: 25) { nodes { identifier title children { nodes { id } } } } }"}'
+  QUERY='{"query":"{ issues(filter: { state: { type: { nin: [\"completed\", \"canceled\"] } } } first: 50) { nodes { identifier title children { nodes { id } } } } }"}'
   RAW=$(curl -s -X POST https://api.linear.app/graphql \
     -H "Authorization: ${LINEAR_API_KEY}" \
     -H "Content-Type: application/json" \
     -d "$QUERY" 2>/dev/null || echo '{"data":null}')
-  
+
   if command -v python3 &>/dev/null; then
-    EPIC_LIST=$(echo "$RAW" | python3 -c "
+    TICKET_LIST=$(echo "$RAW" | python3 -c "
 import json, sys
 try:
   data = json.load(sys.stdin)
   issues = data.get('data',{}).get('issues',{}).get('nodes',[]) or []
   for i in issues:
     ident = i.get('identifier','?')
-    title = i.get('title','')[:60]
+    title = i.get('title','')[:80]
     kids = len(i.get('children',{}).get('nodes',[]) or [])
-    tag = '[epic]' if kids > 0 else '[ticket]'
-    print(f'{ident} {tag} {title}')
+    tag = 'EPIC' if kids > 0 else 'TICKET'
+    print(f'{ident} [{tag}] {title}')
 except: pass
 " 2>/dev/null)
   fi
-  
-  if [ -z "$EPIC_LIST" ]; then
-    EPIC_LIST=$(echo "$RAW" | grep -oP '"identifier":"[A-Z]+-\d+"' | sed 's/"identifier":"//;s/"//' | sort -u)
+
+  if [ -n "${TICKET_LIST:-}" ]; then
+    echo "$TICKET_LIST" | head -30
+    echo ""
+
+    SELECTED_IDS=$(echo "$TICKET_LIST" | awk '{print $1}' | tr '\n' ' ' | sed 's/ *$//')
+    EPIC_IDS=$(echo "$TICKET_LIST" | grep '\[EPIC\]' | awk '{print $1}' | tr '\n' ' ' | sed 's/ *$//')
+    STANDALONE_IDS=$(echo "$TICKET_LIST" | grep '\[TICKET\]' | awk '{print $1}' | tr '\n' ' ' | sed 's/ *$//')
+    echo "  Auto-selecting all: $SELECTED_IDS"
+    [ -n "$EPIC_IDS" ] && echo "  Epics:              $EPIC_IDS"
+    [ -n "$STANDALONE_IDS" ] && echo "  Tickets:            $STANDALONE_IDS"
   fi
 fi
 
-if [ -z "$EPIC_LIST" ]; then
-  echo "  (Could not fetch from Linear. Enter ticket identifiers manually.)"
+if [ -z "${SELECTED_IDS:-}" ]; then
+  echo "  (Could not fetch from Linear or nothing selected. Enter identifiers manually.)"
   echo ""
-  read -rp "  Epic/ticket IDs (space-separated): " MANUAL_IDS
-  SELECTED_EPICS="$MANUAL_IDS"
-else
-  SELECTED_EPICS=$(echo "$EPIC_LIST" | awk '{print $1}' | tr '\n' ' ')
-  echo "$EPIC_LIST" | head -20
-  echo ""
-  echo "  Auto-selecting all: $SELECTED_EPICS"
+  read -rp "  Ticket IDs (space-separated): " MANUAL_IDS
+  SELECTED_IDS="$MANUAL_IDS"
+  # Assume all are epics when entered manually (backward-compatible)
+  EPIC_IDS="$MANUAL_IDS"
+  STANDALONE_IDS=""
 fi
 
-if [ -z "${SELECTED_EPICS:-}" ]; then
-  echo "No epics selected. The server will start idle."
-  echo "The boss can send EPIC <ID> commands to add work."
-  SELECTED_EPICS=""
+if [ -z "${SELECTED_IDS:-}" ]; then
+  echo "No tickets selected. The server will start idle."
+  echo "The boss can send EPIC <id> and TICKET <id> commands to add work."
+  SELECTED_IDS=""
 fi
 
 # ─── Clean slate ─────────────────────────────────────────────────────
@@ -140,9 +150,12 @@ mkdir -p "$PANES_DIR"
 PROMPT_DIR="$REPO_ROOT/.pi/tickets"
 mkdir -p "$PROMPT_DIR"
 
-INITIAL_EPIC_CMDS=""
-if [ -n "${SELECTED_EPICS:-}" ]; then
-  INITIAL_EPIC_CMDS="After registration, immediately send: EPIC $SELECTED_EPICS"
+INITIAL_COMMANDS=""
+if [ -n "${SELECTED_IDS:-}" ]; then
+  CMD_PARTS=""
+  [ -n "${EPIC_IDS:-}" ] && CMD_PARTS="EPIC $EPIC_IDS"
+  [ -n "${STANDALONE_IDS:-}" ] && CMD_PARTS="${CMD_PARTS:+$CMD_PARTS; }TICKET $STANDALONE_IDS"
+  INITIAL_COMMANDS="After registration, immediately send: $CMD_PARTS"
 fi
 
 cat > "$PROMPT_DIR/boss-prompt.txt" << PROMPTEOF
@@ -158,7 +171,7 @@ CAPABILITIES:
 - Server commands:
   EPIC <id1> <id2> ...  — Add one or more epic graphs (multiple epics supported!)
   DROP <id>             — Remove an epic from management
-  TICKET <id>           — Add a single ticket as a mini-graph
+  TICKET <id1> <id2> ... — Add standalone tickets (no children) as mini-graphs
   STOP                  — Halt all workers
   STOP agent-N          — Stop a specific worker
   CLOSE <id>            — Close a ticket in Linear and mark done
@@ -167,7 +180,7 @@ CAPABILITIES:
 - Answer worker questions when they ask you
 - The server manages MULTIPLE epics simultaneously — send EPIC for each
 
-${INITIAL_EPIC_CMDS}
+${INITIAL_COMMANDS}
 
 If server crashes: pkill -f server-daemon; npx tsx .pi/extensions/ticket/server-daemon.ts &
 If a PR closed without merging, tell the server: CLOSE <id>
@@ -200,9 +213,29 @@ done
 DASHBOARDEOF
 chmod +x "$PROMPT_DIR/dashboard-watch.sh"
 
-# ─── Agent pane display script ───────────────────────────────────────
-# Each agent pane runs this loop. The server uses tmux send-keys to
-# interrupt it and show worker output, then reset it afterward.
+# ─── Workers header script ───────────────────────────────────────────
+# Shows active worker count and assignments at the top of the RHS.
+
+cat > "$PROMPT_DIR/workers-header.sh" << 'HEADEREOF'
+#!/usr/bin/env bash
+DASHBOARD_FILE="$1"
+while true; do
+  clear
+  if [ -f "$DASHBOARD_FILE" ]; then
+    # Show counts line (2nd line of dashboard)
+    sed -n '2p' "$DASHBOARD_FILE" 2>/dev/null
+    echo ''
+    # Show worker assignments (lines with ◉ or agent-)
+    grep -E '(◉|agent-)' "$DASHBOARD_FILE" 2>/dev/null | head -10
+  else
+    echo '  Waiting for dashboard...'
+  fi
+  sleep 2
+done
+HEADEREOF
+chmod +x "$PROMPT_DIR/workers-header.sh"
+
+# ─── Legacy agent pane script (kept for backward compat) ────────────
 
 cat > "$PROMPT_DIR/agent-pane.sh" << 'AGENTEOF'
 #!/usr/bin/env bash
@@ -227,35 +260,52 @@ tmux new-session -d -s "$SESSION_NAME" -c "$REPO_ROOT" \
   "$PROMPT_DIR/dashboard-watch.sh '$DASHBOARD_FILE'"
 tmux rename-window -t "$SESSION_NAME:0" 'agents'
 
-HAS_EPICS="${SELECTED_EPICS:-}"
+HAS_SELECTIONS="${SELECTED_IDS:-}"
 
-if [ -n "$HAS_EPICS" ]; then
+if [ -n "$HAS_SELECTIONS" ]; then
   # ── Workers + Boss layout ──
+  # Layout:
+  #   ┌──────────┬──────────────┐
+  #   │ Dashboard│ Workers: N   │ ← header (5 lines)
+  #   │          ├──────────────┤
+  #   │          │ agent-1      │ ← pane-display.sh (FIFO)
+  #   │          ├──────────────┤
+  #   │          │ agent-2      │
+  #   ├──────────┼──────────────┤
+  #   │ Boss     │ agent-3      │
+  #   └──────────┴──────────────┘
 
-  # Pane 1: agent-1 (right column, top)
+  PANE_DISPLAY="$PANES_DIR/pane-display.sh"
+
+  # Pane %1: agent-1 (RHS, split right from dashboard)
   tmux split-window -h -t "$SESSION_NAME:0" -c "$REPO_ROOT" \
-    "$PROMPT_DIR/agent-pane.sh agent-1"
-  PANE_ID=$(tmux display-message -p -t "$SESSION_NAME:0.1" '#{pane_id}')
-  echo "$PANE_ID" > "$PANES_DIR/agent-1.pane"
-  echo "  agent-1 → pane $PANE_ID"
+    "$PANE_DISPLAY agent-1"
+  AGENT1_PANE=$(tmux display-message -p -t "$SESSION_NAME:0.1" '#{pane_id}')
+  echo "$AGENT1_PANE" > "$PANES_DIR/agent-1.pane"
+  echo "  agent-1 → pane $AGENT1_PANE"
 
-  # Panes 2..N: additional agents (split vertically from the previous)
+  # Workers header (split ABOVE agent-1, 5 lines tall)
+  tmux split-window -v -b -l 5 -t "$AGENT1_PANE" -c "$REPO_ROOT" \
+    "bash $PROMPT_DIR/workers-header.sh '$DASHBOARD_FILE'"
+  echo "  workers-header → created above agent-1"
+
+  # Additional agent panes: split vertically from agent-1
+  PREV_PANE="$AGENT1_PANE"
   for i in $(seq 2 "$MAX_AGENTS"); do
-    # Split from the previous agent pane
-    PREV_PANE=$((i-1))
-    tmux split-window -v -t "$SESSION_NAME:0.$PREV_PANE" -c "$REPO_ROOT" \
-      "$PROMPT_DIR/agent-pane.sh agent-$i"
-    PANE_ID=$(tmux display-message -p -t "$SESSION_NAME:0.$i" '#{pane_id}')
+    tmux split-window -v -t "$PREV_PANE" -c "$REPO_ROOT" \
+      "$PANE_DISPLAY agent-$i"
+    PANE_ID=$(tmux display-message -p -t "$SESSION_NAME:0" '#{pane_id}')
     echo "$PANE_ID" > "$PANES_DIR/agent-$i.pane"
     echo "  agent-$i → pane $PANE_ID"
+    PREV_PANE="$PANE_ID"
   done
 
-  # Boss pane (bottom-left, 10 lines)
+  # Boss pane (bottom-left, split from dashboard)
   tmux split-window -v -t "$SESSION_NAME:0.0" -c "$REPO_ROOT" -l 10 \
     "$PI_BIN --append-system-prompt @$PROMPT_DIR/boss-prompt.txt Start"
 else
-  # ── No epics: just Dashboard + Boss ──
-  echo "No epics selected — starting with boss only."
+  # ── No selections: just Dashboard + Boss ──
+  echo "No tickets selected — starting with boss only."
 
   tmux split-window -v -t "$SESSION_NAME:0" -c "$REPO_ROOT" -l 15 \
     "$PI_BIN --append-system-prompt @$PROMPT_DIR/boss-prompt.txt Start"
