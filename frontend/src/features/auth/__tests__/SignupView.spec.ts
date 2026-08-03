@@ -15,9 +15,14 @@ const router = createRouter({
     { path: '/', name: 'home', component: { template: '<div>Home</div>' } },
     { path: '/login', name: 'login', component: { template: '<div>Login</div>' } },
     { path: '/signup', name: 'signup', component: SignupView },
+    { path: '/dashboard', name: 'dashboard', component: { template: '<div>Dashboard</div>' } },
     { path: '/builder', name: 'builder', component: { template: '<div>Builder</div>' } },
   ],
 })
+
+// Save originals before mocking so we can use them for query.redirect test
+const realPush = router.push
+const realReplace = router.replace
 
 router.push = mockPush
 router.replace = mockReplace
@@ -40,11 +45,13 @@ function mountSignup() {
 }
 
 describe('SignupView', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     pinia = createPinia()
     setActivePinia(pinia)
     localStorage.clear()
     vi.clearAllMocks()
+    // Reset route to clean state (no query params)
+    await realReplace.call(router, '/signup')
   })
 
   it('renders email, password, and confirm password fields', () => {
@@ -53,7 +60,7 @@ describe('SignupView', () => {
     expect(wrapper.find('#signup-password').exists()).toBe(true)
     expect(wrapper.find('#signup-confirm').exists()).toBe(true)
     expect(wrapper.find('button[type="submit"]').exists()).toBe(true)
-    expect(wrapper.text()).toContain('Sign up')
+    expect(wrapper.text()).toContain('Sign Up')
   })
 
   it('shows validation errors for empty fields', async () => {
@@ -91,7 +98,7 @@ describe('SignupView', () => {
     expect(wrapper.text()).toContain('Already have an account?')
   })
 
-  it('redirects to /builder when already authenticated', async () => {
+  it('redirects to /dashboard when already authenticated', async () => {
     const store = useAuthStore()
     store.token = 'existing-token'
     store.user = { id: '1', email: 'test@test.com' }
@@ -99,7 +106,7 @@ describe('SignupView', () => {
     mountSignup()
     await nextTick()
 
-    expect(mockReplace).toHaveBeenCalledWith('/builder')
+    expect(mockReplace).toHaveBeenCalledWith('/dashboard')
   })
 
   it('does not redirect when not authenticated', async () => {
@@ -107,5 +114,35 @@ describe('SignupView', () => {
     await nextTick()
 
     expect(mockReplace).not.toHaveBeenCalled()
+  })
+
+  it('redirects to query.redirect after successful signup', async () => {
+    // Navigate to /signup?redirect=/builder using the real router so route.query is populated
+    await realPush.call(router, { path: '/signup', query: { redirect: '/builder' } })
+
+    const store = useAuthStore()
+    const signupSpy = vi.spyOn(store, 'signup').mockResolvedValue(undefined)
+
+    const wrapper = mountSignup()
+    await wrapper.find('#signup-email').setValue('test@test.com')
+    await wrapper.find('#signup-password').setValue('Password1')
+    await wrapper.find('#signup-confirm').setValue('Password1')
+    await wrapper.find('form').trigger('submit.prevent')
+
+    expect(signupSpy).toHaveBeenCalledWith('test@test.com', 'Password1')
+    expect(mockReplace).toHaveBeenCalledWith('/builder')
+  })
+
+  it('redirects to /dashboard after successful signup when no query.redirect', async () => {
+    const store = useAuthStore()
+    vi.spyOn(store, 'signup').mockResolvedValue(undefined)
+
+    const wrapper = mountSignup()
+    await wrapper.find('#signup-email').setValue('test@test.com')
+    await wrapper.find('#signup-password').setValue('Password1')
+    await wrapper.find('#signup-confirm').setValue('Password1')
+    await wrapper.find('form').trigger('submit.prevent')
+
+    expect(mockReplace).toHaveBeenCalledWith('/dashboard')
   })
 })
