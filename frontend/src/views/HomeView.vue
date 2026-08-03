@@ -8,6 +8,7 @@ import { RouterLink } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import SvgIllustration from '@/components/SvgIllustration.vue'
 
+import { computed } from 'vue'
 import heroIllustrationRaw from '@/assets/illustrations/hero-illustration.svg?raw'
 import tailorIllustrationRaw from '@/assets/illustrations/tailor-illustration.svg?raw'
 import sectionsIllustrationRaw from '@/assets/illustrations/sections-illustration.svg?raw'
@@ -17,6 +18,12 @@ import blob1Raw from '@/assets/illustrations/decorative/blob-1.svg?raw'
 import blob2Raw from '@/assets/illustrations/decorative/blob-2.svg?raw'
 import blob3Raw from '@/assets/illustrations/decorative/blob-3.svg?raw'
 import waveDividerRaw from '@/assets/illustrations/decorative/wave-divider.svg?raw'
+import dotPatternRaw from '@/assets/illustrations/decorative/dot-pattern.svg?raw'
+
+/** URL-encoded dot-pattern for use as a repeating background image */
+const dotPatternBg = computed(
+  () => `url("data:image/svg+xml,${encodeURIComponent(dotPatternRaw)}")`,
+)
 
 const features = [
   {
@@ -113,7 +120,10 @@ const features = [
     </div>
 
     <!-- Features Section -->
-    <section class="relative py-16 lg:py-24">
+    <section
+      class="relative py-16 lg:py-24"
+      :style="{ backgroundImage: dotPatternBg, backgroundRepeat: 'repeat' }"
+    >
       <!-- Decorative blobs -->
       <div
         class="absolute top-20 right-0 w-[350px] h-[350px] opacity-40 pointer-events-none"
