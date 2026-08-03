@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuth } from '@/features/auth/composables/useAuth'
 import { ApiRequestError } from '@/shared/composables/useApi'
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card'
@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 
 const router = useRouter()
+const route = useRoute()
 const { isAuthenticated, signup } = useAuth()
 
 const email = ref('')
@@ -36,7 +37,7 @@ function onEmailBlur() {
 
 onMounted(() => {
   if (isAuthenticated) {
-    router.replace('/builder')
+    router.replace('/dashboard')
   }
 })
 
@@ -70,7 +71,12 @@ async function handleSubmit() {
   submitting.value = true
   try {
     await signup(email.value, password.value)
-    router.replace('/builder')
+    const redirect = route.query.redirect
+    if (typeof redirect === 'string') {
+      router.replace(redirect)
+    } else {
+      router.replace('/dashboard')
+    }
   } catch (err) {
     if (err instanceof ApiRequestError) {
       if (err.errors) {
@@ -93,7 +99,7 @@ async function handleSubmit() {
   <div class="flex min-h-screen items-center justify-center px-4">
     <Card class="w-full max-w-md">
       <CardHeader>
-        <CardTitle>Sign up</CardTitle>
+        <CardTitle>Sign Up</CardTitle>
       </CardHeader>
       <CardContent>
         <form @submit.prevent="handleSubmit" novalidate>
@@ -105,7 +111,6 @@ async function handleSubmit() {
                 v-model="email"
                 type="email"
                 autocomplete="email"
-                placeholder="you@example.com"
                 :disabled="submitting"
                 @blur="onEmailBlur"
               />
@@ -133,11 +138,9 @@ async function handleSubmit() {
             </div>
 
             <Alert v-if="hasErrors" variant="destructive">
-              <AlertTitle>Signup failed</AlertTitle>
+              <AlertTitle>Error</AlertTitle>
               <AlertDescription>
-                <ul class="list-disc pl-4 m-0">
-                  <li v-for="(error, i) in errors" :key="i">{{ error }}</li>
-                </ul>
+                <p v-for="(msg, i) in errors" :key="i">{{ msg }}</p>
               </AlertDescription>
             </Alert>
 
@@ -150,7 +153,7 @@ async function handleSubmit() {
       <CardFooter class="justify-center">
         <p class="text-sm text-muted-foreground">
           Already have an account?
-          <RouterLink to="/login" class="text-primary hover:underline">Log in</RouterLink>
+          <RouterLink to="/login" class="underline underline-offset-4 hover:text-primary">Log in</RouterLink>
         </p>
       </CardFooter>
     </Card>
