@@ -1,50 +1,40 @@
-# RES-32: Restyle AccountView with Tailwind + shadcn-vue
+# RES-45: Replace section editor with all-sections stacked view
 
 ## Summary
 
-The AccountView page was restyled to use Tailwind CSS and shadcn-vue components. The work was already present in the codebase (merged as part of RES-29 dependency) and verified to be complete.
+Replaced the one-at-a-time section editor with a scrollable stacked view showing all enabled sections at once. Each section has a collapsible header with color accent matching the sidebar. Clicking a section in the sidebar smooth-scrolls to it; clicking a disabled section enables it and scrolls to it.
 
 ## Changes
 
-### `frontend/src/views/AccountView.vue`
-- Three Card sections: Account Info, Change Password, Delete Account
-- Account Info shows user email with Label
-- Change Password form with three Input+Label fields (current, new, confirm)
-- Error Alert (destructive variant) for validation and API errors
-- Success Alert (green) with "Redirecting to login..." message
-- Delete Account Card with `border-destructive` class
-- Destructive CardTitle (`text-destructive`)
-- Confirmation text input with code-styled hint
-- Destructive variant Button for delete action
-- No `<style>` block — all styling via Tailwind utility classes
+### 1. SectionEditor.vue (from RES-48, merged to master)
+- Renders ALL enabled sections stacked vertically instead of a single editor
+- Each section has a colored header (`border-l-4 border-blue-500 bg-blue-50`) with section name and collapse/expand chevron
+- Collapse state persisted in local `ref<Set<SectionType>>` — start all expanded
+- `setSectionRef` map populates via `:ref` function binding
+- Watches `selectedSectionId` → calls `scrollIntoView({ behavior: 'smooth', block: 'start' })`
+- Lazy-loaded editors via `defineAsyncComponent` preserved
 
-### shadcn-vue components used
-- Card, CardHeader, CardTitle, CardContent
-- Button (default + destructive variant)
-- Input (password + text types)
-- Label
-- Alert, AlertDescription
+### 2. SectionToggles.vue (commit b99d91d)
+- Clicking a disabled section label now emits `toggle` then `select` (enables + scrolls to it)
+- Clicking an enabled section label emits `select` only (no toggle)
 
-### `frontend/src/views/__tests__/AccountView.spec.ts`
-- Updated selectors for new DOM structure (h3 headings, `[role="alert"]`)
-- Tests for destructive border class, destructive heading class
-
-## Verification
-
-| Check | Result |
-|-------|--------|
-| Type-check | ✅ Clean |
-| Lint | ✅ 0 errors (430 pre-existing JSDoc warnings) |
-| Tests | ✅ 416 passed, 35 files |
-| Coverage | ✅ 93.84% stmts, 91.44% branches (above 90% threshold) |
+### 3. ResumeBuilder.vue
+- No structural changes needed — `selectedSectionId` binding unchanged
+- Center panel content is the new stacked all-sections view
 
 ## Acceptance Criteria
 
-- [x] Three Card sections: Account Info, Change Password, Delete Account
-- [x] Account Info shows user email
-- [x] Change Password form works identically — success redirects to login after 2s
-- [x] Delete Account form works identically — confirmation text, destructive button
-- [x] Danger zone Card has red/destructive border (`border-destructive`)
-- [x] Error and success messages use Alert components
-- [x] Existing AccountView tests updated and passing
-- [x] No scoped `<style>` block
+- [x] Center panel shows ALL enabled sections stacked vertically
+- [x] Each section has a colored header with section name and collapse/expand toggle
+- [x] Sections are collapsible — clicking header toggles visibility
+- [x] Clicking an enabled section in the sidebar smooth-scrolls the center panel to that section
+- [x] Clicking a disabled section in the sidebar enables it and smooth-scrolls to it
+- [x] All existing editor tests adapted for the new layout (13 tests in SectionEditor.spec.ts)
+- [x] ≥90% coverage maintained (93.84% statements, 91.44% branches, 95.06% functions, 93.82% lines)
+
+## Test Results
+
+- 35 test files, 416 tests — all pass
+- SectionEditor.spec.ts: 13 tests (rendering, collapse/expand, scroll-to)
+- SectionToggles.spec.ts: 31 tests (including disabled-section enable+select test)
+- Coverage: 93.84% statements / 91.44% branches / 95.06% functions / 93.82% lines
