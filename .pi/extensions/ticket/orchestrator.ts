@@ -893,6 +893,13 @@ async function onWorkerComplete(
   let prError: string | null = null;
 
   if (exitCode === 0) {
+    // Commit changes first (agent should have already done this, but ensure it)
+    const hasChanges = !isCleanCheck(worktreePath);
+    if (hasChanges) {
+      const commitMsg = `${node.ticket.title}\n\nCloses ${identifier}`;
+      commitAll(worktreePath, commitMsg);
+    }
+
     // Verify the worker actually changed something meaningful.
     // Agents that only touch resume.pdf (generated artifact) did no real work.
     if (!hasMeaningfulWork(worktreePath, getDefaultBranch())) {
@@ -914,13 +921,6 @@ async function onWorkerComplete(
       saveStateSnapshot(node);
       node._onComplete?.({ exitCode, branchPushed: false, prUrl: null, prError: 'No meaningful changes' });
       return;
-    }
-
-    // Commit changes (worker should have already done this, but ensure it)
-    const hasChanges = !isCleanCheck(worktreePath);
-    if (hasChanges) {
-      const commitMsg = `${node.ticket.title}\n\nCloses ${identifier}`;
-      commitAll(worktreePath, commitMsg);
     }
 
     const config = getAgentConfig();
