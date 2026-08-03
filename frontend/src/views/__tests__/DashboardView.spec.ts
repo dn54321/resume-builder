@@ -4,6 +4,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { createRouter, createWebHistory } from 'vue-router'
 import DashboardView from '@/views/DashboardView.vue'
+import ConfirmModal from '@/shared/components/ConfirmModal.vue'
 import { useAuthStore } from '@/features/auth/stores/auth'
 
 const mockFetch = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>()
@@ -233,7 +234,7 @@ describe('DashboardView', () => {
 
   // ── Delete Button ───────────────────────────────────────────
 
-  it('does not show delete button', async () => {
+  it('shows trash icon button on each resume card', async () => {
     createAuthenticatedStore()
     mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
 
@@ -243,9 +244,127 @@ describe('DashboardView', () => {
 
     await flushPromises()
 
-    // No delete action visible
-    expect(wrapper.text()).not.toContain('Delete')
-    expect(wrapper.text()).not.toContain('delete')
+    const deleteBtns = wrapper.findAll('[data-testid="delete-btn"]')
+    expect(deleteBtns.length).toBe(2)
+  })
+
+  it('opens confirm modal on trash button click', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    // ConfirmModal should not be visible initially
+    const modal = wrapper.getComponent(ConfirmModal)
+    expect(modal.props('modelValue')).toBe(false)
+
+    // Click trash on first card
+    const deleteBtns = wrapper.findAll('[data-testid="delete-btn"]')
+    await deleteBtns[0]!.trigger('click')
+    await flushPromises()
+
+    // ConfirmModal should now be visible with correct props
+    expect(modal.props('modelValue')).toBe(true)
+    expect(modal.props('title')).toBe('Delete standard?')
+    expect(modal.props('description')).toBe('This action cannot be undone.')
+    expect(modal.props('variant')).toBe('destructive')
+  })
+
+  it('deletes resume on confirm and removes from list', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    // The DELETE call
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(null, 204))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    // Click trash on first card
+    const deleteBtns = wrapper.findAll('[data-testid="delete-btn"]')
+    await deleteBtns[0]!.trigger('click')
+    await flushPromises()
+
+    // Emit confirm on the modal
+    const modal = wrapper.getComponent(ConfirmModal)
+    await modal.vm.$emit('confirm')
+    await flushPromises()
+
+    // Verify DELETE was called
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/v1/resumes/resume-1',
+      expect.objectContaining({ method: 'DELETE' }),
+    )
+
+    // Only resume-2 remains
+    const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
+    expect(cards.length).toBe(1)
+    expect(cards[0]!.find('.resume-card__name').text()).toBe('modern')
+  })
+
+  it('closes modal without deleting when cancel is clicked', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    // Click trash on first card
+    const deleteBtns = wrapper.findAll('[data-testid="delete-btn"]')
+    await deleteBtns[0]!.trigger('click')
+    await flushPromises()
+
+    // Emit cancel on the modal
+    const modal = wrapper.getComponent(ConfirmModal)
+    await modal.vm.$emit('cancel')
+    await flushPromises()
+
+    // DELETE should NOT have been called (only the initial GET)
+    const deleteCalls = mockFetch.mock.calls.filter(
+      (call: unknown[]) => call[1] && (call[1] as RequestInit).method === 'DELETE',
+    )
+    expect(deleteCalls.length).toBe(0)
+
+    // Both resumes still present
+    const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
+    expect(cards.length).toBe(2)
+  })
+
+  it('shows error alert when delete fails', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    mockFetch.mockResolvedValueOnce(
+      mockJsonResponse({ message: 'Failed to delete resume' }, 500),
+    )
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    // Click trash on first card
+    const deleteBtns = wrapper.findAll('[data-testid="delete-btn"]')
+    await deleteBtns[0]!.trigger('click')
+    await flushPromises()
+
+    // Emit confirm on the modal
+    const modal = wrapper.getComponent(ConfirmModal)
+    await modal.vm.$emit('confirm')
+    await flushPromises()
+
+    // Error alert should show
+    expect(wrapper.find('.alert-error').exists()).toBe(true)
+    expect(wrapper.find('.alert-error').text()).toBe('Failed to delete resume')
   })
 
   // ── Create Resume Flow ─────────────────────────────────────

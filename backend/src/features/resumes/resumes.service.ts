@@ -63,6 +63,19 @@ export class ResumesService {
     return this.decryptResumeFields(resume);
   }
 
+  async delete(id: string, userId: string): Promise<void> {
+    const resume = await this.prisma.resume.findUnique({
+      where: { id },
+      select: { userId: true },
+    });
+
+    if (!resume || resume.userId !== userId) {
+      throw new NotFoundException('Resume not found');
+    }
+
+    await this.prisma.resume.delete({ where: { id } });
+  }
+
   async create(userId: string, dto: CreateResumeDto): Promise<ResumeTree> {
     return this.prisma.$transaction(async (tx) => {
       const resume = await tx.resume.create({
