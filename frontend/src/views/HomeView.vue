@@ -83,7 +83,7 @@ const features = [
             </RouterLink>
           </template>
           <template v-else>
-            <RouterLink to="/signup">
+            <RouterLink to="/builder">
               <Button size="lg">Get Started</Button>
             </RouterLink>
             <RouterLink to="/login">
