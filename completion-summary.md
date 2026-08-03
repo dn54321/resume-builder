@@ -1,31 +1,35 @@
-# RES-29 Completion Summary
+# RES-30 Completion Summary
 
 ## What was done
 
-The ticket was already completed in 3 prior commits (c6ee7b5, 6e9b344, 77e6fb7). All acceptance criteria are verified:
+Updated the e2e test (`frontend/e2e/vue.spec.ts`) to match the new App.vue shell and HomeView content implemented in commit `bdf238a`.
 
-### 1. Tailwind CSS v4 installed and configured
-- `tailwindcss` ^4.3.3 and `@tailwindcss/vite` ^4.3.3 in devDependencies
-- `vite.config.ts` imports and uses `tailwindcss()` plugin
-- `main.css` starts with `@import "tailwindcss"` and has shadcn-vue CSS variable theme for light and dark modes
+The App.vue shell, AppLogo.vue, ThemeToggle.vue, and all associated unit tests were already committed to the branch in prior work. The full implementation includes:
 
-### 2. All 11 Vue boilerplate files deleted
-Confirmed none of these exist in the source tree:
-- HelloWorld.vue, TheWelcome.vue, WelcomeItem.vue
-- IconCommunity.vue, IconDocumentation.vue, IconEcosystem.vue, IconSupport.vue, IconTooling.vue
-- logo.svg, base.css, AboutView.vue
+### App.vue shell
+- Sticky navbar with bottom border and `bg-background` (shadcn theming)
+- Brand logo (AppLogo) + "Resume Builder" as home link
+- ThemeToggle for light/dark/system mode switching
+- Guest state: "Log in" (ghost) and "Sign up" (primary) buttons
+- Authenticated state: "My Resumes" link, user email dropdown
+- Dropdown with "Account settings" → `/account` and "Log out" → logout + redirect
+- `<RouterView />` in `<main class="flex-1">` for page content
+- Responsive: max-w-7xl container, responsive padding, truncated email
 
-### 3. shadcn-vue initialized
-- `components.json` at `frontend/components.json` with base color "zinc", CSS variables enabled, Tailwind CSS 4
-- `cn()` utility in `frontend/src/lib/utils.ts` using clsx + tailwind-merge
+### AppLogo.vue
+- 32×32 inline SVG document icon with stacked pages
+- Uses `currentColor` for theme-aware rendering
+- Accent bar uses `var(--color-primary)` CSS variable
 
-### 4. shadcn-vue components installed
-All 9 components present in `frontend/src/components/ui/`:
-- button, input, card, label, dropdown-menu, separator, badge, skeleton, alert
+### Tests
+- **App.spec.ts**: 31 tests covering rendering, guest state, authenticated state, navbar structure, responsive layout, dropdown menu
+- **AppLogo.spec.ts**: 10 tests covering SVG structure, dimensions, accessibility
+- **App shell e2e**: 2 Playwright tests verifying navbar renders with brand, sticky/border classes, RouterView content, and guest nav links
 
-### 5. Build and tests
-- `vue-tsc --build`: ✅ no errors
-- `npm run lint`: ✅ 0 errors (JSDoc warnings only)
-- `vite build`: ✅ production build succeeds
-- `vitest run --coverage`: ✅ 35/35 files pass, 416/416 tests pass
-- Coverage: 93.84% statements, 91.44% branches, 95.06% functions, 93.82% lines (all above 90% threshold)
+## Validation
+
+- **Unit tests**: 35 files, 416 tests — all pass
+- **Coverage**: 93.84% (above 90% threshold)
+- **Type-check**: clean
+- **Lint**: 0 errors (430 pre-existing JSDoc warnings)
+- **E2E**: 2/2 pass (updated `vue.spec.ts`)
