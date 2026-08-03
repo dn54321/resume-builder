@@ -42,6 +42,7 @@ export class ResumesService {
       where: { userId },
       select: {
         id: true,
+        name: true,
         layout: true,
         createdAt: true,
         updatedAt: true,
@@ -81,6 +82,7 @@ export class ResumesService {
       const resume = await tx.resume.create({
         data: {
           userId,
+          name: dto.name ?? null,
           layout: dto.layout ?? 'standard',
         },
       });
@@ -118,10 +120,17 @@ export class ResumesService {
         throw new NotFoundException('Resume not found');
       }
 
+      const updateData: { name?: string; layout?: string } = {};
+      if (dto.name !== undefined) {
+        updateData.name = dto.name;
+      }
       if (dto.layout !== undefined) {
+        updateData.layout = dto.layout;
+      }
+      if (Object.keys(updateData).length > 0) {
         await tx.resume.update({
           where: { id },
-          data: { layout: dto.layout },
+          data: updateData,
         });
       }
 

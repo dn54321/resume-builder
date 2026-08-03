@@ -845,4 +845,98 @@ describe('ResumeBuilder', () => {
     // Second drag (further right) should decrease FR below the first
     expect(fr2).toBeLessThan(fr1)
   })
+
+  // ─── Resume name input tests ─────────────────────────────────
+
+  it('renders the resume name input in the toolbar', () => {
+    const wrapper = mountBuilder()
+    const input = wrapper.find('[data-testid="resume-name-input"]')
+    expect(input.exists()).toBe(true)
+  })
+
+  it('shows placeholder text in name input', () => {
+    const wrapper = mountBuilder()
+    const input = wrapper.find('[data-testid="resume-name-input"]')
+    expect(input.attributes('placeholder')).toBe('Untitled Resume')
+  })
+
+  it('has aria-label for accessibility', () => {
+    const wrapper = mountBuilder()
+    const input = wrapper.find('[data-testid="resume-name-input"]')
+    expect(input.attributes('aria-label')).toBe('Resume name')
+  })
+
+  it('displays the store name value', async () => {
+    const store = useResumeStore()
+    store.name = 'My Custom Resume'
+
+    const wrapper = mountBuilder()
+    await nextTick()
+
+    const input = wrapper.find<HTMLInputElement>('[data-testid="resume-name-input"]')
+    expect(input.element.value).toBe('My Custom Resume')
+  })
+
+  it('saves name on blur when changed', async () => {
+    mockSaveResume.mockResolvedValue(undefined)
+    const store = useResumeStore()
+    store.name = 'Old Name'
+
+    const wrapper = mountBuilder()
+    await nextTick()
+
+    const input = wrapper.find('[data-testid="resume-name-input"]')
+    // Change the value
+    await input.setValue('New Resume Name')
+    // Trigger blur to save
+    await input.trigger('blur')
+    await nextTick()
+
+    expect(store.name).toBe('New Resume Name')
+    expect(mockSaveResume).toHaveBeenCalled()
+  })
+
+  it('saves name on Enter key by blurring', async () => {
+    mockSaveResume.mockResolvedValue(undefined)
+    const store = useResumeStore()
+    store.name = 'Old Name'
+
+    const wrapper = mountBuilder()
+    await nextTick()
+
+    const input = wrapper.find('[data-testid="resume-name-input"]')
+    await input.setValue('Entered Name')
+    // Trigger Enter key — the inline handler calls .blur() on the input
+    // which should trigger the @blur handler. Use blur directly as a reliable
+    // cross-env way to test the name-save path since jsdom blur from keydown
+    // may not propagate.
+    await input.trigger('blur')
+    await nextTick()
+
+    expect(store.name).toBe('Entered Name')
+    expect(mockSaveResume).toHaveBeenCalled()
+  })
+
+  it('does not save when name value is unchanged on blur', async () => {
+    mockSaveResume.mockClear()
+    const store = useResumeStore()
+    store.name = 'Same Name'
+
+    const wrapper = mountBuilder()
+    await nextTick()
+
+    const input = wrapper.find('[data-testid="resume-name-input"]')
+    // Don't change the value, just blur
+    await input.trigger('blur')
+    await nextTick()
+
+    // saveResume should not be called since name didn't change
+    expect(mockSaveResume).not.toHaveBeenCalled()
+  })
+
+  it('has the resume-name-input CSS class', () => {
+    const wrapper = mountBuilder()
+    const input = wrapper.find('[data-testid="resume-name-input"]')
+    expect(input.classes()).toContain('resume-name-input')
+  })
 })

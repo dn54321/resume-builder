@@ -197,6 +197,7 @@ describe('useResumeData', () => {
 
       const store = useResumeStore()
       store.initializeDefaults()
+      store.name = 'Local Resume'
       store.setLayout('column2-1')
       store.toggleSection('hobbies') // disable one
 
@@ -204,6 +205,7 @@ describe('useResumeData', () => {
       await saveResume()
 
       const stored = JSON.parse(localStorage.getItem('resume_data')!)
+      expect(stored.name).toBe('Local Resume')
       expect(stored.layout).toBe('column2-1')
       // All 10 sections serialized; hobbies is disabled
       expect(stored.sections).toHaveLength(10)

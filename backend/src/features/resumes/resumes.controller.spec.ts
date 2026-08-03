@@ -19,6 +19,7 @@ import { AuthGuard } from '../../common/guards/auth.guard';
 
 interface ResumeBody {
   id: string;
+  name: string | null;
   layout: string;
   sections?: SectionBody[];
 }
@@ -108,7 +109,7 @@ describe('ResumesController', () => {
   describe('GET /api/v1/resumes', () => {
     it('returns resume summaries for authenticated user', async () => {
       mockResumesService.findAll.mockResolvedValue([
-        { id: 'r1', layout: 'standard' },
+        { id: 'r1', name: 'My Resume', layout: 'standard' },
       ]);
 
       const response = await request(app.getHttpServer())
@@ -132,6 +133,7 @@ describe('ResumesController', () => {
     it('returns full tree with decrypted field values', async () => {
       const resume: ResumeBody = {
         id: 'r1',
+        name: null,
         layout: 'standard',
         sections: [
           {
@@ -200,6 +202,7 @@ describe('ResumesController', () => {
     it('creates resume and returns decrypted values', async () => {
       const created: ResumeBody = {
         id: 'new-resume',
+        name: 'My Resume',
         layout: 'standard',
         sections: [
           {
@@ -266,6 +269,7 @@ describe('ResumesController', () => {
     it('updates resume and returns updated tree', async () => {
       const updated: ResumeBody = {
         id: 'r1',
+        name: null,
         layout: 'compact',
         sections: [],
       };

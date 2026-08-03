@@ -21,6 +21,7 @@ interface EncryptedFieldResult {
 interface ResumeRow {
   id: string;
   userId: string;
+  name: string | null;
   layout: string;
   createdAt: Date;
   updatedAt: Date;
@@ -57,6 +58,7 @@ interface ResumeSectionRow {
 interface ResumeTreeRow {
   id: string;
   userId: string;
+  name: string | null;
   layout: string;
   createdAt: Date;
   updatedAt: Date;
@@ -126,6 +128,7 @@ describe('ResumesService', () => {
     return {
       id: resumeId,
       userId,
+      name: null,
       layout: 'standard',
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -208,6 +211,7 @@ describe('ResumesService', () => {
         {
           id: 'r1',
           userId,
+          name: null,
           layout: 'standard',
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -215,6 +219,7 @@ describe('ResumesService', () => {
         {
           id: 'r2',
           userId,
+          name: 'My Resume',
           layout: 'compact',
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -228,6 +233,7 @@ describe('ResumesService', () => {
         where: { userId },
         select: {
           id: true,
+          name: true,
           layout: true,
           createdAt: true,
           updatedAt: true,
@@ -236,6 +242,24 @@ describe('ResumesService', () => {
       });
       expect(result).toHaveLength(2);
       expect(result[0].id).toBe('r1');
+    });
+
+    it('returns name field when present', async () => {
+      const rows: ResumeRow[] = [
+        {
+          id: 'r1',
+          userId,
+          name: 'My Custom Resume',
+          layout: 'standard',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ];
+      mockPrisma.resume.findMany.mockResolvedValue(rows);
+
+      const result = await service.findAll(userId);
+
+      expect(result[0].name).toBe('My Custom Resume');
     });
 
     it('returns empty array when user has no resumes', async () => {
@@ -421,6 +445,7 @@ describe('ResumesService', () => {
       const createdResume = {
         id: resumeId,
         userId,
+        name: null,
         layout: 'standard',
       };
       const createdSection = {
@@ -485,6 +510,52 @@ describe('ResumesService', () => {
 
       expect(result.sections).toBeDefined();
     });
+
+    it('creates resume with name when provided', async () => {
+      const dtoWithName: CreateResumeDto = {
+        name: 'My Resume',
+        layout: 'standard',
+        sections: [],
+      };
+
+      mockPrisma.$transaction.mockImplementation(
+        async (cb: TransactionCallback<ResumeTreeRow>) => {
+          const tx = {
+            resume: {
+              create: jest.fn().mockResolvedValue({
+                id: resumeId,
+                userId,
+                name: 'My Resume',
+                layout: 'standard',
+              }),
+              findUnique: jest
+                .fn()
+                .mockResolvedValue(makeResumeResponse({ name: 'My Resume' })),
+            },
+            resumeSection: {
+              create: jest.fn(),
+            },
+            sectionEntry: {
+              create: jest.fn(),
+            },
+            sectionField: {
+              create: jest.fn(),
+            },
+          };
+          const result = cb(tx);
+          return result instanceof Promise ? result : Promise.resolve(result);
+        },
+      );
+
+      mockCrypto.decryptField.mockImplementation(
+        (encrypted: string, _iv: string, _authTag: string) =>
+          encrypted.replace('enc_', ''),
+      );
+
+      const result = await service.create(userId, dtoWithName);
+
+      expect(result.name).toBe('My Resume');
+    });
   });
 
   describe('update', () => {
@@ -492,12 +563,14 @@ describe('ResumesService', () => {
       const existingResume: ResumeRow = {
         id: resumeId,
         userId,
+        name: null,
         layout: 'standard',
         createdAt: new Date(),
         updatedAt: new Date(),
       };
       const existingSections = [{ id: 'rs-1' }];
       const updatedResume = makeResumeResponse({
+        name: 'Updated Name',
         layout: 'compact',
       });
 
@@ -551,12 +624,116 @@ describe('ResumesService', () => {
       const result = await service.update(resumeId, userId, dto);
 
       expect(result.layout).toBe('compact');
+      expect(result.name).toBe('Updated Name');
+    });
+
+    it('updates name when provided without layout or sections', async () => {
+      const existingResume: ResumeRow = {
+        id: resumeId,
+        userId,
+        name: 'Old Name',
+        layout: 'standard',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      const updatedResume = makeResumeResponse({ name: 'New Name' });
+
+      mockPrisma.$transaction.mockImplementation(
+        async (cb: TransactionCallback<ResumeTreeRow>) => {
+          const tx = {
+            resume: {
+              findUnique: jest
+                .fn()
+                .mockResolvedValueOnce(existingResume)
+                .mockResolvedValueOnce(updatedResume),
+              update: jest.fn().mockResolvedValue({}),
+            },
+            resumeSection: {
+              findMany: jest.fn(),
+              deleteMany: jest.fn(),
+              create: jest.fn(),
+            },
+            sectionEntry: {
+              deleteMany: jest.fn(),
+              create: jest.fn(),
+            },
+            sectionField: {
+              create: jest.fn(),
+            },
+          };
+          const result = cb(tx);
+          return result instanceof Promise ? result : Promise.resolve(result);
+        },
+      );
+
+      mockCrypto.decryptField.mockImplementation(
+        (encrypted: string, _iv: string, _authTag: string) =>
+          encrypted.replace('enc_', ''),
+      );
+
+      const dto: UpdateResumeDto = { name: 'New Name' };
+
+      const result = await service.update(resumeId, userId, dto);
+
+      expect(result.name).toBe('New Name');
+    });
+
+    it('clears name when updated with empty string', async () => {
+      const existingResume: ResumeRow = {
+        id: resumeId,
+        userId,
+        name: 'Old Name',
+        layout: 'standard',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      const updatedResume = makeResumeResponse({ name: '' });
+
+      mockPrisma.$transaction.mockImplementation(
+        async (cb: TransactionCallback<ResumeTreeRow>) => {
+          const tx = {
+            resume: {
+              findUnique: jest
+                .fn()
+                .mockResolvedValueOnce(existingResume)
+                .mockResolvedValueOnce(updatedResume),
+              update: jest.fn().mockResolvedValue({}),
+            },
+            resumeSection: {
+              findMany: jest.fn(),
+              deleteMany: jest.fn(),
+              create: jest.fn(),
+            },
+            sectionEntry: {
+              deleteMany: jest.fn(),
+              create: jest.fn(),
+            },
+            sectionField: {
+              create: jest.fn(),
+            },
+          };
+          const result = cb(tx);
+          return result instanceof Promise ? result : Promise.resolve(result);
+        },
+      );
+
+      mockCrypto.decryptField.mockImplementation(
+        (encrypted: string, _iv: string, _authTag: string) =>
+          encrypted.replace('enc_', ''),
+      );
+
+      const dto: UpdateResumeDto = { name: '' };
+
+      const result = await service.update(resumeId, userId, dto);
+
+      expect(result.name).toBe('');
     });
 
     it('replaces all sections atomically when sections provided', async () => {
       const existingResume: ResumeRow = {
         id: resumeId,
         userId,
+        name: null,
         layout: 'standard',
         createdAt: new Date(),
         updatedAt: new Date(),
