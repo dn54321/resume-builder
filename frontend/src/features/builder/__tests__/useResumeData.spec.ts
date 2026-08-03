@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { nextTick } from 'vue'
 import { setActivePinia, createPinia } from 'pinia'
 import { useResumeStore } from '@/features/builder/stores/resume'
 import { useAuthStore } from '@/features/auth/stores/auth'
@@ -98,12 +99,94 @@ describe('useResumeData', () => {
       store.initializeDefaults()
       SECTION_TYPES.forEach((t) => store.toggleSection(t))
 
-      const { loadResume } = useResumeData()
+      const { loadResume, dirty } = useResumeData()
       await loadResume()
 
       // Corrupted data is cleared, defaults loaded
       expect(localStorage.getItem('resume_data')).toBeNull()
       expect(store.sections).toHaveLength(10)
+      // After load, dirty should be false
+      expect(dirty.value).toBe(false)
+    })
+
+    it('is not dirty after loadResume completes', async () => {
+      const auth = useAuthStore()
+      auth.logout()
+
+      const store = useResumeStore()
+      store.initializeDefaults()
+      SECTION_TYPES.forEach((t) => store.toggleSection(t))
+
+      const { loadResume, dirty } = useResumeData()
+      await loadResume()
+
+      expect(dirty.value).toBe(false)
+    })
+
+    it('becomes dirty when store is mutated after load', async () => {
+      const auth = useAuthStore()
+      auth.logout()
+
+      const store = useResumeStore()
+      store.initializeDefaults()
+      SECTION_TYPES.forEach((t) => store.toggleSection(t))
+
+      const { loadResume, dirty } = useResumeData()
+      await loadResume()
+      expect(dirty.value).toBe(false)
+
+      // Mutate the store
+      store.setLayout('column2-1')
+      await nextTick()
+      expect(dirty.value).toBe(true)
+    })
+
+    it('clears dirty after explicit saveResume', async () => {
+      const auth = useAuthStore()
+      auth.logout()
+
+      const store = useResumeStore()
+      store.initializeDefaults()
+      SECTION_TYPES.forEach((t) => store.toggleSection(t))
+
+      const { loadResume, saveResume, dirty } = useResumeData()
+      await loadResume()
+
+      // Mutate to make dirty
+      store.setLayout('column2-1')
+      await nextTick()
+      expect(dirty.value).toBe(true)
+
+      // Save should clear dirty
+      await saveResume()
+      expect(dirty.value).toBe(false)
+    })
+
+    it('clears dirty when auto-save fires', async () => {
+      vi.useFakeTimers()
+      const auth = useAuthStore()
+      auth.logout()
+
+      const store = useResumeStore()
+      store.initializeDefaults()
+      SECTION_TYPES.forEach((t) => store.toggleSection(t))
+
+      const { loadResume, setupAutoSave, teardownAutoSave, dirty } = useResumeData()
+      await loadResume()
+      setupAutoSave()
+      expect(dirty.value).toBe(false)
+
+      // Mutate store — dirty goes true
+      store.setLayout('column2-1')
+      await nextTick()
+      expect(dirty.value).toBe(true)
+
+      // Advance timer past debounce — auto-save fires and clears dirty
+      await vi.advanceTimersByTimeAsync(2000)
+      expect(dirty.value).toBe(false)
+
+      teardownAutoSave()
+      vi.useRealTimers()
     })
   })
 
