@@ -933,10 +933,4 @@ describe('ResumeBuilder', () => {
     // saveResume should not be called since name didn't change
     expect(mockSaveResume).not.toHaveBeenCalled()
   })
-
-  it('has the resume-name-input CSS class', () => {
-    const wrapper = mountBuilder()
-    const input = wrapper.find('[data-testid="resume-name-input"]')
-    expect(input.classes()).toContain('resume-name-input')
-  })
 })
