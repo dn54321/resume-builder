@@ -26,7 +26,7 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=3000
-      - DATABASE_URL=${DATABASE_URL:-file:./db/dev.db}
+      - DATABASE_URL=${DATABASE_URL:-file:./prisma/db/dev.db}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:${FRONTEND_PORT:-5173}}
       - RESUME_FIELD_ENCRYPTION_KEY=${RESUME_FIELD_ENCRYPTION_KEY:-}
       - SESSION_ENCRYPTION_KEY=${SESSION_ENCRYPTION_KEY:-}
