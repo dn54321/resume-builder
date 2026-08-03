@@ -8,6 +8,8 @@ let pinia: ReturnType<typeof createPinia>
 
 /**
  * Helper to mount FullscreenPreview with required stubs.
+ * @param props
+ * @param props.open
  */
 function mountComponent(props: { open: boolean }) {
   return mount(FullscreenPreview, {

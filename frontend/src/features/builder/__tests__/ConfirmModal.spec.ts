@@ -11,6 +11,8 @@ describe('ConfirmModal', () => {
    * Mount the ConfirmModal. Because reka-ui DialogPortal uses Teleport,
    * content is rendered to document.body. We mount onto a div attached
    * to body so that cleanup is easy.
+   * @param modelValue
+   * @param overrides
    */
   function mountModal(modelValue = false, overrides = {}) {
     wrapperDiv = document.createElement('div')

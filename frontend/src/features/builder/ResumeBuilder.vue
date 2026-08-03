@@ -210,6 +210,10 @@ function showSavedConfirmation() {
 
 // ─── beforeunload handler ─────────────────────────────────────────
 
+/**
+ *
+ * @param event
+ */
 function onBeforeUnload(event: BeforeUnloadEvent) {
   if (dirty.value) {
     event.returnValue = ''

@@ -72,10 +72,16 @@ const scale = computed(() => {
   return Math.min(1.0, scaleX, scaleY)
 })
 
+/**
+ *
+ */
 function close() {
   emit('update:open', false)
 }
 
+/**
+ *
+ */
 function onResize() {
   viewportWidth.value = window.innerWidth
   viewportHeight.value = window.innerHeight
