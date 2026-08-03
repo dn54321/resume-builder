@@ -303,7 +303,7 @@ describe('SectionToggles', () => {
     expect(wrapper.emitted('select')![0]).toEqual(['name_contact' as SectionType])
   })
 
-  it('emits select when clicking a disabled section label (no toggle)', async () => {
+  it('emits toggle and select when clicking a disabled section label', async () => {
     const enabled: SectionType[] = ['name_contact']
     const wrapper = mount(SectionToggles, {
       props: {
@@ -321,13 +321,14 @@ describe('SectionToggles', () => {
     const label = summaryItem!.find('label')
     await label.trigger('click')
 
-    // Should emit select but NOT toggle (toggling is done via checkbox only)
-    expect(wrapper.emitted('toggle')).toBeFalsy()
+    // Should emit toggle first (to enable it), then select (to scroll to it)
+    expect(wrapper.emitted('toggle')).toBeTruthy()
+    expect(wrapper.emitted('toggle')![0]).toEqual(['summary' as SectionType])
     expect(wrapper.emitted('select')).toBeTruthy()
     expect(wrapper.emitted('select')![0]).toEqual(['summary' as SectionType])
   })
 
-  it('does not emit toggle when clicking any section label', async () => {
+  it('does not emit toggle when clicking an enabled section label', async () => {
     const wrapper = mount(SectionToggles, {
       props: {
         layout: 'standard',
@@ -336,24 +337,22 @@ describe('SectionToggles', () => {
       },
     })
 
-    // Clear any existing events by remounting is handled by the factory above.
-    // Record current toggle call count
+    // Capture toggle events before clicking
     const items = wrapper.findAll('li')
     const contactItem = items.find((item) =>
       item.text().includes('Contact'),
     )
     const label = contactItem!.find('label')
 
-    // Capture toggle events before clicking
     const toggleBefore = (wrapper.emitted('toggle') || []).length
 
     await label.trigger('click')
 
-    // Should emit select
+    // Should emit select for enabled section
     expect(wrapper.emitted('select')).toBeTruthy()
     expect(wrapper.emitted('select')![0]).toEqual(['name_contact' as SectionType])
 
-    // Should NOT emit additional toggle events (only from label click)
+    // Should NOT emit toggle for enabled sections
     const toggleAfter = (wrapper.emitted('toggle') || []).length
     expect(toggleAfter).toBe(toggleBefore)
   })

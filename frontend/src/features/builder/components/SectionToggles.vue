@@ -90,10 +90,17 @@ const dropIndicator = ref<{ type: SectionType; position: 'above' | 'below' } | n
 
 /**
  * Handle label click: select the section and scroll the editor to it.
- * Toggling is done via the checkbox, not the label.
+ * For disabled sections, also toggle them on first (enables + scrolls in one click).
+ * @param section
  */
 function onLabelClick(section: OrderedSection): void {
-  emit('select', section.type)
+  if (section.enabled) {
+    emit('select', section.type)
+  } else {
+    // Enable the section first, then select it so the editor scrolls to it
+    emit('toggle', section.type)
+    emit('select', section.type)
+  }
 }
 
 interface OrderedSection {
