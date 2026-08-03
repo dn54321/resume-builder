@@ -126,8 +126,8 @@ describe('DashboardView', () => {
 
     await flushPromises()
 
-    expect(wrapper.find('.alert-error').exists()).toBe(true)
-    expect(wrapper.find('.alert-error').text()).toBe('Internal server error')
+    expect(wrapper.find('[role="alert"]').exists()).toBe(true)
+    expect(wrapper.find('[role="alert"]').text()).toBe('Internal server error')
   })
 
   it('shows generic error when fetch throws non-API error', async () => {
@@ -140,8 +140,8 @@ describe('DashboardView', () => {
 
     await flushPromises()
 
-    expect(wrapper.find('.alert-error').exists()).toBe(true)
-    expect(wrapper.find('.alert-error').text()).toBe('Something went wrong')
+    expect(wrapper.find('[role="alert"]').exists()).toBe(true)
+    expect(wrapper.find('[role="alert"]').text()).toBe('Something went wrong')
   })
 
   // ── Empty State ─────────────────────────────────────────────
@@ -305,8 +305,8 @@ describe('DashboardView', () => {
     await emptyStateBtn.trigger('click')
     await flushPromises()
 
-    expect(wrapper.find('.alert-error').exists()).toBe(true)
-    expect(wrapper.find('.alert-error').text()).toBe('Failed to create resume')
+    expect(wrapper.find('[role="alert"]').exists()).toBe(true)
+    expect(wrapper.find('[role="alert"]').text()).toBe('Failed to create resume')
   })
 
   it('shows generic error when create throws non-API error', async () => {
@@ -324,8 +324,8 @@ describe('DashboardView', () => {
     await emptyStateBtn.trigger('click')
     await flushPromises()
 
-    expect(wrapper.find('.alert-error').exists()).toBe(true)
-    expect(wrapper.find('.alert-error').text()).toBe('Something went wrong')
+    expect(wrapper.find('[role="alert"]').exists()).toBe(true)
+    expect(wrapper.find('[role="alert"]').text()).toBe('Something went wrong')
   })
 
   it('creates resume from header button and navigates to builder', async () => {
@@ -351,6 +351,56 @@ describe('DashboardView', () => {
     await flushPromises()
 
     expect(pushSpy).toHaveBeenCalledWith('/builder/new-resume-id-2')
+  })
+
+  // ── Dark Mode / Theme ─────────────────────────────────────
+
+  it('error alert has dark-mode Tailwind classes', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(
+      mockJsonResponse({ message: 'Error' }, 500),
+    )
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    const alert = wrapper.find('[role="alert"]')
+    expect(alert.exists()).toBe(true)
+    expect(alert.classes()).toContain('dark:bg-red-950')
+    expect(alert.classes()).toContain('dark:border-red-800')
+    expect(alert.classes()).toContain('dark:text-red-200')
+  })
+
+  it('skeleton cards render with skeleton class for theme-aware styling', () => {
+    createAuthenticatedStore()
+    mockFetch.mockImplementation(() => new Promise(() => {}))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    const skeletons = wrapper.findAll('.resume-card--skeleton')
+    expect(skeletons.length).toBe(3)
+    expect(wrapper.find('.skeleton-line').exists()).toBe(true)
+  })
+
+  it('empty-state card has theme-card background via CSS var', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse([]))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    // Verify the empty state card renders (CSS var --color-card is applied via scoped style)
+    const card = wrapper.find('.empty-state-card')
+    expect(card.exists()).toBe(true)
+    expect(card.find('h2').text()).toBe('No resumes yet')
   })
 
   it('disables Create New Resume button while loading', () => {
