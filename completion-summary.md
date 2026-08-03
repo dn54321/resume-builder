@@ -1,34 +1,32 @@
-# RES-54: Save button + unsaved changes guard in builder
+# RES-55: Decorate login and signup pages with brand SVG illustrations
 
 ## Summary
-
-Added explicit save functionality and unsaved-changes protection to the resume builder.
+Added decorative SVG elements (blobs, wave divider, dot patterns) to both LoginView.vue and SignupView.vue, following the same pattern used in HomeView.vue's hero section. Both auth pages now have a visually consistent branded background using the amber/rose gradient palette.
 
 ## Changes
 
-### `frontend/src/features/builder/composables/useResumeData.ts`
-- Added `dirty` ref that tracks unsaved store mutations
-- Used `flush: 'sync'` on the dirty watcher — this was the critical bug fix from the previous attempt. Without it, Vue's async watcher batching meant the watcher fired AFTER `initialLoadComplete` was set to `true`, causing spurious `dirty=true` right after `loadResume()`.
-- `saveResume()` and auto-save both clear `dirty = false` on success
+### `frontend/src/features/auth/LoginView.vue`
+- Imported `SvgIllustration` component and 5 decorative SVGs (blob-1, blob-2, blob-3, wave-divider, dot-pattern)
+- Wrapped the page in a `relative min-h-screen overflow-hidden` container
+- Added 3 blob illustrations positioned behind the card:
+  - blob-1 (amber) — top-right corner
+  - blob-2 (rose) — bottom-left corner
+  - blob-3 (light amber) — off-center at lower opacity
+- Added 3 dot-pattern accents scattered across the page
+- Added wave divider at the bottom edge
+- Card given `relative z-10` to float above decorations
+- All decorative containers have `aria-hidden="true"` and `pointer-events-none`
 
-### `frontend/src/features/builder/ResumeBuilder.vue`
-- Added "Save Changes" button (visible only when `dirty`) next to PDF export
-- `isSaving` ref shows "Saving..." disabled state during save
-- "Saved" confirmation text fades out after 2s using CSS opacity transition
-- `beforeunload` listener sets `event.returnValue = ''` when dirty (browser close guard)
-- `onBeforeRouteLeave` navigation guard shows `ConfirmModal` with async Promise resolution
+### `frontend/src/features/auth/SignupView.vue`
+- Identical decorative structure to LoginView for visual consistency
 
-### `frontend/src/features/builder/components/ConfirmModal.vue` (new)
-- Reka UI Dialog-based confirmation modal
-- Accepts `title`, `description`, `confirmText`, `cancelText` props
-- Emits `confirm`/`cancel` events; supports `v-model` for open state
-- Non-dismissible (prevents escape key and outside click)
+### `frontend/src/features/auth/__tests__/LoginView.spec.ts`
+- Added test: "renders decorative SVG blobs with aria-hidden" — verifies at least 5 `.svg-illustration` elements, at least 4 `[aria-hidden="true"]` containers, and at least 4 `.pointer-events-none` elements
 
-### Tests
-- 44 tests across `ResumeBuilder.spec.ts` and `useResumeData.spec.ts` — all passing
-- Full test suite: 430 tests across 35 files — all passing
-- Tests cover: save button visibility/state, saved confirmation timing, beforeunload behavior, dirty flag lifecycle, auto-save clears dirty
+### `frontend/src/features/auth/__tests__/SignupView.spec.ts`
+- Added same decorative SVG test
 
-## Root cause of previous failure
-
-The dirty watcher was using the default async flush mode. During `loadResume()`, `store.initializeDefaults()` triggers watcher callbacks asynchronously. Since `initialLoadComplete = true` is set synchronously right after the mutation, the pending watcher callbacks fire later and see `initialLoadComplete === true`, incorrectly setting `dirty = true`. Fix: `flush: 'sync'` ensures callbacks fire during the mutation while `initialLoadComplete` is still `false`.
+## Validation
+- `pnpm type-check`: passed
+- `pnpm lint`: passed (only pre-existing JSdoc warnings)
+- `pnpm test:cov`: 35 files, 418 tests passed; coverage 93.84% (above 90% threshold)

@@ -55,6 +55,23 @@ describe('LoginView', () => {
     await realReplace.call(router, '/login')
   })
 
+  it('renders decorative SVG blobs with aria-hidden', () => {
+    const wrapper = mountLogin()
+
+    // All decorative blobs should render SvgIllustration components
+    // (SvgIllustration root has class "svg-illustration")
+    const svgIllustrations = wrapper.findAll('.svg-illustration')
+    expect(svgIllustrations.length).toBeGreaterThanOrEqual(5)
+
+    // The decorative containers should have aria-hidden="true"
+    const ariaHiddenContainers = wrapper.findAll('[aria-hidden="true"]')
+    expect(ariaHiddenContainers.length).toBeGreaterThanOrEqual(4)
+
+    // Decorative containers should have pointer-events-none
+    const pointerEventsNone = wrapper.findAll('.pointer-events-none')
+    expect(pointerEventsNone.length).toBeGreaterThanOrEqual(4)
+  })
+
   it('renders email and password fields', () => {
     const wrapper = mountLogin()
     expect(wrapper.find('#login-email').exists()).toBe(true)

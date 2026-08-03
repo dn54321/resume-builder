@@ -8,6 +8,12 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import SvgIllustration from '@/components/SvgIllustration.vue'
+import blob1Raw from '@/assets/illustrations/decorative/blob-1.svg?raw'
+import blob2Raw from '@/assets/illustrations/decorative/blob-2.svg?raw'
+import blob3Raw from '@/assets/illustrations/decorative/blob-3.svg?raw'
+import waveDividerRaw from '@/assets/illustrations/decorative/wave-divider.svg?raw'
+import dotPatternRaw from '@/assets/illustrations/decorative/dot-pattern.svg?raw'
 
 const router = useRouter()
 const route = useRoute()
@@ -98,6 +104,7 @@ async function handleSubmit() {
 </script>
 
 <template>
+<<<<<<< HEAD
   <div class="flex min-h-screen items-center justify-center px-4">
     <Card class="w-full max-w-md">
       <CardHeader>
@@ -159,5 +166,106 @@ async function handleSubmit() {
         </p>
       </CardFooter>
     </Card>
+=======
+  <div class="relative min-h-screen overflow-hidden">
+    <!-- Decorative blobs behind the card -->
+    <div
+      class="absolute top-0 right-0 w-[500px] h-[500px] opacity-60 pointer-events-none"
+      aria-hidden="true"
+    >
+      <SvgIllustration :svg="blob1Raw" class="absolute -top-20 -right-10 w-full h-full" />
+    </div>
+    <div
+      class="absolute bottom-0 left-0 w-[400px] h-[400px] opacity-50 pointer-events-none"
+      aria-hidden="true"
+    >
+      <SvgIllustration :svg="blob2Raw" class="absolute -bottom-20 -left-10 w-full h-full" />
+    </div>
+    <div
+      class="absolute top-1/3 left-1/4 w-[300px] h-[300px] opacity-30 pointer-events-none"
+      aria-hidden="true"
+    >
+      <SvgIllustration :svg="blob3Raw" class="w-full h-full" />
+    </div>
+
+    <!-- Dot pattern accents -->
+    <div class="absolute inset-0 pointer-events-none" aria-hidden="true">
+      <SvgIllustration :svg="dotPatternRaw" class="absolute top-16 right-32 w-6 h-6 opacity-20" />
+      <SvgIllustration :svg="dotPatternRaw" class="absolute bottom-32 left-20 w-6 h-6 opacity-20" />
+      <SvgIllustration :svg="dotPatternRaw" class="absolute top-1/2 right-16 w-6 h-6 opacity-15" />
+    </div>
+
+    <!-- Wave divider at bottom -->
+    <div class="absolute bottom-0 left-0 right-0 h-16 overflow-hidden pointer-events-none" aria-hidden="true">
+      <SvgIllustration :svg="waveDividerRaw" class="absolute inset-0 w-full h-full opacity-30" />
+    </div>
+
+    <!-- Card -->
+    <div class="flex min-h-screen items-center justify-center px-4">
+      <Card class="w-full max-w-md relative z-10">
+        <CardHeader>
+          <CardTitle>Sign up</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form @submit.prevent="handleSubmit" novalidate>
+            <div class="grid gap-4">
+              <div class="grid gap-2">
+                <Label for="signup-email">Email</Label>
+                <Input
+                  id="signup-email"
+                  v-model="email"
+                  type="email"
+                  autocomplete="email"
+                  placeholder="you@example.com"
+                  :disabled="submitting"
+                  @blur="onEmailBlur"
+                />
+                <p v-if="emailError" class="text-sm text-destructive">{{ emailError }}</p>
+              </div>
+              <div class="grid gap-2">
+                <Label for="signup-password">Password</Label>
+                <Input
+                  id="signup-password"
+                  v-model="password"
+                  type="password"
+                  autocomplete="new-password"
+                  :disabled="submitting"
+                />
+              </div>
+              <div class="grid gap-2">
+                <Label for="signup-confirm">Confirm password</Label>
+                <Input
+                  id="signup-confirm"
+                  v-model="confirmPassword"
+                  type="password"
+                  autocomplete="new-password"
+                  :disabled="submitting"
+                />
+              </div>
+
+              <Alert v-if="hasErrors" variant="destructive">
+                <AlertTitle>Signup failed</AlertTitle>
+                <AlertDescription>
+                  <ul class="list-disc pl-4 m-0">
+                    <li v-for="(error, i) in errors" :key="i">{{ error }}</li>
+                  </ul>
+                </AlertDescription>
+              </Alert>
+
+              <Button type="submit" :disabled="submitting" class="w-full">
+                {{ submitting ? 'Creating account...' : 'Sign up' }}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+        <CardFooter class="justify-center">
+          <p class="text-sm text-muted-foreground">
+            Already have an account?
+            <RouterLink to="/login" class="text-primary hover:underline">Log in</RouterLink>
+          </p>
+        </CardFooter>
+      </Card>
+    </div>
+>>>>>>> ticket/res-55
   </div>
 </template>
