@@ -26,11 +26,6 @@ const router = createRouter({
       component: () => import('../views/AccountView.vue'),
     },
     {
-      path: '/dashboard',
-      name: 'dashboard',
-      component: () => import('../views/DashboardView.vue'),
-    },
-    {
       path: '/builder',
       name: 'builder',
       component: () => import('../features/builder/ResumeBuilder.vue'),
