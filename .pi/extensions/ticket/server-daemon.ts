@@ -193,7 +193,7 @@ function writeDashboard(): void {
   }
 
   lines.push(`══ Ticket Agents Dashboard ${now.padStart(30 - now.length + 21)} ══`);
-  lines.push(`${totalEpics} epic(s) · ${totalTickets} tickets · ${totalRunning} running · ${totalDone} done · ${totalFailed} failed · ${spawnedProcesses.size} active`);
+  lines.push(`${totalEpics} ticket(s) · ${totalTickets} tickets · ${totalRunning} running · ${totalDone} done · ${totalFailed} failed · ${spawnedProcesses.size} active`);
   lines.push('');
 
   // Per-epic breakdown
@@ -420,7 +420,7 @@ function dropEpic(ticketId: string): void {
   const epic = epicGraphs.get(ticketId);
   if (!epic) return;
   epicGraphs.delete(ticketId);
-  log(`Dropped epic ${ticketId}. Remaining epics: ${epicGraphs.size}`);
+  log(`Dropped ticket ${ticketId}. Remaining epics: ${epicGraphs.size}`);
   saveAllState();
   writeDashboard();
 }
@@ -441,12 +441,12 @@ async function handleCommand(from: string, text: string): Promise<void> {
         await tellBoss(`Error adding epic ${id}: ${err.message}`);
       }
     }
-    await tellBoss(`Managing ${epicGraphs.size} epic(s): ${[...epicGraphs.keys()].join(', ')}`);
+    await tellBoss(`Managing ${epicGraphs.size} ticket(s): ${[...epicGraphs.keys()].join(', ')}`);
   } else if (trimmed.startsWith('DROP ') || trimmed.startsWith('drop ')) {
     const ticketId = trimmed.split(/\s+/)[1]?.trim();
     if (!ticketId) return;
     dropEpic(ticketId);
-    await tellBoss(`Dropped epic ${ticketId}. ${epicGraphs.size} epic(s) remaining.`);
+    await tellBoss(`Dropped ticket ${ticketId}. ${epicGraphs.size} ticket(s) remaining.`);
   } else if (trimmed.startsWith('TICKET ') || trimmed.startsWith('ticket ')) {
     const ids = trimmed.split(/\s+/).slice(1);
     for (const ticketId of ids) {
@@ -461,7 +461,7 @@ async function handleCommand(from: string, text: string): Promise<void> {
         await tellBoss(`Error: ${err.message}`);
       }
     }
-    await tellBoss(`Managing ${epicGraphs.size} epic(s): ${[...epicGraphs.keys()].join(', ')}`);
+    await tellBoss(`Managing ${epicGraphs.size} ticket(s): ${[...epicGraphs.keys()].join(', ')}`);
   } else if (trimmed === 'STOP' || trimmed === 'stop') {
     log('Boss requested stop');
     for (const [, epic] of epicGraphs) {
@@ -545,7 +545,7 @@ async function handleCommand(from: string, text: string): Promise<void> {
         if (n.state.status === 'failed') totalFailed++;
       }
     }
-    await tellBoss(`${epicGraphs.size} epic(s) · ${totalTickets} tickets: ${totalRunning} running, ${totalDone} done, ${totalFailed} failed. ${spawnedProcesses.size} workers active.`);
+    await tellBoss(`${epicGraphs.size} ticket(s) · ${totalTickets} tickets: ${totalRunning} running, ${totalDone} done, ${totalFailed} failed. ${spawnedProcesses.size} workers active.`);
   }
 }
 
@@ -737,7 +737,7 @@ async function autoStart(): Promise<void> {
   const existingState = loadState();
   const epicRoots = existingState?.epicRoots ?? [];
   if (epicRoots.length > 0) {
-    log(`Resuming ${epicRoots.length} epic(s): ${epicRoots.join(', ')}`);
+    log(`Resuming ${epicRoots.length} ticket(s): ${epicRoots.join(', ')}`);
     for (const rootId of epicRoots) {
       try {
         await addEpic(rootId);
@@ -762,7 +762,7 @@ async function autoStart(): Promise<void> {
   
   const epics = await findActiveEpics();
   if (epics.length > 0) {
-    log(`Found ${epics.length} active epic(s): ${epics.join(', ')}`);
+    log(`Found ${epics.length} active ticket(s): ${epics.join(', ')}`);
     for (const epicId of epics) {
       try {
         await addEpic(epicId);
