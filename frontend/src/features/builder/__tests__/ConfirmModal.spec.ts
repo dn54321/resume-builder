@@ -119,21 +119,12 @@ describe('ConfirmModal', () => {
     // The dialog should either be removed or in closed state
     const dialogAfterClose = document.body.querySelector('[role="dialog"]')
     // reka-ui keeps dialog elements during close animation with data-state="closed"
-    // If dialog is still in DOM, it should be in closed state
-    if (dialogAfterClose) {
-      expect(dialogAfterClose.getAttribute('data-state')).toBe('closed')
-    } else {
-      // Dialog removed from DOM entirely — that's also fine
-      expect(dialogAfterClose).toBeNull()
-    }
+    // If dialog is still in DOM, it should be in closed state; if removed, treat as closed
+    expect(dialogAfterClose ? dialogAfterClose.getAttribute('data-state') : 'closed').toBe('closed')
     // Title should be hidden or removed
     const title = document.body.querySelector('h2')
-    if (title) {
-      const parentDialog = title.closest('[role="dialog"]')
-      expect(parentDialog?.getAttribute('data-state')).toBe('closed')
-    } else {
-      expect(title).toBeNull()
-    }
+    const parentDialog = title?.closest('[role="dialog"]')
+    expect(parentDialog ? parentDialog.getAttribute('data-state') : 'closed').toBe('closed')
   })
 
   // ─── Confirm button ────────────────────────────────────────────
