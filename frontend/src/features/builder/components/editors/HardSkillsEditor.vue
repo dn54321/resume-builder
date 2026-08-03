@@ -1,10 +1,10 @@
 <template>
   <div class="p-4">
-    <h3 class="text-base font-semibold m-0 mb-4 text-gray-900">
+    <h3 class="text-base font-semibold m-0 mb-4 text-foreground">
       Hard Skills
       <span
         v-if="store.isFiltered"
-        class="font-normal text-xs text-gray-500"
+        class="font-normal text-xs text-muted-foreground"
       >
         &mdash; Showing {{ visibleCount }} of {{ totalCount }} skills
       </span>
@@ -18,14 +18,14 @@
         :class="{ 'opacity-45': entry.dimmed }"
       >
         <span
-          class="cursor-grab text-gray-400 text-xs shrink-0 active:cursor-grabbing"
+          class="cursor-grab text-muted-foreground/70 text-xs shrink-0 active:cursor-grabbing"
           @mousedown.prevent="onDragStart($event, index)"
           title="Drag to reorder"
         >&#x2630;</span>
         <span
           v-if="store.isFiltered"
           class="text-[0.6875rem] shrink-0 w-4 text-center cursor-default"
-          :class="entry.dimmed ? 'text-gray-300' : 'text-green-600'"
+          :class="entry.dimmed ? 'text-muted-foreground/40' : 'text-green-600'"
           :title="entry.dimmed ? 'Filtered out' : 'Relevant'"
         >
           {{ entry.dimmed ? '&#10005;' : '&#10003;' }}
@@ -34,19 +34,19 @@
           type="text"
           :value="entry.value"
           @input="onUpdate(entry.id, ($event.target as HTMLInputElement).value)"
-          class="flex-1 px-2 py-1.5 border border-gray-300 rounded-sm text-[0.8125rem] font-[inherit] bg-white focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-          :class="entry.dimmed ? 'text-gray-400' : 'text-gray-900'"
+          class="flex-1 px-2 py-1.5 border border-border rounded-sm text-[0.8125rem] font-[inherit] bg-surface focus:outline-hidden focus:border-primary focus:ring-1 focus:ring-primary"
+          :class="entry.dimmed ? 'text-muted-foreground/70' : 'text-foreground'"
           placeholder="e.g. TypeScript"
         />
         <button
-          class="w-6 h-6 flex items-center justify-center border-none bg-transparent text-gray-400 cursor-pointer rounded-sm text-lg leading-none shrink-0 hover:bg-red-50 hover:text-red-600"
+          class="w-6 h-6 flex items-center justify-center border-none bg-transparent text-muted-foreground/70 cursor-pointer rounded-sm text-lg leading-none shrink-0 hover:bg-destructive/10 hover:text-destructive"
           @click="onRemove(entry.id)"
           title="Remove skill"
           aria-label="Remove skill"
         >&times;</button>
       </div>
     </div>
-    <button class="mt-2 px-3 py-1.5 border border-dashed border-gray-300 rounded-sm bg-transparent text-gray-500 cursor-pointer text-[0.8125rem] font-[inherit] transition-colors hover:border-blue-500 hover:text-blue-500" @click="addSkill">
+    <button class="mt-2 px-3 py-1.5 border border-dashed border-border rounded-sm bg-transparent text-muted-foreground cursor-pointer text-[0.8125rem] font-[inherit] transition-colors hover:border-primary hover:text-primary" @click="addSkill">
       + Add Skill
     </button>
   </div>

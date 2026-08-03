@@ -1,10 +1,10 @@
 <template>
   <div class="p-4">
-    <h3 class="text-base font-semibold m-0 mb-4 text-gray-900">
+    <h3 class="text-base font-semibold m-0 mb-4 text-foreground">
       Projects
       <span
         v-if="store.isFiltered"
-        class="font-normal text-xs text-gray-500"
+        class="font-normal text-xs text-muted-foreground"
       >
         &mdash; Showing {{ filteredCount.visible }} of {{ filteredCount.total }} bullets
       </span>
@@ -20,57 +20,57 @@
       <template #fields="{ entry, index: entryIndex }">
         <div class="flex flex-col gap-2.5">
           <div class="flex flex-col gap-1">
-            <label class="text-xs font-medium text-gray-900">Name</label>
+            <label class="text-xs font-medium text-foreground">Name</label>
             <input
               type="text"
               :value="editor.getFieldValue(entry.id, 'name')"
               @input="editor.updateField(entry.id, 'name', ($event.target as HTMLInputElement).value)"
-              class="px-2 py-1.5 border border-gray-300 rounded-sm text-[0.8125rem] font-[inherit] text-gray-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              class="px-2 py-1.5 border border-border rounded-sm text-[0.8125rem] font-[inherit] text-foreground bg-surface focus:outline-hidden focus:border-primary focus:ring-1 focus:ring-primary"
               placeholder="My Awesome Project"
             />
           </div>
           <div class="flex flex-col gap-1">
-            <label class="text-xs font-medium text-gray-900">Description</label>
+            <label class="text-xs font-medium text-foreground">Description</label>
             <textarea
               :value="editor.getFieldValue(entry.id, 'description')"
               @input="editor.updateField(entry.id, 'description', ($event.target as HTMLTextAreaElement).value)"
-              class="px-2 py-1.5 border border-gray-300 rounded-sm text-[0.8125rem] font-[inherit] text-gray-900 bg-white resize-y focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              class="px-2 py-1.5 border border-border rounded-sm text-[0.8125rem] font-[inherit] text-foreground bg-surface resize-y focus:outline-hidden focus:border-primary focus:ring-1 focus:ring-primary"
               rows="3"
               placeholder="Brief description of the project..."
             ></textarea>
           </div>
           <div class="flex flex-col gap-1">
-            <label class="text-xs font-medium text-gray-900">URL</label>
+            <label class="text-xs font-medium text-foreground">URL</label>
             <input
               type="url"
               :value="editor.getFieldValue(entry.id, 'url')"
               @input="editor.updateField(entry.id, 'url', ($event.target as HTMLInputElement).value)"
-              class="px-2 py-1.5 border border-gray-300 rounded-sm text-[0.8125rem] font-[inherit] text-gray-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              class="px-2 py-1.5 border border-border rounded-sm text-[0.8125rem] font-[inherit] text-foreground bg-surface focus:outline-hidden focus:border-primary focus:ring-1 focus:ring-primary"
               placeholder="https://github.com/user/project"
             />
           </div>
           <div class="flex gap-2">
             <div class="flex flex-col gap-1 flex-1">
-              <label class="text-xs font-medium text-gray-900">Start Date</label>
+              <label class="text-xs font-medium text-foreground">Start Date</label>
               <input
                 type="month"
                 :value="editor.getFieldValue(entry.id, 'startDate')"
                 @input="editor.updateField(entry.id, 'startDate', ($event.target as HTMLInputElement).value)"
-                class="px-2 py-1.5 border border-gray-300 rounded-sm text-[0.8125rem] font-[inherit] text-gray-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                class="px-2 py-1.5 border border-border rounded-sm text-[0.8125rem] font-[inherit] text-foreground bg-surface focus:outline-hidden focus:border-primary focus:ring-1 focus:ring-primary"
               />
             </div>
             <div class="flex flex-col gap-1 flex-1">
-              <label class="text-xs font-medium text-gray-900">End Date</label>
+              <label class="text-xs font-medium text-foreground">End Date</label>
               <input
                 type="month"
                 :value="editor.getFieldValue(entry.id, 'endDate')"
                 @input="editor.updateField(entry.id, 'endDate', ($event.target as HTMLInputElement).value)"
-                class="px-2 py-1.5 border border-gray-300 rounded-sm text-[0.8125rem] font-[inherit] text-gray-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                class="px-2 py-1.5 border border-border rounded-sm text-[0.8125rem] font-[inherit] text-foreground bg-surface focus:outline-hidden focus:border-primary focus:ring-1 focus:ring-primary"
               />
             </div>
           </div>
-          <div class="mt-2 pt-2 border-t border-gray-200">
-            <label class="text-xs font-medium text-gray-900">Bullet Points</label>
+          <div class="mt-2 pt-2 border-t border-border">
+            <label class="text-xs font-medium text-foreground">Bullet Points</label>
             <BulletList
               :bullets="bulletStates(entry.id, entryIndex)"
               @add="editor.addBullet(entry.id)"
@@ -82,7 +82,7 @@
                 <span
                   v-if="store.isFiltered"
                   class="text-[0.6875rem] shrink-0 w-4 text-center cursor-default"
-                  :class="store.isBulletRelevant('projects', entryIndex, bulletIndex) ? 'text-green-600' : 'text-gray-300'"
+                  :class="store.isBulletRelevant('projects', entryIndex, bulletIndex) ? 'text-green-600' : 'text-muted-foreground/40'"
                   :title="store.isBulletRelevant('projects', entryIndex, bulletIndex) ? 'Relevant' : 'Filtered out'"
                 >
                   {{ store.isBulletRelevant('projects', entryIndex, bulletIndex) ? '&#10003;' : '&#10005;' }}

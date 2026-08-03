@@ -4,9 +4,9 @@
       <span class="shrink-0 text-base">&#9888;</span>
       <span>
         You are not signed in. Your resume is saved only in this browser.
-        <RouterLink to="/signup" class="text-blue-500 font-semibold underline">Sign Up</RouterLink>
+        <RouterLink to="/signup" class="text-primary font-semibold underline">Sign Up</RouterLink>
         or
-        <RouterLink to="/login" class="text-blue-500 font-semibold underline">Log In</RouterLink>
+        <RouterLink to="/login" class="text-primary font-semibold underline">Log In</RouterLink>
         to save it permanently.
       </span>
     </div>

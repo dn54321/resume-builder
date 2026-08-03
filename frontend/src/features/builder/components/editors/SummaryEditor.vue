@@ -1,16 +1,16 @@
 <template>
   <div class="p-4">
-    <h3 class="text-base font-semibold m-0 mb-4 text-gray-900">Summary</h3>
+    <h3 class="text-base font-semibold m-0 mb-4 text-foreground">Summary</h3>
     <div class="flex flex-col gap-1.5">
       <textarea
         :value="summaryText"
         @input="update(($event.target as HTMLTextAreaElement).value)"
-        class="px-3 py-2 border border-gray-300 rounded-md text-sm font-[inherit] text-gray-900 bg-white resize-y min-h-[120px] focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+        class="px-3 py-2 border border-border rounded-md text-sm font-[inherit] text-foreground bg-surface resize-y min-h-[120px] focus:outline-hidden focus:border-primary focus:ring-1 focus:ring-primary"
         rows="6"
         placeholder="Write a brief professional summary..."
         maxlength="2000"
       ></textarea>
-      <span class="text-xs text-gray-400 text-right">{{ characterCount }} / 2000</span>
+      <span class="text-xs text-muted-foreground/70 text-right">{{ characterCount }} / 2000</span>
     </div>
   </div>
 </template>

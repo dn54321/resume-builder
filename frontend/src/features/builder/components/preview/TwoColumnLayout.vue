@@ -1,7 +1,7 @@
 <template>
   <div class="two-column-layout p-[48pt] pb-[36pt] min-h-[960pt]">
     <!-- Empty state watermark -->
-    <div v-if="isEmpty" class="two-column-layout__watermark flex items-center justify-center min-h-[600pt] text-[16pt] text-gray-400 italic select-none">
+    <div v-if="isEmpty" class="two-column-layout__watermark flex items-center justify-center min-h-[600pt] text-[16pt] text-neutral-400 italic select-none">
       Your resume preview will appear here.
     </div>
 
@@ -281,13 +281,13 @@ const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
             return h('div', { class: 'two-col-entry mb-[8pt]', key: entry.id }, [
               h('div', { class: 'two-col-entry-header flex justify-between items-baseline' }, [
                 h('span', { class: 'two-col-bold text-[10pt] font-bold text-black' }, fieldValue(section, entry.id, 'company')),
-                h('span', { class: 'two-col-dates text-[10pt] text-gray-700 whitespace-nowrap' }, formatDateRange(section, entry.id)),
+                h('span', { class: 'two-col-dates text-[10pt] text-neutral-700 whitespace-nowrap' }, formatDateRange(section, entry.id)),
               ]),
               fieldValue(section, entry.id, 'title')
                 ? h('p', { class: 'two-col-italic text-[10pt] italic text-black mt-[1pt]' }, fieldValue(section, entry.id, 'title'))
                 : null,
               fieldValue(section, entry.id, 'location')
-                ? h('p', { class: 'two-col-location text-[10pt] text-gray-700 mt-[1pt]' }, fieldValue(section, entry.id, 'location'))
+                ? h('p', { class: 'two-col-location text-[10pt] text-neutral-700 mt-[1pt]' }, fieldValue(section, entry.id, 'location'))
                 : null,
               bullets.length > 0 ? h(PreviewBulletList, { bullets }) : null,
             ])
@@ -314,7 +314,7 @@ const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
             return h('div', { class: 'two-col-entry mb-[8pt]', key: entry.id }, [
               h('div', { class: 'two-col-entry-header flex justify-between items-baseline' }, [
                 h('span', { class: 'two-col-bold text-[10pt] font-bold text-black' }, fieldValue(section, entry.id, 'school')),
-                h('span', { class: 'two-col-dates text-[10pt] text-gray-700 whitespace-nowrap' }, formatDateRange(section, entry.id)),
+                h('span', { class: 'two-col-dates text-[10pt] text-neutral-700 whitespace-nowrap' }, formatDateRange(section, entry.id)),
               ]),
               degreeLine
                 ? h('p', { class: 'two-col-body-text text-[10pt] text-black m-0 leading-[1.4]' }, degreeLine)
@@ -367,13 +367,13 @@ const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
             return h('div', { class: 'two-col-entry mb-[8pt]', key: entry.id }, [
               h('p', { class: 'two-col-body-text text-[10pt] text-black m-0 leading-[1.4]' }, [
                 h('strong', name),
-                dr ? [' | ', h('span', { class: 'two-col-dates text-[10pt] text-gray-700 whitespace-nowrap' }, dr)] : null,
+                dr ? [' | ', h('span', { class: 'two-col-dates text-[10pt] text-neutral-700 whitespace-nowrap' }, dr)] : null,
               ]),
               fieldValue(section, entry.id, 'description')
                 ? h('p', { class: 'two-col-body-text text-[10pt] text-black m-0 leading-[1.4]' }, fieldValue(section, entry.id, 'description'))
                 : null,
               fieldValue(section, entry.id, 'url')
-                ? h('p', { class: 'two-col-url text-[10pt] text-gray-700 mt-[2pt] break-all' }, fieldValue(section, entry.id, 'url'))
+                ? h('p', { class: 'two-col-url text-[10pt] text-neutral-700 mt-[2pt] break-all' }, fieldValue(section, entry.id, 'url'))
                 : null,
               bullets.length > 0 ? h(PreviewBulletList, { bullets }) : null,
             ])

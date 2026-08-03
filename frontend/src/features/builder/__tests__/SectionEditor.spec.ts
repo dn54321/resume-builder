@@ -82,7 +82,7 @@ describe('SectionEditor', () => {
       for (const header of headers) {
         // Each header should have the blue left border accent class
         expect(header.classes()).toContain('border-l-4')
-        expect(header.classes()).toContain('border-blue-500')
+        expect(header.classes()).toContain('border-primary')
       }
     })
 
@@ -170,9 +170,9 @@ describe('SectionEditor', () => {
 
       const headers = wrapper.findAll('button[aria-label]')
 
-      // Find the content div (the .bg-white div sibling of the header button)
+      // Find the content div (the .bg-surface div sibling of the header button)
       const firstSectionContainer = headers[0]!.element.parentElement!
-      const contentDivs = firstSectionContainer.querySelectorAll('.bg-white')
+      const contentDivs = firstSectionContainer.querySelectorAll('.bg-surface')
       expect(contentDivs.length).toBeGreaterThanOrEqual(1)
 
       // Collapse it

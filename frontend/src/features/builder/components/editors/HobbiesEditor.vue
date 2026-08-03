@@ -1,6 +1,6 @@
 <template>
   <div class="p-4">
-    <h3 class="text-base font-semibold m-0 mb-4 text-gray-900">Hobbies</h3>
+    <h3 class="text-base font-semibold m-0 mb-4 text-foreground">Hobbies</h3>
     <div class="flex flex-col gap-1.5">
       <div
         v-for="(entry, index) in hobbyEntries"
@@ -9,7 +9,7 @@
         class="flex items-center gap-1.5"
       >
         <span
-          class="cursor-grab text-gray-400 text-xs shrink-0 active:cursor-grabbing"
+          class="cursor-grab text-muted-foreground/70 text-xs shrink-0 active:cursor-grabbing"
           @mousedown.prevent="onDragStart($event, index)"
           title="Drag to reorder"
         >&#x2630;</span>
@@ -17,18 +17,18 @@
           type="text"
           :value="entry.value"
           @input="onUpdate(entry.id, ($event.target as HTMLInputElement).value)"
-          class="flex-1 px-2 py-1.5 border border-gray-300 rounded-sm text-[0.8125rem] font-[inherit] text-gray-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          class="flex-1 px-2 py-1.5 border border-border rounded-sm text-[0.8125rem] font-[inherit] text-foreground bg-surface focus:outline-hidden focus:border-primary focus:ring-1 focus:ring-primary"
           placeholder="e.g. Photography"
         />
         <button
-          class="w-6 h-6 flex items-center justify-center border-none bg-transparent text-gray-400 cursor-pointer rounded-sm text-lg leading-none shrink-0 hover:bg-red-50 hover:text-red-600"
+          class="w-6 h-6 flex items-center justify-center border-none bg-transparent text-muted-foreground/70 cursor-pointer rounded-sm text-lg leading-none shrink-0 hover:bg-destructive/10 hover:text-destructive"
           @click="onRemove(entry.id)"
           title="Remove hobby"
           aria-label="Remove hobby"
         >&times;</button>
       </div>
     </div>
-    <button class="mt-2 px-3 py-1.5 border border-dashed border-gray-300 rounded-sm bg-transparent text-gray-500 cursor-pointer text-[0.8125rem] font-[inherit] transition-colors hover:border-blue-500 hover:text-blue-500" @click="addHobby">
+    <button class="mt-2 px-3 py-1.5 border border-dashed border-border rounded-sm bg-transparent text-muted-foreground cursor-pointer text-[0.8125rem] font-[inherit] transition-colors hover:border-primary hover:text-primary" @click="addHobby">
       + Add Hobby
     </button>
   </div>

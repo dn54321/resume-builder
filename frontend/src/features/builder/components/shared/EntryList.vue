@@ -3,29 +3,29 @@
     <div
       v-for="(entry, index) in entries"
       :key="entry.id"
-      class="border border-gray-300 rounded-md overflow-hidden"
+      class="border border-border rounded-md overflow-hidden"
       data-entry-panel
     >
-      <div class="flex items-center gap-2 px-3 py-2 bg-gray-50 cursor-pointer select-none hover:bg-gray-200" @click="toggleEntry(entry.id)">
+      <div class="flex items-center gap-2 px-3 py-2 bg-muted/20 cursor-pointer select-none hover:bg-muted/50" @click="toggleEntry(entry.id)">
         <span
-          class="cursor-grab text-gray-400 text-sm p-0.5 shrink-0 active:cursor-grabbing"
+          class="cursor-grab text-muted-foreground/70 text-sm p-0.5 shrink-0 active:cursor-grabbing"
           @mousedown.prevent="onDragStart($event, index)"
           title="Drag to reorder"
         >&#x2630;</span>
-        <span class="flex-1 text-[0.8125rem] font-medium text-gray-900 overflow-hidden text-ellipsis whitespace-nowrap">{{ entryTitle(entry, index) }}</span>
+        <span class="flex-1 text-[0.8125rem] font-medium text-foreground overflow-hidden text-ellipsis whitespace-nowrap">{{ entryTitle(entry, index) }}</span>
         <button
-          class="w-6 h-6 flex items-center justify-center border-none bg-transparent text-gray-400 cursor-pointer rounded-sm text-lg leading-none shrink-0 hover:bg-red-50 hover:text-red-600"
+          class="w-6 h-6 flex items-center justify-center border-none bg-transparent text-muted-foreground/70 cursor-pointer rounded-sm text-lg leading-none shrink-0 hover:bg-destructive/10 hover:text-destructive"
           @click.stop="onRemove(entry.id)"
           title="Remove entry"
           aria-label="Remove entry"
         >&times;</button>
-        <span class="text-[0.625rem] text-gray-400 shrink-0">{{ isExpanded(entry.id) ? '&#x25B2;' : '&#x25BC;' }}</span>
+        <span class="text-[0.625rem] text-muted-foreground/70 shrink-0">{{ isExpanded(entry.id) ? '&#x25B2;' : '&#x25BC;' }}</span>
       </div>
-      <div v-if="isExpanded(entry.id)" class="p-3 border-t border-gray-300 flex flex-col gap-2.5">
+      <div v-if="isExpanded(entry.id)" class="p-3 border-t border-border flex flex-col gap-2.5">
         <slot name="fields" :entry="entry" :index="index" />
       </div>
     </div>
-    <button class="px-4 py-2 border border-dashed border-gray-300 rounded-md bg-transparent text-gray-500 cursor-pointer text-[0.8125rem] font-[inherit] transition-colors hover:border-blue-500 hover:text-blue-500" @click="$emit('add')">
+    <button class="px-4 py-2 border border-dashed border-border rounded-md bg-transparent text-muted-foreground cursor-pointer text-[0.8125rem] font-[inherit] transition-colors hover:border-primary hover:text-primary" @click="$emit('add')">
       + {{ addLabel }}
     </button>
   </div>

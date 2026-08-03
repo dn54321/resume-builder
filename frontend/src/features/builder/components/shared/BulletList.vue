@@ -8,28 +8,28 @@
       :class="{ 'opacity-45': bullet.dimmed }"
     >
       <span
-        class="cursor-grab text-gray-400 text-xs shrink-0 active:cursor-grabbing"
+        class="cursor-grab text-muted-foreground/70 text-xs shrink-0 active:cursor-grabbing"
         @mousedown.prevent="onDragStart($event, index)"
         title="Drag to reorder"
       >&#x2630;</span>
       <slot name="bullet" :bullet="bullet" :index="index" />
-      <span class="text-gray-400 shrink-0">&bull;</span>
+      <span class="text-muted-foreground/70 shrink-0">&bull;</span>
       <input
         type="text"
         :value="bullet.value"
         @input="onUpdate(index, ($event.target as HTMLInputElement).value)"
-        class="flex-1 px-2 py-1.5 border border-gray-300 rounded-sm text-[0.8125rem] font-[inherit] bg-white focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-        :class="bullet.dimmed ? 'text-gray-400' : 'text-gray-900'"
+        class="flex-1 px-2 py-1.5 border border-border rounded-sm text-[0.8125rem] font-[inherit] bg-surface focus:outline-hidden focus:border-primary focus:ring-1 focus:ring-primary"
+        :class="bullet.dimmed ? 'text-muted-foreground/70' : 'text-foreground'"
         :placeholder="placeholder"
       />
       <button
-        class="w-6 h-6 flex items-center justify-center border-none bg-transparent text-gray-400 cursor-pointer rounded-sm text-lg leading-none shrink-0 hover:bg-red-50 hover:text-red-600"
+        class="w-6 h-6 flex items-center justify-center border-none bg-transparent text-muted-foreground/70 cursor-pointer rounded-sm text-lg leading-none shrink-0 hover:bg-destructive/10 hover:text-destructive"
         @click="onRemove(bullet.id)"
         title="Remove bullet"
         aria-label="Remove bullet point"
       >&times;</button>
     </div>
-    <button class="px-3 py-1.5 border border-dashed border-gray-300 rounded-sm bg-transparent text-gray-500 cursor-pointer text-[0.8125rem] font-[inherit] self-start transition-colors hover:border-blue-500 hover:text-blue-500" @click="$emit('add')">
+    <button class="px-3 py-1.5 border border-dashed border-border rounded-sm bg-transparent text-muted-foreground cursor-pointer text-[0.8125rem] font-[inherit] self-start transition-colors hover:border-primary hover:text-primary" @click="$emit('add')">
       + Add bullet point
     </button>
   </div>
