@@ -71,13 +71,13 @@ describe('HomeView', () => {
 
   // ── Guest CTAs ────────────────────────────────────────────
 
-  it('shows "Get Started" button linking to /signup when not authenticated', () => {
+  it('shows "Get Started" button linking to /builder when not authenticated', () => {
     const wrapper = mountHome({ authenticated: false })
 
     const links = wrapper.findAllComponents({ name: 'RouterLink' })
-    const signupLink = links.find((l) => l.props('to') === '/signup')
-    expect(signupLink?.exists()).toBe(true)
-    expect(signupLink?.text()).toContain('Get Started')
+    const builderLink = links.find((l) => l.props('to') === '/builder')
+    expect(builderLink?.exists()).toBe(true)
+    expect(builderLink?.text()).toContain('Get Started')
   })
 
   it('shows "Log in" button linking to /login when not authenticated', () => {
