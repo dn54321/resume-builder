@@ -134,7 +134,11 @@ async function handleConfirmDelete(): Promise<void> {
     </header>
 
     <!-- Error State -->
-    <div v-if="error" class="alert-error" role="alert">
+    <div
+      v-if="error"
+      class="mb-6 rounded-md border px-4 py-3 text-sm bg-red-50 border-red-200 text-red-800 dark:bg-red-950 dark:border-red-800 dark:text-red-200"
+      role="alert"
+    >
       {{ error }}
     </div>
 
@@ -248,18 +252,6 @@ async function handleConfirmDelete(): Promise<void> {
   cursor: not-allowed;
 }
 
-/* ── Alert ──────────────────────────────── */
-
-.alert-error {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  color: #b91c1c;
-  padding: 0.75rem 1rem;
-  border-radius: 6px;
-  margin-bottom: 1.5rem;
-  font-size: 0.875rem;
-}
-
 /* ── Grid ───────────────────────────────── */
 
 .resume-grid {
@@ -281,7 +273,6 @@ async function handleConfirmDelete(): Promise<void> {
 
 .resume-card:hover {
   border-color: var(--color-text);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .resume-card:focus-visible {
@@ -325,7 +316,7 @@ async function handleConfirmDelete(): Promise<void> {
 .resume-card__date {
   margin: 0;
   font-size: 0.8125rem;
-  color: #6b7280;
+  color: var(--muted-foreground);
 }
 
 /* ── Skeleton Card ──────────────────────── */
@@ -342,7 +333,7 @@ async function handleConfirmDelete(): Promise<void> {
 
 .skeleton-line {
   height: 1rem;
-  background: #e5e7eb;
+  background: var(--muted);
   border-radius: 4px;
   animation: pulse 1.5s ease-in-out infinite;
 }
@@ -378,6 +369,7 @@ async function handleConfirmDelete(): Promise<void> {
   border-radius: 12px;
   max-width: 360px;
   width: 100%;
+  background: var(--color-card);
 }
 
 .empty-state-icon {
@@ -392,7 +384,7 @@ async function handleConfirmDelete(): Promise<void> {
 
 .empty-state-card p {
   margin: 0 0 1.5rem;
-  color: #6b7280;
+  color: var(--muted-foreground);
   font-size: 0.9375rem;
 }
 </style>
