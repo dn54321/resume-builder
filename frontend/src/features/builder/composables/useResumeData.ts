@@ -95,6 +95,13 @@ export function useResumeData() {
   const dirty = ref(false)
   let initialLoadComplete = false
 
+  /**
+   * Guard flag: true while a save operation is in progress.
+   * Prevents the dirty watcher from re-asserting dirty=true
+   * after saveResume() has already cleared the dirty flag.
+   */
+  let isSaving = false
+
   // Watch for store mutations — mark dirty on any change after initial load.
   // flush: 'sync' is required so the watcher fires synchronously while
   // initialLoadComplete is still false during loadResume(). Without it,
@@ -103,7 +110,7 @@ export function useResumeData() {
   watch(
     () => store.toPayload(),
     () => {
-      if (initialLoadComplete) {
+      if (initialLoadComplete && !isSaving) {
         dirty.value = true
       }
     },
@@ -184,30 +191,38 @@ export function useResumeData() {
   }
 
   /**
-   *
+   * Save the current resume state to the backend (authenticated) or
+   * localStorage (anonymous). Sets isSaving guard during the operation
+   * to prevent the dirty watcher from re-asserting dirty=true after
+   * the save completes and clears the dirty flag.
    */
   async function saveResume() {
-    const payload = store.toPayload()
+    isSaving = true
+    try {
+      const payload = store.toPayload()
 
-    if (isAuthenticated) {
-      try {
-        await api.put('/api/v1/resumes', payload)
-      } catch (err) {
-        if (err instanceof ApiRequestError && err.status === 404) {
-          // Resume doesn't exist yet, POST it
-          await api.post('/api/v1/resumes', payload)
-        } else {
-          throw err
+      if (isAuthenticated) {
+        try {
+          await api.put('/api/v1/resumes', payload)
+        } catch (err) {
+          if (err instanceof ApiRequestError && err.status === 404) {
+            // Resume doesn't exist yet, POST it
+            await api.post('/api/v1/resumes', payload)
+          } else {
+            throw err
+          }
         }
+        // Successful backend save — clear the sessionStorage safety net
+        clearSessionStorage()
+      } else {
+        writeToLocalStorage(payload)
       }
-      // Successful backend save — clear the sessionStorage safety net
-      clearSessionStorage()
-    } else {
-      writeToLocalStorage(payload)
-    }
 
-    // Clear dirty flag on successful save
-    dirty.value = false
+      // Clear dirty flag on successful save
+      dirty.value = false
+    } finally {
+      isSaving = false
+    }
   }
 
   /**
