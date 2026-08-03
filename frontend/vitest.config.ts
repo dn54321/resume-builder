@@ -35,7 +35,6 @@ export default mergeConfig(
           'src/components/WelcomeItem.vue',
           'src/components/icons/**',
           'src/views/AboutView.vue',
-          'src/views/HomeView.vue',
           'src/stores/counter.ts',
 
           // Builder feature — restyled in RES-37; component tests will be added/updated then.
