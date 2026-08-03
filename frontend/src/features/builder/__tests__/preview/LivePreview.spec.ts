@@ -86,9 +86,10 @@ describe('LivePreview', () => {
 
     const wrapper = mountLivePreview()
 
-    const button = wrapper.find('.live-preview__header button')
+    const button = wrapper.find('.live-preview__expand-btn')
     expect(button.exists()).toBe(true)
-    expect(button.attributes('aria-label')).toBe('Full screen')
+    expect(button.attributes('aria-label')).toBe('Open full screen preview')
+    expect(button.attributes('title')).toBe('Full screen preview')
   })
 
   it('opens FullscreenPreview when full-screen button is clicked', async () => {
@@ -103,7 +104,7 @@ describe('LivePreview', () => {
     expect(fpComponent.props('open')).toBe(false)
 
     // Click the full-screen button
-    const button = wrapper.find('.live-preview__header button')
+    const button = wrapper.find('.live-preview__expand-btn')
     await button.trigger('click')
 
     // FullscreenPreview should now be open
@@ -118,7 +119,7 @@ describe('LivePreview', () => {
     const wrapper = mountLivePreview()
 
     // Open the modal
-    const button = wrapper.find('.live-preview__header button')
+    const button = wrapper.find('.live-preview__expand-btn')
     await button.trigger('click')
 
     const fpComponent = wrapper.findComponent({ name: 'FullscreenPreview' })
@@ -237,6 +238,34 @@ describe('LivePreview', () => {
     const scaleValue = parseFloat(match![1]!)
     expect(scaleValue).toBeGreaterThan(0)
     expect(scaleValue).toBeLessThanOrEqual(1)
+  })
+
+  it('styles the header bar with white background and proper height', () => {
+    const store = makeStore()
+    store.initializeDefaults()
+    store.layout = 'standard'
+
+    const wrapper = mountLivePreview()
+
+    const header = wrapper.find('.live-preview__header')
+    expect(header.classes()).toContain('bg-white')
+    expect(header.classes()).toContain('h-10')
+  })
+
+  it('styles the expand button with proper size and hover states', () => {
+    const store = makeStore()
+    store.initializeDefaults()
+    store.layout = 'standard'
+
+    const wrapper = mountLivePreview()
+
+    const button = wrapper.find('.live-preview__expand-btn')
+    expect(button.classes()).toContain('size-8')
+    expect(button.classes()).toContain('text-gray-500')
+    expect(button.classes()).toContain('hover:text-gray-700')
+    expect(button.classes()).toContain('hover:bg-gray-100')
+    expect(button.classes()).toContain('rounded-md')
+    expect(button.attributes('title')).toBe('Full screen preview')
   })
 
   it('renders US Letter sized paper (816px × 1056px)', () => {

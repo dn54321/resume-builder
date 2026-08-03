@@ -5,11 +5,11 @@
       :disable-outside-pointer-events="false"
     >
       <button
-        class="fullscreen-preview__close absolute top-4 right-4 z-10 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none"
+        class="fullscreen-preview__close absolute top-4 right-4 z-10 inline-flex items-center justify-center size-10 rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black/60"
         @click="close"
         aria-label="Close full screen preview"
       >
-        <X class="h-6 w-6 text-white" />
+        <X class="size-5" />
       </button>
 
       <div

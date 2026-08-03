@@ -160,6 +160,18 @@ describe('FullscreenPreview', () => {
     expect(closeBtn.attributes('aria-label')).toBe('Close full screen preview')
   })
 
+  it('styles the close button with visible background circle', () => {
+    setupStore()
+    const wrapper = mountComponent({ open: true })
+
+    const closeBtn = wrapper.find('.fullscreen-preview__close')
+    expect(closeBtn.classes()).toContain('rounded-full')
+    expect(closeBtn.classes()).toContain('bg-black/60')
+    expect(closeBtn.classes()).toContain('text-white')
+    expect(closeBtn.classes()).toContain('hover:bg-black/80')
+    expect(closeBtn.classes()).toContain('size-10')
+  })
+
   // ─── Display names ──────────────────────────────────────────────────
   // The layouts render actual data, so the preview shows real content.
 
