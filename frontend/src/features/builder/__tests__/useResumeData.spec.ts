@@ -355,6 +355,160 @@ describe('useResumeData', () => {
       // After successful save, sessionStorage should be cleared
       expect(sessionStorage.getItem('resume_pending_changes')).toBeNull()
     })
+
+    it('clears dirty flag after successful authenticated save', async () => {
+      const auth = useAuthStore()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
+      )
+      await auth.login('test@test.com', 'password')
+
+      mockFetch.mockClear()
+      // Mock: loadResume GET returns empty sections (falls back to defaults)
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ id: 'resume-1', layout: 'standard', sections: [] }),
+      )
+
+      const store = useResumeStore()
+      store.initializeDefaults()
+      SECTION_TYPES.forEach((t) => store.toggleSection(t))
+
+      const { loadResume, saveResume, dirty } = useResumeData()
+      await loadResume()
+
+      // Mutate to make dirty
+      store.setLayout('column2-1')
+      await nextTick()
+      expect(dirty.value).toBe(true)
+
+      // Mock: saveResume PUT succeeds
+      mockFetch.mockClear()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ id: 'resume-1', layout: 'standard', sections: [] }),
+      )
+
+      // Save should clear dirty
+      await saveResume()
+      expect(dirty.value).toBe(false)
+    })
+
+    it('clears dirty flag after 404 → POST fallback save', async () => {
+      const auth = useAuthStore()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
+      )
+      await auth.login('test@test.com', 'password')
+
+      mockFetch.mockClear()
+      // Mock: loadResume GET returns empty sections (falls back to defaults)
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ id: 'resume-1', layout: 'standard', sections: [] }),
+      )
+
+      const store = useResumeStore()
+      store.initializeDefaults()
+      SECTION_TYPES.forEach((t) => store.toggleSection(t))
+
+      const { loadResume, saveResume, dirty } = useResumeData()
+      await loadResume()
+
+      store.setLayout('column2-1')
+      await nextTick()
+      expect(dirty.value).toBe(true)
+
+      // Mocks: PUT returns 404 — triggers POST fallback
+      mockFetch.mockClear()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ message: 'Not Found' }, 404),
+      )
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ id: 'resume-1', layout: 'standard', sections: [] }),
+      )
+
+      // Save (PUT 404 → POST succeeds) should clear dirty
+      await saveResume()
+      expect(dirty.value).toBe(false)
+    })
+
+    it('keeps dirty true when save fails with non-404 error', async () => {
+      const auth = useAuthStore()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
+      )
+      await auth.login('test@test.com', 'password')
+
+      mockFetch.mockClear()
+      // Mock: loadResume GET returns empty sections (falls back to defaults)
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ id: 'resume-1', layout: 'standard', sections: [] }),
+      )
+
+      const store = useResumeStore()
+      store.initializeDefaults()
+      SECTION_TYPES.forEach((t) => store.toggleSection(t))
+
+      const { loadResume, saveResume, dirty } = useResumeData()
+      await loadResume()
+
+      store.setLayout('column2-1')
+      await nextTick()
+      expect(dirty.value).toBe(true)
+
+      // Mock: PUT fails with 500 (server error) — NOT a 404, so it propagates
+      mockFetch.mockClear()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ message: 'Server Error' }, 500),
+      )
+
+      // Save fails — dirty should stay true
+      await expect(saveResume()).rejects.toThrow('Server Error')
+      expect(dirty.value).toBe(true)
+    })
+
+    it('allows dirty watcher to fire again after failed save (isSaving guard resets)', async () => {
+      const auth = useAuthStore()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
+      )
+      await auth.login('test@test.com', 'password')
+
+      mockFetch.mockClear()
+      // Mock: loadResume GET returns empty sections (falls back to defaults)
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ id: 'resume-1', layout: 'standard', sections: [] }),
+      )
+
+      const store = useResumeStore()
+      store.initializeDefaults()
+      SECTION_TYPES.forEach((t) => store.toggleSection(t))
+
+      const { loadResume, saveResume, dirty } = useResumeData()
+      await loadResume()
+      expect(dirty.value).toBe(false)
+
+      // Make an edit
+      store.setLayout('column2-1')
+      await nextTick()
+      expect(dirty.value).toBe(true)
+
+      // Mock: PUT fails with 500
+      mockFetch.mockClear()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ message: 'Server Error' }, 500),
+      )
+
+      // Save fails
+      await expect(saveResume()).rejects.toThrow('Server Error')
+      expect(dirty.value).toBe(true)
+
+      // After the failed save, the isSaving guard should be reset.
+      // Further store mutations should still mark dirty (though it's already true).
+      // Verify: set dirty to false manually, then mutate — should mark dirty again.
+      dirty.value = false
+      store.setLayout('standard')
+      await nextTick()
+      expect(dirty.value).toBe(true)
+    })
   })
 
   describe('sessionStorage persistence (authenticated)', () => {
