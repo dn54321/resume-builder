@@ -133,7 +133,6 @@ describe('SignupView', () => {
     expect(mockReplace).not.toHaveBeenCalled()
   })
 
-<<<<<<< HEAD
   it('redirects to query.redirect after successful signup', async () => {
     // Navigate to /signup?redirect=/builder using the real router so route.query is populated
     await realPush.call(router, { path: '/signup', query: { redirect: '/builder' } })
@@ -162,7 +161,8 @@ describe('SignupView', () => {
     await wrapper.find('form').trigger('submit.prevent')
 
     expect(mockReplace).toHaveBeenCalledWith('/dashboard')
-=======
+  })
+
   it('has type="email" on the email input', () => {
     const wrapper = mountSignup()
     const input = wrapper.find('#signup-email')
@@ -263,6 +263,5 @@ describe('SignupView', () => {
     await nextTick()
     const alert = wrapper.find('[role="alert"]')
     expect(alert.text()).toContain('An unexpected error occurred. Please try again.')
->>>>>>> ticket/res-50
   })
 })

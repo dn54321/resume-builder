@@ -9,10 +9,8 @@
 import { RouterLink } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/features/auth/stores/auth'
+import SvgIllustration from '@/components/SvgIllustration.vue'
 
-<<<<<<< HEAD
-const auth = useAuthStore()
-=======
 import { computed } from 'vue'
 import heroIllustrationRaw from '@/assets/illustrations/hero-illustration.svg?raw'
 import tailorIllustrationRaw from '@/assets/illustrations/tailor-illustration.svg?raw'
@@ -25,11 +23,12 @@ import blob3Raw from '@/assets/illustrations/decorative/blob-3.svg?raw'
 import waveDividerRaw from '@/assets/illustrations/decorative/wave-divider.svg?raw'
 import dotPatternRaw from '@/assets/illustrations/decorative/dot-pattern.svg?raw'
 
+const auth = useAuthStore()
+
 /** URL-encoded dot-pattern for use as a repeating background image */
 const dotPatternBg = computed(
   () => `url("data:image/svg+xml,${encodeURIComponent(dotPatternRaw)}")`,
 )
->>>>>>> ticket/res-52
 
 const features = [
   {
@@ -102,12 +101,6 @@ const features = [
       </div>
     </section>
 
-<<<<<<< HEAD
-    <!-- Features Grid -->
-    <section class="px-4 py-16">
-      <div class="max-w-5xl mx-auto">
-        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-=======
     <!-- Wave divider -->
     <div class="relative h-16 overflow-hidden" aria-hidden="true">
       <SvgIllustration :svg="waveDividerRaw" class="absolute inset-0 w-full h-full" />
@@ -137,7 +130,6 @@ const features = [
         </div>
 
         <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
->>>>>>> ticket/res-52
           <div
             v-for="feature in features"
             :key="feature.title"

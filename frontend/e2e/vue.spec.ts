@@ -2,7 +2,6 @@ import { test, expect } from '@playwright/test'
 
 test('renders the app shell with navbar and RouterView content', async ({ page }) => {
   await page.goto('/')
-<<<<<<< HEAD
 
   // Navbar renders with brand
   await expect(page.locator('header')).toBeVisible()
@@ -25,7 +24,10 @@ test('shows guest nav links when unauthenticated', async ({ page }) => {
   // Guest state: Log in and Sign up buttons
   await expect(page.locator('header')).toContainText('Log in')
   await expect(page.locator('header')).toContainText('Sign up')
-=======
+})
+
+test('renders hero headline on landing page', async ({ page }) => {
+  await page.goto('/')
   // Hero headline
   await expect(page.locator('h1')).toHaveText('Build a resume that gets you hired')
 })
@@ -47,5 +49,4 @@ test('shows guest CTAs when not authenticated', async ({ page }) => {
 test('renders the footer', async ({ page }) => {
   await page.goto('/')
   await expect(page.locator('footer')).toContainText('Resume Builder')
->>>>>>> ticket/res-31
 })

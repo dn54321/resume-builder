@@ -1,20 +1,4 @@
 <template>
-<<<<<<< HEAD
-  <div class="live-preview flex justify-center items-start h-full overflow-y-auto py-3 bg-muted/50">
-    <div
-      id="resume-preview"
-      class="live-preview__paper"
-      :style="{ transform: `scale(${scale})` }"
-    >
-      <StandardLayout
-        v-if="store.layout === 'standard'"
-        :sections="store.sections"
-      />
-      <TwoColumnLayout
-        v-else
-        :sections="store.sections"
-      />
-=======
   <div class="live-preview flex flex-col h-full bg-gray-200">
     <!-- Header bar -->
     <div class="live-preview__header h-8 px-3 border-b border-gray-300 flex items-center justify-between shrink-0">
@@ -22,7 +6,6 @@
       <Button variant="ghost" size="icon-sm" aria-label="Full screen" @click="isFullscreenOpen = true">
         <Maximize2 class="h-4 w-4" />
       </Button>
->>>>>>> ticket/res-49
     </div>
 
     <!-- Paper area -->

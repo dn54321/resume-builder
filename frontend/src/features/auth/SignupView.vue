@@ -104,69 +104,6 @@ async function handleSubmit() {
 </script>
 
 <template>
-<<<<<<< HEAD
-  <div class="flex min-h-screen items-center justify-center px-4">
-    <Card class="w-full max-w-md">
-      <CardHeader>
-        <CardTitle>Sign Up</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form @submit.prevent="handleSubmit" novalidate>
-          <div class="grid gap-4">
-            <div class="grid gap-2">
-              <Label for="signup-email">Email</Label>
-              <Input
-                id="signup-email"
-                v-model="email"
-                type="email"
-                autocomplete="email"
-                :disabled="submitting"
-                @blur="onEmailBlur"
-              />
-              <p v-if="emailError" class="text-sm text-destructive">{{ emailError }}</p>
-            </div>
-            <div class="grid gap-2">
-              <Label for="signup-password">Password</Label>
-              <Input
-                id="signup-password"
-                v-model="password"
-                type="password"
-                autocomplete="new-password"
-                :disabled="submitting"
-              />
-            </div>
-            <div class="grid gap-2">
-              <Label for="signup-confirm">Confirm password</Label>
-              <Input
-                id="signup-confirm"
-                v-model="confirmPassword"
-                type="password"
-                autocomplete="new-password"
-                :disabled="submitting"
-              />
-            </div>
-
-            <Alert v-if="hasErrors" variant="destructive">
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>
-                <p v-for="(msg, i) in errors" :key="i">{{ msg }}</p>
-              </AlertDescription>
-            </Alert>
-
-            <Button type="submit" :disabled="submitting" class="w-full">
-              {{ submitting ? 'Creating account...' : 'Sign up' }}
-            </Button>
-          </div>
-        </form>
-      </CardContent>
-      <CardFooter class="justify-center">
-        <p class="text-sm text-muted-foreground">
-          Already have an account?
-          <RouterLink to="/login" class="underline underline-offset-4 hover:text-primary">Log in</RouterLink>
-        </p>
-      </CardFooter>
-    </Card>
-=======
   <div class="relative min-h-screen overflow-hidden">
     <!-- Decorative blobs behind the card -->
     <div
@@ -266,6 +203,5 @@ async function handleSubmit() {
         </CardFooter>
       </Card>
     </div>
->>>>>>> ticket/res-55
   </div>
 </template>
