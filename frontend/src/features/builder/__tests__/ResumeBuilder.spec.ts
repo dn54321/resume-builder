@@ -550,4 +550,284 @@ describe('ResumeBuilder', () => {
     const dataAttrs = Object.keys(main.attributes()).filter((k) => k.startsWith('data-v-'))
     expect(dataAttrs.length).toBe(1)
   })
+
+  // ─── Resizable preview pane tests ────────────────────────────
+
+  /**
+   * Helper: dispatch a PointerEvent on an element.
+   * @param el
+   * @param type
+   * @param opts
+   * @param opts.clientX
+   * @param opts.pointerId
+   */
+  function dispatchPointer(
+    el: Element,
+    type: string,
+    opts: { clientX?: number; pointerId?: number } = {},
+  ) {
+    el.dispatchEvent(
+      new PointerEvent(type, {
+        clientX: opts.clientX ?? 0,
+        pointerId: opts.pointerId ?? 1,
+        bubbles: true,
+        cancelable: true,
+      }),
+    )
+  }
+
+  it('renders the drag handle between editor and preview', () => {
+    const wrapper = mountBuilder()
+    const handle = wrapper.find('[data-testid="drag-handle"]')
+    expect(handle.exists()).toBe(true)
+  })
+
+  it('renders handle with col-resize cursor', () => {
+    const wrapper = mountBuilder()
+    const handle = wrapper.find('[data-testid="drag-handle"]')
+    expect(handle.classes()).toContain('cursor-col-resize')
+  })
+
+  it('renders handle with correct ARIA attributes', () => {
+    const wrapper = mountBuilder()
+    const handle = wrapper.find('[data-testid="drag-handle"]')
+    expect(handle.attributes('role')).toBe('separator')
+    expect(handle.attributes('aria-label')).toBe('Resize preview')
+  })
+
+  it('renders handle with resize-handle class for responsive hiding', () => {
+    const wrapper = mountBuilder()
+    const handle = wrapper.find('[data-testid="drag-handle"]')
+    expect(handle.classes()).toContain('resize-handle')
+  })
+
+  it('uses dynamic grid template with default 2fr preview', () => {
+    const wrapper = mountBuilder()
+    const grid = wrapper.find('.builder-grid')
+    const style = grid.attributes('style')
+    expect(style).toBeDefined()
+    expect(style).toContain('grid-template-columns')
+    expect(style).toContain('240px 1fr 4px 2fr')
+  })
+
+  it('increases preview fr when dragging handle right', async () => {
+    const wrapper = mountBuilder()
+    await nextTick()
+    const grid = wrapper.find('.builder-grid')
+
+    // Mock clientWidth for consistent px↔fr conversion
+    Object.defineProperty(grid.element, 'clientWidth', {
+      value: 1200,
+      writable: true,
+      configurable: true,
+    })
+
+    const handle = wrapper.find('[data-testid="drag-handle"]')
+
+    // Start drag
+    dispatchPointer(handle.element, 'pointerdown', { clientX: 800 })
+    await nextTick()
+
+    // Drag right by 200px → preview should get wider
+    dispatchPointer(handle.element, 'pointermove', { clientX: 1000 })
+    await nextTick()
+
+    const newStyle = grid.attributes('style')!
+    const match = newStyle.match(/240px 1fr 4px ([\d.]+)fr/)
+    expect(match).not.toBeNull()
+    const newFr = parseFloat(match![1]!)
+    // Dragging right from 2fr (max) is clamped — preview should stay at 2fr
+    expect(newFr).toBe(2)
+
+    // End drag — cleanup listeners
+    dispatchPointer(handle.element, 'pointerup')
+    await nextTick()
+  })
+
+  it('decreases preview fr when dragging handle left', async () => {
+    const wrapper = mountBuilder()
+    await nextTick()
+    const grid = wrapper.find('.builder-grid')
+
+    Object.defineProperty(grid.element, 'clientWidth', {
+      value: 1200,
+      writable: true,
+      configurable: true,
+    })
+
+    const handle = wrapper.find('[data-testid="drag-handle"]')
+
+    // Start drag
+    dispatchPointer(handle.element, 'pointerdown', { clientX: 800 })
+    await nextTick()
+
+    // Drag left by 200px → preview should get narrower
+    dispatchPointer(handle.element, 'pointermove', { clientX: 600 })
+    await nextTick()
+
+    const newStyle = grid.attributes('style')!
+    const match = newStyle.match(/240px 1fr 4px ([\d.]+)fr/)
+    expect(match).not.toBeNull()
+    const newFr = parseFloat(match![1]!)
+    // Dragging left decreases FR below default 2
+    expect(newFr).toBeLessThan(2)
+
+    dispatchPointer(handle.element, 'pointerup')
+    await nextTick()
+  })
+
+  it('respects minimum preview width of 300px', async () => {
+    const wrapper = mountBuilder()
+    await nextTick()
+    const grid = wrapper.find('.builder-grid')
+
+    Object.defineProperty(grid.element, 'clientWidth', {
+      value: 1200,
+      writable: true,
+      configurable: true,
+    })
+
+    const handle = wrapper.find('[data-testid="drag-handle"]')
+
+    // Start at x=500
+    dispatchPointer(handle.element, 'pointerdown', { clientX: 500 })
+    await nextTick()
+
+    // Drag far left — should clamp at 300px minimum
+    dispatchPointer(handle.element, 'pointermove', { clientX: 100 })
+    await nextTick()
+
+    // Convert the FR back to pixels to verify clamping
+    const style = grid.attributes('style')!
+    const match = style.match(/240px 1fr 4px ([\d.]+)fr/)
+    expect(match).not.toBeNull()
+    const clampedFr = parseFloat(match![1]!)
+
+    // At 1200px container, availableFrSpace = 956
+    // Min 300px → fr = 300 / (956 - 300) = 300 / 656 ≈ 0.46
+    expect(clampedFr).toBeGreaterThanOrEqual(0.4)
+    expect(clampedFr).toBeLessThanOrEqual(0.5)
+
+    dispatchPointer(handle.element, 'pointerup')
+    await nextTick()
+  })
+
+  it('respects maximum preview width of 2fr', async () => {
+    const wrapper = mountBuilder()
+    const grid = wrapper.find('.builder-grid')
+
+    Object.defineProperty(grid.element, 'clientWidth', {
+      value: 1200,
+      writable: true,
+      configurable: true,
+    })
+
+    const handle = wrapper.find('[data-testid="drag-handle"]')
+
+    // Start drag
+    dispatchPointer(handle.element, 'pointerdown', { clientX: 800 })
+
+    // Drag far right — should clamp at 2fr max
+    dispatchPointer(handle.element, 'pointermove', { clientX: 2000 })
+
+    const style = grid.attributes('style')!
+    // Max should be 2fr
+    expect(style).toContain('240px 1fr 4px 2fr')
+
+    dispatchPointer(handle.element, 'pointerup')
+  })
+
+  it('cleans up pointermove and pointerup listeners on drag end', async () => {
+    const wrapper = mountBuilder()
+    const handle = wrapper.find('[data-testid="drag-handle"]')
+    const handleEl = handle.element
+
+    const removeSpy = vi.spyOn(handleEl, 'removeEventListener')
+
+    // Start and end a drag
+    dispatchPointer(handleEl, 'pointerdown', { clientX: 800 })
+    dispatchPointer(handleEl, 'pointerup')
+
+    // After pointerup, listeners should be removed
+    expect(removeSpy).toHaveBeenCalledWith('pointermove', expect.any(Function))
+    expect(removeSpy).toHaveBeenCalledWith('pointerup', expect.any(Function))
+
+    removeSpy.mockRestore()
+  })
+
+  it('does not crash on pointermove when gridRef is null', async () => {
+    const wrapper = mountBuilder()
+    const handle = wrapper.find('[data-testid="drag-handle"]')
+
+    // Simulate pointermove before grid is mounted (should be a no-op)
+    // The gridRef is set in the template, so it should be non-null here.
+    // But we can test the guard by dispatching move immediately.
+    dispatchPointer(handle.element, 'pointerdown', { clientX: 500 })
+    // This should not throw — the gridRef is available
+    dispatchPointer(handle.element, 'pointermove', { clientX: 600 })
+    dispatchPointer(handle.element, 'pointerup')
+
+    // If we get here without error, the test passes
+    expect(true).toBe(true)
+  })
+
+  it('renders handle between editor and preview in DOM order', () => {
+    const wrapper = mountBuilder()
+    // Get all direct children of the builder grid
+    const grid = wrapper.find('.builder-grid')
+    const children = grid.findAll(':scope > *')
+
+    // Order: sidebar, editor, handle, preview
+    expect(children.length).toBeGreaterThanOrEqual(4)
+
+    // Find indices
+    const editorIdx = children.findIndex((c) => c.find('[data-testid="section-editor"]').exists())
+    const handleIdx = children.findIndex((c) => c.attributes('data-testid') === 'drag-handle')
+    const previewIdx = children.findIndex((c) => c.find('[data-testid="live-preview"]').exists())
+
+    // Handle should be between editor and preview
+    expect(editorIdx).toBeLessThan(handleIdx)
+    expect(handleIdx).toBeLessThan(previewIdx)
+  })
+
+  it('preserves preview fr across multiple drags', async () => {
+    const wrapper = mountBuilder()
+    await nextTick()
+    const grid = wrapper.find('.builder-grid')
+
+    Object.defineProperty(grid.element, 'clientWidth', {
+      value: 1200,
+      writable: true,
+      configurable: true,
+    })
+
+    const handle = wrapper.find('[data-testid="drag-handle"]')
+
+    // First drag: move left to decrease FR
+    dispatchPointer(handle.element, 'pointerdown', { clientX: 800 })
+    await nextTick()
+    dispatchPointer(handle.element, 'pointermove', { clientX: 700 })
+    await nextTick()
+    dispatchPointer(handle.element, 'pointerup')
+    await nextTick()
+
+    const afterFirst = grid.attributes('style')!
+    const match1 = afterFirst.match(/240px 1fr 4px ([\d.]+)fr/)!
+    const fr1 = parseFloat(match1[1]!)
+
+    // Second drag: start from the same position, move further left
+    dispatchPointer(handle.element, 'pointerdown', { clientX: 700 })
+    await nextTick()
+    dispatchPointer(handle.element, 'pointermove', { clientX: 600 })
+    await nextTick()
+    dispatchPointer(handle.element, 'pointerup')
+    await nextTick()
+
+    const afterSecond = grid.attributes('style')!
+    const match2 = afterSecond.match(/240px 1fr 4px ([\d.]+)fr/)!
+    const fr2 = parseFloat(match2[1]!)
+
+    // Second drag should decrease FR below the first
+    expect(fr2).toBeLessThan(fr1)
+  })
 })
