@@ -23,4 +23,4 @@ COPY backend/nest-cli.json backend/tsconfig.json backend/tsconfig.build.json ./
 
 EXPOSE 3000
 
-CMD ["pnpm", "run", "start:dev"]
+CMD pnpm run prisma:push && pnpm run start:dev
