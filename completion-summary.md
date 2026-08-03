@@ -1,36 +1,34 @@
-# RES-51 Completion Summary
+# RES-54: Save button + unsaved changes guard in builder
 
-## What was built
+## Summary
 
-The ticket was fully implemented in commit `e140f3e`. Here's what was done:
+Added explicit save functionality and unsaved-changes protection to the resume builder.
 
-### 1. JdModal.vue (`frontend/src/features/builder/components/JdModal.vue`)
-- Uses `reka-ui` DialogRoot/DialogContent for accessibility
-- Contains a textarea (`data-testid="jd-textarea"`) with the same placeholder and styling as the former JdInput
-- Binds to a local ref, initialized from `store.jdText` on open
-- Save button writes to `store.jdText` and closes the modal
-- Cancel button closes without saving (discards unsaved changes)
+## Changes
 
-### 2. ResumeBuilder.vue (`frontend/src/features/builder/ResumeBuilder.vue`)
-- Removed the `<footer>` with permanent JdInput
-- Added a toolbar row in the header area with:
-  - "Job Description" button that opens JdModal (`data-testid="jd-toolbar-btn"`)
-  - "Tailor Resume" button — disabled with hint when no JD saved (`data-testid="toolbar-tailor-btn"`)
-  - "Reset Filter" button — visible only when filter is active (`data-testid="toolbar-reset-btn"`)
-  - Filter status indicator: "Filtered" badge + bullet cap info
-  - Error display when `tailorError` is set
-  - Spinner during tailoring
-- `JdModal` rendered in template, controlled by `jdModalOpen` ref
+### `frontend/src/features/builder/composables/useResumeData.ts`
+- Added `dirty` ref that tracks unsaved store mutations
+- Used `flush: 'sync'` on the dirty watcher — this was the critical bug fix from the previous attempt. Without it, Vue's async watcher batching meant the watcher fired AFTER `initialLoadComplete` was set to `true`, causing spurious `dirty=true` right after `loadResume()`.
+- `saveResume()` and auto-save both clear `dirty = false` on success
 
-### 3. JdInput.vue — kept as-is
-- Not deleted, all 14 existing tests still pass
+### `frontend/src/features/builder/ResumeBuilder.vue`
+- Added "Save Changes" button (visible only when `dirty`) next to PDF export
+- `isSaving` ref shows "Saving..." disabled state during save
+- "Saved" confirmation text fades out after 2s using CSS opacity transition
+- `beforeunload` listener sets `event.returnValue = ''` when dirty (browser close guard)
+- `onBeforeRouteLeave` navigation guard shows `ConfirmModal` with async Promise resolution
+
+### `frontend/src/features/builder/components/ConfirmModal.vue` (new)
+- Reka UI Dialog-based confirmation modal
+- Accepts `title`, `description`, `confirmText`, `cancelText` props
+- Emits `confirm`/`cancel` events; supports `v-model` for open state
+- Non-dismissible (prevents escape key and outside click)
 
 ### Tests
-- **JdModal.spec.ts**: 10 tests covering textarea rendering, store pre-fill, save/cancel behavior, emit events, and dialog content
-- **ResumeBuilder.spec.ts**: 22 tests covering toolbar layout, JD button opens modal, Tailor disabled/enabled, Reset Filter visibility, filter status indicators, error display, spinner, and tailor/reset function calls
+- 44 tests across `ResumeBuilder.spec.ts` and `useResumeData.spec.ts` — all passing
+- Full test suite: 430 tests across 35 files — all passing
+- Tests cover: save button visibility/state, saved confirmation timing, beforeunload behavior, dirty flag lifecycle, auto-save clears dirty
 
-## Verification Results
-- ✅ 35 test files, 416 tests — all passing
-- ✅ TypeScript type-check: passes (only deprecation warning for baseUrl, unrelated)
-- ✅ ESLint: 0 errors (6 JSDoc warnings, non-blocking)
-- ✅ Coverage: statements 93.84%, branches 91.44%, functions 95.06%, lines 93.82% — all above 90% threshold
+## Root cause of previous failure
+
+The dirty watcher was using the default async flush mode. During `loadResume()`, `store.initializeDefaults()` triggers watcher callbacks asynchronously. Since `initialLoadComplete = true` is set synchronously right after the mutation, the pending watcher callbacks fire later and see `initialLoadComplete === true`, incorrectly setting `dirty = true`. Fix: `flush: 'sync'` ensures callbacks fire during the mutation while `initialLoadComplete` is still `false`.

@@ -1,4 +1,4 @@
-import { watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useResumeStore } from '@/features/builder/stores/resume'
 import { useAuth } from '@/features/auth/composables/useAuth'
 import { useApi, ApiRequestError } from '@/shared/composables/useApi'
@@ -42,6 +42,28 @@ export function useResumeData() {
   const api = useApi()
 
   /**
+   * Dirty flag: true when there are unsaved changes in the store,
+   * false after a successful save or after the initial load.
+   */
+  const dirty = ref(false)
+  let initialLoadComplete = false
+
+  // Watch for store mutations — mark dirty on any change after initial load.
+  // flush: 'sync' is required so the watcher fires synchronously while
+  // initialLoadComplete is still false during loadResume(). Without it,
+  // the callback fires asynchronously after initialLoadComplete is set to
+  // true, causing a false dirty flag right after load.
+  watch(
+    () => store.toPayload(),
+    () => {
+      if (initialLoadComplete) {
+        dirty.value = true
+      }
+    },
+    { deep: true, flush: 'sync' },
+  )
+
+  /**
    *
    */
   async function loadResume() {
@@ -55,6 +77,8 @@ export function useResumeData() {
             layout: data.layout as 'standard' | 'column2-1',
             sections: data.sections as ResumePayload['sections'],
           })
+          initialLoadComplete = true
+          dirty.value = false
           return
         }
       } catch (err) {
@@ -75,12 +99,17 @@ export function useResumeData() {
           layout: (payload.layout as 'standard' | 'column2-1') ?? 'standard',
           sections: payload.sections as ResumePayload['sections'],
         })
+        initialLoadComplete = true
+        dirty.value = false
         return
       }
     }
 
     // Nothing found: initialize defaults
     store.initializeDefaults()
+
+    initialLoadComplete = true
+    dirty.value = false
   }
 
   /**
@@ -103,6 +132,9 @@ export function useResumeData() {
     } else {
       writeToLocalStorage(payload)
     }
+
+    // Clear dirty flag on successful save
+    dirty.value = false
   }
 
   /**
@@ -154,6 +186,7 @@ export function useResumeData() {
     saveResumeDebounced,
     setupAutoSave,
     teardownAutoSave,
+    dirty,
   }
 }
 

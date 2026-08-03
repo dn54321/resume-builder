@@ -56,8 +56,27 @@
         </div>
       </div>
 
-      <!-- Right: PDF export -->
-      <PdfExportButton />
+      <!-- Right: Save + PDF export -->
+      <div class="flex items-center gap-2">
+        <button
+          v-if="dirty"
+          class="px-3 py-1.5 rounded-md text-[0.8125rem] font-[inherit] font-medium cursor-pointer transition-colors border border-primary bg-primary text-primary-foreground hover:bg-primary/90"
+          :disabled="isSaving"
+          @click="onSaveClick"
+          data-testid="toolbar-save-btn"
+        >
+          {{ isSaving ? 'Saving...' : 'Save Changes' }}
+        </button>
+        <span
+          v-if="showSaved"
+          class="text-[0.8125rem] font-medium text-green-600 transition-opacity duration-500"
+          :class="{ 'opacity-0': savedFadingOut, 'opacity-100': !savedFadingOut }"
+          data-testid="toolbar-saved-msg"
+        >
+          ✓ Saved
+        </span>
+        <PdfExportButton />
+      </div>
     </header>
 
     <div class="grid grid-cols-[240px_1fr_2fr] gap-4 flex-1 min-h-0 max-[1024px]:grid-cols-1 max-[1024px]:grid-rows-[auto_1fr_1fr]">
@@ -90,11 +109,24 @@
 
     <!-- JD Modal -->
     <JdModal v-model="jdModalOpen" />
+
+    <!-- Unsaved Changes Modal -->
+    <ConfirmModal
+      v-model="showUnsavedModal"
+      title="Unsaved Changes"
+      description="You have unsaved changes. Leave anyway?"
+      confirm-text="Leave"
+      cancel-text="Stay"
+      @confirm="onLeaveAnyway"
+      @cancel="onStay"
+      data-testid="unsaved-modal"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { onBeforeRouteLeave } from 'vue-router'
 import { useResumeStore } from '@/features/builder/stores/resume'
 import { useResumeData } from '@/features/builder/composables/useResumeData'
 import { useAuth } from '@/features/auth/composables/useAuth'
@@ -105,12 +137,13 @@ import JdModal from '@/features/builder/components/JdModal.vue'
 import AnonymousBanner from '@/features/builder/components/AnonymousBanner.vue'
 import LivePreview from '@/features/builder/components/LivePreview.vue'
 import PdfExportButton from '@/features/builder/components/PdfExportButton.vue'
+import ConfirmModal from '@/features/builder/components/ConfirmModal.vue'
 import { useTailor } from '@/features/builder/composables/useTailor'
 import type { SectionType } from '@/features/builder/types/resume'
 
 const store = useResumeStore()
 const { isAuthenticated } = useAuth()
-const { loadResume, setupAutoSave, teardownAutoSave } = useResumeData()
+const { loadResume, saveResume, setupAutoSave, teardownAutoSave, dirty } = useResumeData()
 const { isTailoring, tailorError, bulletCap, tailorResume, resetFilter } = useTailor()
 
 const selectedSectionId = ref<string | null>(null)
@@ -140,9 +173,87 @@ async function onTailor() {
   await tailorResume(store.jdText)
 }
 
+// ─── Save button state ────────────────────────────────────────────
+
+const isSaving = ref(false)
+const showSaved = ref(false)
+const savedFadingOut = ref(false)
+let savedTimer: ReturnType<typeof setTimeout> | null = null
+
+/** Handle explicit save button click. */
+async function onSaveClick() {
+  isSaving.value = true
+  try {
+    await saveResume()
+    showSavedConfirmation()
+  } catch (err) {
+    console.error('Save failed:', err)
+  } finally {
+    isSaving.value = false
+  }
+}
+
+/** Show the "Saved" confirmation that fades after 2s. */
+function showSavedConfirmation() {
+  if (savedTimer) clearTimeout(savedTimer)
+  showSaved.value = true
+  savedFadingOut.value = false
+  savedTimer = setTimeout(() => {
+    savedFadingOut.value = true
+    // Remove from DOM after fade-out transition completes
+    setTimeout(() => {
+      showSaved.value = false
+      savedFadingOut.value = false
+    }, 500)
+  }, 2000)
+}
+
+// ─── beforeunload handler ─────────────────────────────────────────
+
+function onBeforeUnload(event: BeforeUnloadEvent) {
+  if (dirty.value) {
+    event.returnValue = ''
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('beforeunload', onBeforeUnload)
+})
+
 onUnmounted(() => {
+  window.removeEventListener('beforeunload', onBeforeUnload)
+  if (savedTimer) clearTimeout(savedTimer)
   teardownAutoSave()
 })
+
+// ─── Unsaved changes navigation guard ─────────────────────────────
+
+const showUnsavedModal = ref(false)
+let resolveNavigation: ((value: boolean) => void) | null = null
+
+onBeforeRouteLeave(() => {
+  if (dirty.value) {
+    showUnsavedModal.value = true
+    return new Promise<boolean>((resolve) => {
+      resolveNavigation = resolve
+    })
+  }
+  return true
+})
+
+/** User chose to leave anyway. */
+function onLeaveAnyway() {
+  showUnsavedModal.value = false
+  resolveNavigation?.(true)
+  resolveNavigation = null
+}
+
+/** User chose to stay. */
+function onStay() {
+  showUnsavedModal.value = false
+  resolveNavigation?.(false)
+  resolveNavigation = null
+}
 </script>
 
 
