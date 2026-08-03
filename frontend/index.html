@@ -7,6 +7,19 @@
     <meta name="theme-color" content="#f59e0b" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Resume Builder</title>
+    <!-- Apply the correct theme class before the page renders to prevent FOUC.
+         Mirrors the logic in useTheme.ts: respect localStorage first, then
+         system preference, defaulting to light. -->
+    <script>
+      (function() {
+        try {
+          var theme = localStorage.getItem('theme-mode');
+          if (theme === 'dark' || (theme !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+          }
+        } catch(e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

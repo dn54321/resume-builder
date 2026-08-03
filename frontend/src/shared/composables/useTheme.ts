@@ -64,13 +64,17 @@ function applyTheme(mode: ThemeMode): void {
 }
 
 // Watch for changes and apply + persist automatically.
-// First run happens synchronously at module load before any component mounts,
-// writing 'system' to localStorage and toggling dark class. When initTheme()
-// fires on first useTheme() call, it bumps currentTheme.value which re-triggers
-// this effect to persist and apply the correct stored value.
+// The first run happens synchronously at module load before any component
+// mounts. We apply the theme immediately (system preference fallback) so the
+// page is never stuck without a class, but we defer persistence until
+// initTheme() has read the user's stored preference — otherwise we'd overwrite
+// localStorage with 'system' before ever reading it.
 watchEffect(() => {
   const mode = currentTheme.value
-  persistTheme(mode)
+  // Defer persist until initTheme() has read the stored preference.
+  if (localStorageRead) {
+    persistTheme(mode)
+  }
   applyTheme(mode)
 })
 

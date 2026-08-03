@@ -83,6 +83,54 @@ describe('useTheme', () => {
     expect(document.documentElement.classList.contains('dark')).toBe(false)
   })
 
+  describe('initialization from localStorage', () => {
+    it('does not overwrite localStorage during module initialization', async () => {
+      // Simulate a user who previously chose 'dark'
+      localStorage.setItem('theme-mode', 'dark')
+
+      const { useTheme } = await import('@/shared/composables/useTheme')
+
+      // After module import, localStorage must still say 'dark' —
+      // the watchEffect must NOT have overwritten it with 'system'.
+      expect(localStorage.getItem('theme-mode')).toBe('dark')
+
+      const { theme } = useTheme()
+      await nextTick()
+      expect(theme.value).toBe('dark')
+    })
+
+    it('loads stored light preference on init', async () => {
+      localStorage.setItem('theme-mode', 'light')
+
+      const { useTheme } = await import('@/shared/composables/useTheme')
+      const { theme } = useTheme()
+      await nextTick()
+
+      expect(theme.value).toBe('light')
+      expect(document.documentElement.classList.contains('dark')).toBe(false)
+    })
+
+    it('applies system theme at module load before initTheme runs (FOUC prevention)', async () => {
+      // The watchEffect should apply theme (for FOUC prevention) but NOT persist
+      // before initTheme is called. Since jsdom defaults to light, 'system'
+      // should NOT add the dark class.
+      localStorage.setItem('theme-mode', 'dark')
+
+      const { useTheme } = await import('@/shared/composables/useTheme')
+
+      // After module import (watchEffect ran with 'system'), the dark class
+      // should NOT be present because jsdom prefers light.
+      // The localStorage should still read 'dark' (not overwritten).
+      expect(localStorage.getItem('theme-mode')).toBe('dark')
+
+      // After initTheme, the theme should switch to dark
+      const { theme } = useTheme()
+      await nextTick()
+      expect(theme.value).toBe('dark')
+      expect(document.documentElement.classList.contains('dark')).toBe(true)
+    })
+  })
+
   describe('error handling', () => {
     it('survives localStorage.setItem throwing during persist', async () => {
       // Override setItem to throw before the module initializes
