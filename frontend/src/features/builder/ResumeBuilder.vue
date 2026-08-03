@@ -4,20 +4,8 @@
 
     <!-- Header with toolbar row -->
     <header class="flex items-center justify-between gap-2 pb-3 shrink-0 flex-wrap">
-      <!-- Left: resume name + toolbar buttons -->
-      <div class="flex items-center gap-3 flex-wrap">
-        <input
-          type="text"
-          :value="store.name"
-          class="resume-name-input"
-          placeholder="Untitled Resume"
-          aria-label="Resume name"
-          data-testid="resume-name-input"
-          @input="onNameInput"
-          @blur="onNameBlur"
-          @keydown.enter="($event.target as HTMLInputElement).blur()"
-        />
-        <div class="flex items-center gap-2 flex-wrap">
+      <!-- Left: toolbar buttons -->
+      <div class="flex items-center gap-2 flex-wrap">
         <button
           class="px-3 py-1.5 rounded-md text-[0.8125rem] font-[inherit] font-medium cursor-pointer transition-colors border border-border bg-background text-foreground hover:bg-muted"
           @click="jdModalOpen = true"
@@ -67,7 +55,6 @@
           {{ tailorError }}
         </div>
       </div>
-      </div>
 
       <!-- Right: Save + PDF export -->
       <div class="flex items-center gap-2">
@@ -115,6 +102,17 @@
 
       <!-- Center: Section editor -->
       <main class="overflow-y-auto p-4 border border-border rounded-lg bg-surface">
+        <input
+          type="text"
+          :value="store.name"
+          class="w-full px-3 py-1.5 mb-3 text-lg font-semibold bg-transparent border-b border-border focus:outline-hidden focus:border-primary"
+          placeholder="Untitled Resume"
+          aria-label="Resume name"
+          data-testid="resume-name-input"
+          @input="onNameInput"
+          @blur="onNameBlur"
+          @keydown.enter="($event.target as HTMLInputElement).blur()"
+        />
         <SectionEditor :selected-section-id="selectedSectionId" />
       </main>
 
@@ -432,35 +430,6 @@ function onStay() {
 
 <style scoped>
 /* ── Resume name input ─────────────────── */
-.resume-name-input {
-  font-size: 1.25rem;
-  font-weight: 600;
-  font-family: inherit;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  padding: 0.25rem 0.5rem;
-  background: transparent;
-  color: var(--foreground);
-  max-width: 320px;
-  width: 100%;
-  transition: border-color 0.15s, background-color 0.15s;
-}
-
-.resume-name-input:hover {
-  border-color: var(--border);
-}
-
-.resume-name-input:focus {
-  outline: none;
-  border-color: var(--primary);
-  background: var(--background);
-}
-
-.resume-name-input::placeholder {
-  color: var(--muted-foreground);
-  font-weight: 400;
-}
-
 main {
   /* Firefox */
   scrollbar-width: thin;
