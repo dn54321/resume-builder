@@ -1,36 +1,50 @@
-## RES-31: Build welcome/landing page at /
+# RES-32: Restyle AccountView with Tailwind + shadcn-vue
 
-### Changes Made
+## Summary
 
-**`frontend/src/views/HomeView.vue`** — Full rewrite
-- Replaced the elaborate illustrated landing page with a clean, simple design
-- Hero section with "Resume Builder" badge, headline "Build a resume that gets you hired", subheading explaining the value proposition
-- **Auth-aware CTAs:**
-  - Guest state: "Get Started" → `/signup`, "Log in" → `/login`
-  - Authenticated state: "Go to Dashboard" → `/dashboard`, "Create New Resume" → `/dashboard`
-- Feature grid with 4 cards (emoji icons): Live Preview, Smart Sections, Tailor to Jobs, PDF Export
-- Simple centered footer: "Resume Builder — Built with Vue, NestJS, and Tailwind CSS"
-- Responsive grid: stacks 2 columns on `sm`, 4 columns on `lg`
+The AccountView page was restyled to use Tailwind CSS and shadcn-vue components. The work was already present in the codebase (merged as part of RES-29 dependency) and verified to be complete.
 
-**`frontend/src/views/__tests__/HomeView.spec.ts`** — Full rewrite (16 tests)
-- Hero section: badge, headline, subheading rendering
-- Guest CTAs: Get Started links to /signup, Log in links to /login, no dashboard CTAs
-- Authenticated CTAs: Go to Dashboard and Create New Resume link to /dashboard, no guest CTAs
-- Feature cards: exactly 4 cards, all titles and descriptions render, icons present
-- Footer: present with correct text
-- Verified with Pinia auth store setup for both guest and authenticated states
+## Changes
 
-**`frontend/vitest.config.ts`** — Removed `HomeView.vue` from coverage exclude list (no longer Vue boilerplate)
+### `frontend/src/views/AccountView.vue`
+- Three Card sections: Account Info, Change Password, Delete Account
+- Account Info shows user email with Label
+- Change Password form with three Input+Label fields (current, new, confirm)
+- Error Alert (destructive variant) for validation and API errors
+- Success Alert (green) with "Redirecting to login..." message
+- Delete Account Card with `border-destructive` class
+- Destructive CardTitle (`text-destructive`)
+- Confirmation text input with code-styled hint
+- Destructive variant Button for delete action
+- No `<style>` block — all styling via Tailwind utility classes
 
-**`frontend/e2e/vue.spec.ts`** — Updated e2e tests
-- Checks new h1 headline
-- Checks 4 feature cards render
-- Checks guest CTAs scoped to hero section (avoids nav bar collision)
-- Checks footer renders
+### shadcn-vue components used
+- Card, CardHeader, CardTitle, CardContent
+- Button (default + destructive variant)
+- Input (password + text types)
+- Label
+- Alert, AlertDescription
 
-### Verification
-- All 420 unit tests pass (35 test files)
-- Type-check passes (`vue-tsc --build`)
-- Lint passes (only pre-existing JSDoc warnings)
-- Coverage thresholds met: 94.3% statements, 92.35% branches, 95.55% functions, 94.2% lines
-- 4/4 e2e tests pass (chromium)
+### `frontend/src/views/__tests__/AccountView.spec.ts`
+- Updated selectors for new DOM structure (h3 headings, `[role="alert"]`)
+- Tests for destructive border class, destructive heading class
+
+## Verification
+
+| Check | Result |
+|-------|--------|
+| Type-check | ✅ Clean |
+| Lint | ✅ 0 errors (430 pre-existing JSDoc warnings) |
+| Tests | ✅ 416 passed, 35 files |
+| Coverage | ✅ 93.84% stmts, 91.44% branches (above 90% threshold) |
+
+## Acceptance Criteria
+
+- [x] Three Card sections: Account Info, Change Password, Delete Account
+- [x] Account Info shows user email
+- [x] Change Password form works identically — success redirects to login after 2s
+- [x] Delete Account form works identically — confirmation text, destructive button
+- [x] Danger zone Card has red/destructive border (`border-destructive`)
+- [x] Error and success messages use Alert components
+- [x] Existing AccountView tests updated and passing
+- [x] No scoped `<style>` block
