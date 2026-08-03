@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, afterEach } from 'vitest'
 import { mount, VueWrapper } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import ConfirmModal from '@/features/builder/components/ConfirmModal.vue'
@@ -118,14 +118,21 @@ describe('ConfirmModal', () => {
     // reka-ui keeps dialog elements during close animation with data-state="closed"
     // The dialog should either be removed or in closed state
     const dialogAfterClose = document.body.querySelector('[role="dialog"]')
+    // reka-ui keeps dialog elements during close animation with data-state="closed"
+    // If dialog is still in DOM, it should be in closed state
     if (dialogAfterClose) {
       expect(dialogAfterClose.getAttribute('data-state')).toBe('closed')
+    } else {
+      // Dialog removed from DOM entirely — that's also fine
+      expect(dialogAfterClose).toBeNull()
     }
     // Title should be hidden or removed
     const title = document.body.querySelector('h2')
     if (title) {
       const parentDialog = title.closest('[role="dialog"]')
       expect(parentDialog?.getAttribute('data-state')).toBe('closed')
+    } else {
+      expect(title).toBeNull()
     }
   })
 
