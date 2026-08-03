@@ -171,7 +171,7 @@ async function handleConfirmDelete(): Promise<void> {
       <div
         v-for="resume in resumes"
         :key="resume.id"
-        class="resume-card"
+        class="resume-card bg-card border border-border text-card-foreground rounded-lg hover:border-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-foreground focus-visible:outline-offset-2"
         role="button"
         tabindex="0"
         @click="router.push(`/builder/${resume.id}`)"
@@ -264,20 +264,9 @@ async function handleConfirmDelete(): Promise<void> {
 
 .resume-card {
   padding: 1.25rem;
-  border: 1px solid var(--color-border);
   border-radius: 8px;
   cursor: pointer;
   transition: box-shadow 0.15s, border-color 0.15s;
-  background: var(--color-background);
-}
-
-.resume-card:hover {
-  border-color: var(--color-text);
-}
-
-.resume-card:focus-visible {
-  outline: 2px solid var(--color-text);
-  outline-offset: 2px;
 }
 
 .resume-card__header {
@@ -324,11 +313,6 @@ async function handleConfirmDelete(): Promise<void> {
 .resume-card--skeleton {
   cursor: default;
   pointer-events: none;
-}
-
-.resume-card--skeleton:hover {
-  border-color: var(--color-border);
-  box-shadow: none;
 }
 
 .skeleton-line {
