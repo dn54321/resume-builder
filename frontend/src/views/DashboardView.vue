@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/features/auth/composables/useAuth'
 import { useApi, ApiRequestError } from '@/shared/composables/useApi'
+import ConfirmModal from '@/shared/components/ConfirmModal.vue'
 
 interface ResumeSummary {
   id: string
@@ -18,6 +19,8 @@ const api = useApi()
 const resumes = ref<ResumeSummary[]>([])
 const isLoading = ref(true)
 const error = ref('')
+const showConfirmModal = ref(false)
+const resumeToDelete = ref<ResumeSummary | null>(null)
 
 onMounted(async () => {
   if (!auth.isAuthenticated) {
@@ -69,8 +72,9 @@ async function handleCreateResume(): Promise<void> {
 }
 
 /**
- *
- * @param dateStr
+ * Format a date string for display.
+ * @param {string} dateStr - ISO date string
+ * @returns {string} Locale-formatted date
  */
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString(undefined, {
@@ -78,6 +82,40 @@ function formatDate(dateStr: string): string {
     month: 'short',
     day: 'numeric',
   })
+}
+
+/**
+ * Open the confirm modal for a resume.
+ * @param {ResumeSummary} resume - The resume to delete
+ */
+function handleDeleteClick(resume: ResumeSummary): void {
+  error.value = ''
+  resumeToDelete.value = resume
+  showConfirmModal.value = true
+}
+
+/**
+ * Execute the deletion after user confirms.
+ */
+async function handleConfirmDelete(): Promise<void> {
+  if (!resumeToDelete.value) return
+
+  error.value = ''
+
+  try {
+    await api.del(`/api/v1/resumes/${resumeToDelete.value.id}`)
+    resumes.value = resumes.value.filter(
+      (r) => r.id !== resumeToDelete.value!.id,
+    )
+  } catch (err) {
+    if (err instanceof ApiRequestError) {
+      error.value = err.message
+    } else {
+      error.value = 'Something went wrong'
+    }
+  } finally {
+    resumeToDelete.value = null
+  }
 }
 </script>
 
@@ -136,12 +174,34 @@ function formatDate(dateStr: string): string {
         @keydown.enter="router.push(`/builder/${resume.id}`)"
         @keydown.space.prevent="router.push(`/builder/${resume.id}`)"
       >
-        <h3 class="resume-card__name">{{ resume.layout }}</h3>
+        <div class="resume-card__header">
+          <h3 class="resume-card__name">{{ resume.layout }}</h3>
+          <button
+            class="resume-card__delete-btn"
+            data-testid="delete-btn"
+            :aria-label="`Delete ${resume.layout}`"
+            @click.stop="handleDeleteClick(resume)"
+          >
+            🗑️
+          </button>
+        </div>
         <p class="resume-card__date">
           Updated {{ formatDate(resume.updatedAt) }}
         </p>
       </div>
     </div>
+
+    <!-- Confirm Delete Modal -->
+    <ConfirmModal
+      v-model="showConfirmModal"
+      :title="resumeToDelete ? `Delete ${resumeToDelete.layout}?` : 'Delete?'"
+      description="This action cannot be undone."
+      confirm-label="Delete"
+      cancel-label="Cancel"
+      variant="destructive"
+      data-testid="confirm-delete-modal"
+      @confirm="handleConfirmDelete"
+    />
   </div>
 </template>
 
@@ -229,10 +289,37 @@ function formatDate(dateStr: string): string {
   outline-offset: 2px;
 }
 
+.resume-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
 .resume-card__name {
-  margin: 0 0 0.5rem;
+  margin: 0;
   font-size: 1.125rem;
   text-transform: capitalize;
+  word-break: break-word;
+  flex: 1;
+}
+
+.resume-card__delete-btn {
+  flex-shrink: 0;
+  padding: 0.25rem;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  border-radius: 4px;
+  opacity: 0.5;
+  transition: opacity 0.15s, background-color 0.15s;
+}
+
+.resume-card__delete-btn:hover {
+  opacity: 1;
+  background-color: #fee2e2;
 }
 
 .resume-card__date {

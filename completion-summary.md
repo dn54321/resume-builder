@@ -1,41 +1,24 @@
-## RES-57: ConfirmModal — reusable confirmation dialog component
+# RES-58: Delete resume — backend endpoint + frontend delete button
 
-### Summary
+## Summary
 
-Created `frontend/src/components/ui/ConfirmModal.vue` — a reusable confirmation dialog component that can be used for delete confirmations, unsaved changes guards, and other confirmation flows.
+Implemented the ability for users to delete their resumes from the dashboard.
 
-### Files Changed
+## Changes
 
-- **Created:** `frontend/src/components/ui/ConfirmModal.vue`
-- **Created:** `frontend/src/components/ui/__tests__/ConfirmModal.spec.ts`
+### Backend
+- **`resumes.service.ts`**: Added `delete(id, userId)` method that checks ownership (throws `NotFoundException` for non-existent or unauthorized) and deletes via Prisma (cascade handles children via `onDelete: Cascade`)
+- **`resumes.controller.ts`**: Added `@Delete(':id')` endpoint with `@HttpCode(204)`, guarded by `AuthGuard`
+- **`resumes.service.spec.ts`**: Added test for `delete` on `MockPrisma` interface; 4 test cases: successful delete, not-found, unauthorized, and verify no delete call when check fails
+- **`resumes.controller.spec.ts`**: 4 test cases for DELETE endpoint: 204 success, 404 not found, 404 other user, 401 unauthenticated
 
-### Component Features
+### Frontend
+- **`ConfirmModal.vue`** (new): Shared reusable confirmation modal using reka-ui Dialog components. Props: modelValue, title, description, confirmLabel, cancelLabel, variant (default/destructive). Emits: confirm, cancel. Fully themed with dark mode support.
+- **`DashboardView.vue`**: Added trash icon button on each resume card, wired to ConfirmModal with destructive variant. On confirm, calls `api.del()` and removes from local array. Error state handled with alert.
+- **`DashboardView.spec.ts`**: Replaced old "does not show delete button" test with 5 new tests: trash icon visibility, modal opens on click, delete on confirm, cancel without delete, and error alert on failure. Tests use component props/emits to avoid DialogPortal teleport issues.
 
-| Feature | Implementation |
-|---------|---------------|
-| Props | `open` (boolean), `title` (string), `description` (string), `confirmLabel` (string, default "Confirm"), `variant` ('destructive' \| 'default') |
-| Emits | `confirm`, `cancel` |
-| Card & Button | Uses existing shadcn-style `Card` and `Button` components |
-| Backdrop | Fixed `bg-black/50` overlay, click-to-dismiss |
-| Responsive | Centered on screen, `max-w-[400px]`, horizontal padding via `mx-4` |
-| Scroll lock | Uses `@vueuse/core` `useScrollLock` on `document.body` |
-| Theme support | Uses CSS variables (`bg-card`, `text-card-foreground`, `text-muted-foreground`, button variants) that respect light/dark |
-| Accessibility | `role="alertdialog"`, `aria-modal="true"`, `aria-labelledby`/`aria-describedby` with `useId()`, focus trap (Tab/Shift+Tab), Escape to cancel, focus restored on close |
-
-### Test Coverage
-
-32 tests across 8 describe blocks:
-- **Rendering** (6): open/closed state, re-rendering on prop change, title/description display
-- **Props** (5): default/custom confirmLabel, Cancel button presence, default/destructive variant classes
-- **Events** (5): confirm/cancel button clicks, backdrop click, Escape key, no emit when closed
-- **Accessibility** (5): role, aria-modal, aria-labelledby/describedby linkage, focus on open, focus trap cycling
-- **Scroll lock** (3): locked when open, not locked when closed, restored on prop change
-- **Responsive/styling** (3): backdrop class, max-width, centering flex classes
-- **Cleanup** (2): scroll restored on unmount, no throw when unmounted while closed
-
-### Validation
-
-- TypeScript: `vue-tsc --build` passes with zero errors
-- Lint: `oxlint` passes, `eslint` has only jsdoc warnings (no errors)
-- Tests: All 448 tests pass across 36 test files
-- Coverage: 93.84% statements, 91.44% branches, 95.06% functions, 93.82% lines (all above 90% threshold)
+## Test Results
+- Backend: 21/22 suites pass (1 pre-existing failure in prisma-schema.spec.ts requiring DATABASE_URL), 182 tests pass
+- Frontend: 35 suites pass, 420 tests pass
+- Type-check: both backend and frontend pass
+- Lint: both pass (pre-existing warnings only)

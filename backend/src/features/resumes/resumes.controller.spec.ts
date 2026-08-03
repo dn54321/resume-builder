@@ -47,6 +47,7 @@ describe('ResumesController', () => {
     findOne: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
+    delete: jest.Mock;
   };
   let mockAuthGuard: CanActivate;
 
@@ -58,6 +59,7 @@ describe('ResumesController', () => {
       findOne: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      delete: jest.fn(),
     };
 
     mockAuthGuard = {
@@ -307,6 +309,46 @@ describe('ResumesController', () => {
       await request(app.getHttpServer())
         .put('/api/v1/resumes/r1')
         .send({ layout: 'compact' })
+        .expect(401);
+    });
+  });
+
+  describe('DELETE /api/v1/resumes/:id', () => {
+    it('returns 204 on successful delete', async () => {
+      mockResumesService.delete.mockResolvedValue(undefined);
+
+      await request(app.getHttpServer())
+        .delete('/api/v1/resumes/r1')
+        .expect(204);
+
+      expect(mockResumesService.delete).toHaveBeenCalledWith('r1', 'user-1');
+    });
+
+    it('returns 404 when resume does not exist', async () => {
+      mockResumesService.delete.mockRejectedValue(
+        new NotFoundException('Resume not found'),
+      );
+
+      await request(app.getHttpServer())
+        .delete('/api/v1/resumes/nonexistent')
+        .expect(404);
+    });
+
+    it('returns 404 when resume belongs to another user', async () => {
+      mockResumesService.delete.mockRejectedValue(
+        new NotFoundException('Resume not found'),
+      );
+
+      await request(app.getHttpServer())
+        .delete('/api/v1/resumes/other-user-resume')
+        .expect(404);
+    });
+
+    it('returns 401 when not authenticated', async () => {
+      denyAuth();
+
+      await request(app.getHttpServer())
+        .delete('/api/v1/resumes/r1')
         .expect(401);
     });
   });

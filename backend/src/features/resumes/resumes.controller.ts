@@ -3,8 +3,10 @@ import {
   Get,
   Post,
   Put,
+  Delete,
   Param,
   Body,
+  HttpCode,
   Inject,
   UseGuards,
   Req,
@@ -52,5 +54,14 @@ export class ResumesController {
     @Req() req: AuthenticatedRequest,
   ): Promise<ResumeFull> {
     return this.resumesService.update(id, req.user.id, dto);
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  async remove(
+    @Param('id') id: string,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<void> {
+    return this.resumesService.delete(id, req.user.id);
   }
 }

@@ -73,6 +73,7 @@ interface MockPrisma {
     findUnique: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
+    delete: jest.Mock;
   };
   resumeSection: {
     create: jest.Mock;
@@ -168,6 +169,7 @@ describe('ResumesService', () => {
         findUnique: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
+        delete: jest.fn(),
       },
       resumeSection: {
         create: jest.fn(),
@@ -341,6 +343,49 @@ describe('ResumesService', () => {
       await expect(service.findOne('nonexistent', userId)).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  describe('delete', () => {
+    it('deletes the resume when it belongs to the user', async () => {
+      const existingResume = { id: resumeId, userId };
+      mockPrisma.resume.findUnique.mockResolvedValue(existingResume);
+      mockPrisma.resume.delete.mockResolvedValue({});
+
+      await service.delete(resumeId, userId);
+
+      expect(mockPrisma.resume.findUnique).toHaveBeenCalledWith({
+        where: { id: resumeId },
+        select: { userId: true },
+      });
+      expect(mockPrisma.resume.delete).toHaveBeenCalledWith({
+        where: { id: resumeId },
+      });
+    });
+
+    it('throws NotFoundException for non-existent resume', async () => {
+      mockPrisma.resume.findUnique.mockResolvedValue(null);
+
+      await expect(service.delete('nonexistent', userId)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it("throws NotFoundException for another user's resume", async () => {
+      const existingResume = { id: resumeId, userId: otherUserId };
+      mockPrisma.resume.findUnique.mockResolvedValue(existingResume);
+
+      await expect(service.delete(resumeId, userId)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('does not call delete when ownership check fails', async () => {
+      const existingResume = { id: resumeId, userId: otherUserId };
+      mockPrisma.resume.findUnique.mockResolvedValue(existingResume);
+
+      await expect(service.delete(resumeId, userId)).rejects.toThrow();
+      expect(mockPrisma.resume.delete).not.toHaveBeenCalled();
     });
   });
 
