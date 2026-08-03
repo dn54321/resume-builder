@@ -24,9 +24,11 @@ vi.mock('@/features/builder/composables/useResumeData', () => ({
 }))
 
 // ─── Mock useAuth ──────────────────────────────────────────────────
+const mockIsAuthenticated = ref(false)
+
 vi.mock('@/features/auth/composables/useAuth', () => ({
   useAuth: () => ({
-    isAuthenticated: false,
+    isAuthenticated: mockIsAuthenticated,
   }),
 }))
 
@@ -144,6 +146,7 @@ describe('ResumeBuilder', () => {
     mockTailorError.value = null
     mockTailorResume.mockReset()
     mockResetFilter.mockReset()
+    mockIsAuthenticated.value = false
   })
 
   it('renders the toolbar with Job Description button', () => {
@@ -383,19 +386,31 @@ describe('ResumeBuilder', () => {
 
   // ─── Save button tests ────────────────────────────────────────
 
-  it('hides Save Changes button when not dirty', () => {
+  it('hides Save button when not dirty and not authenticated', () => {
     mockDirty.value = false
+    mockIsAuthenticated.value = false
     const wrapper = mountBuilder()
     expect(wrapper.find('[data-testid="toolbar-save-btn"]').exists()).toBe(false)
   })
 
-  it('shows Save Changes button when dirty', async () => {
+  it('shows disabled Saved button when authenticated and not dirty', async () => {
+    mockDirty.value = false
+    mockIsAuthenticated.value = true
+    const wrapper = mountBuilder()
+    await nextTick()
+    const saveBtn = wrapper.find('[data-testid="toolbar-save-btn"]')
+    expect(saveBtn.exists()).toBe(true)
+    expect(saveBtn.text()).toBe('Saved')
+    expect(saveBtn.attributes('disabled')).toBeDefined()
+  })
+
+  it('shows Save button when dirty', async () => {
     mockDirty.value = true
     const wrapper = mountBuilder()
     await nextTick()
     const saveBtn = wrapper.find('[data-testid="toolbar-save-btn"]')
     expect(saveBtn.exists()).toBe(true)
-    expect(saveBtn.text()).toBe('Save Changes')
+    expect(saveBtn.text()).toBe('Save')
   })
 
   it('calls saveResume when Save Changes is clicked', async () => {

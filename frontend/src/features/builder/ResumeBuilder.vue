@@ -59,13 +59,13 @@
       <!-- Right: Save + PDF export -->
       <div class="flex items-center gap-2">
         <button
-          v-if="dirty"
-          class="px-3 py-1.5 rounded-md text-[0.8125rem] font-[inherit] font-medium cursor-pointer transition-colors border border-primary bg-primary text-primary-foreground hover:bg-primary/90"
-          :disabled="isSaving"
+          v-if="isAuthenticated || dirty"
+          class="px-3 py-1.5 rounded-md text-[0.8125rem] font-[inherit] font-medium cursor-pointer transition-colors border border-primary bg-primary text-primary-foreground hover:not-disabled:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+          :disabled="isSaving || !dirty"
           @click="onSaveClick"
           data-testid="toolbar-save-btn"
         >
-          {{ isSaving ? 'Saving...' : 'Save Changes' }}
+          {{ isSaving ? 'Saving...' : dirty ? 'Save' : 'Saved' }}
         </button>
         <span
           v-if="showSaved"

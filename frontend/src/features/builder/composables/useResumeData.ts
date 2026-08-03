@@ -6,6 +6,13 @@ import { useApi, ApiRequestError } from '@/shared/composables/useApi'
 const LOCAL_STORAGE_KEY = 'resume_data'
 
 /**
+ * sessionStorage key for pending changes that survive page refreshes
+ * but are scoped to the tab (cleared when tab is closed).
+ * Only used for authenticated users as a safety net between auto-saves.
+ */
+const SESSION_STORAGE_KEY = 'resume_pending_changes'
+
+/**
  *
  */
 function readFromLocalStorage(): unknown {
@@ -28,6 +35,46 @@ function writeToLocalStorage(data: unknown) {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data))
   } catch {
     // Silently fail on quota exceeded or other storage errors
+  }
+}
+
+/**
+ * Read pending changes from sessionStorage.
+ * Returns null if nothing is stored or the data is corrupt.
+ */
+function readFromSessionStorage(): unknown {
+  try {
+    const raw = sessionStorage.getItem(SESSION_STORAGE_KEY)
+    if (!raw) return null
+    return JSON.parse(raw)
+  } catch {
+    sessionStorage.removeItem(SESSION_STORAGE_KEY)
+    return null
+  }
+}
+
+/**
+ * Write pending changes to sessionStorage (synchronous, immediate).
+ * This is the safety net — it captures every mutation so edits survive
+ * page refreshes and accidental navigation before the debounced API save fires.
+ * @param data
+ */
+function writeToSessionStorage(data: unknown) {
+  try {
+    sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(data))
+  } catch {
+    // Silently fail on quota exceeded or other storage errors
+  }
+}
+
+/**
+ * Remove pending changes from sessionStorage after a successful backend save.
+ */
+function clearSessionStorage() {
+  try {
+    sessionStorage.removeItem(SESSION_STORAGE_KEY)
+  } catch {
+    // Ignore errors (e.g. if sessionStorage is not available)
   }
 }
 
@@ -68,6 +115,30 @@ export function useResumeData() {
    */
   async function loadResume() {
     if (isAuthenticated) {
+      // Check sessionStorage first for pending changes that survived a refresh.
+      // This is the safety net: if the user edited and refreshed before the
+      // debounced auto-save fired, sessionStorage still has the pending state.
+      const pending = readFromSessionStorage()
+      if (
+        pending &&
+        typeof pending === 'object' &&
+        pending !== null &&
+        'sections' in pending &&
+        Array.isArray((pending as Record<string, unknown>).sections) &&
+        ((pending as Record<string, unknown>).sections as unknown[]).length > 0
+      ) {
+        const payload = pending as { layout?: string; sections: unknown[] }
+        store.loadFromPayload({
+          layout: (payload.layout as 'standard' | 'column2-1') ?? 'standard',
+          sections: payload.sections as ResumePayload['sections'],
+        })
+        initialLoadComplete = true
+        dirty.value = true
+        // Keep sessionStorage data — it will be cleared on explicit save.
+        // Mark as dirty so the user knows these are pending changes.
+        return
+      }
+
       try {
         const data = await api.get<{ id: string; layout: string; sections: unknown[] }>(
           '/api/v1/resumes',
@@ -129,6 +200,8 @@ export function useResumeData() {
           throw err
         }
       }
+      // Successful backend save — clear the sessionStorage safety net
+      clearSessionStorage()
     } else {
       writeToLocalStorage(payload)
     }
@@ -159,6 +232,12 @@ export function useResumeData() {
     autoSaveWatch = watch(
       () => store.toPayload(),
       () => {
+        // Immediate safety net: write to sessionStorage on every change
+        // so edits survive page refreshes before the debounced API save fires.
+        if (isAuthenticated) {
+          writeToSessionStorage(store.toPayload())
+        }
+
         if (timer) clearTimeout(timer)
         timer = setTimeout(() => {
           saveResume().catch((err) => {

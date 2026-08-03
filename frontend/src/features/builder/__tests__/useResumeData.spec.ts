@@ -28,7 +28,7 @@ describe('useResumeData', () => {
     setActivePinia(createPinia())
     localStorage.clear()
     sessionStorage.clear()
-    vi.clearAllMocks()
+    mockFetch.mockReset()
     // Set VITE_API_BASE_URL for useApi
     vi.stubEnv('VITE_API_BASE_URL', 'http://localhost:3000')
   })
@@ -327,6 +327,211 @@ describe('useResumeData', () => {
       // Second call is a POST
       const postCall = mockFetch.mock.calls[1]!
       expect(postCall[1]!.method).toBe('POST')
+    })
+
+    it('clears sessionStorage after successful API save', async () => {
+      const auth = useAuthStore()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
+      )
+      await auth.login('test@test.com', 'password')
+
+      mockFetch.mockClear()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ id: 'resume-1', layout: 'standard', sections: [] }),
+      )
+
+      // Pre-populate sessionStorage with pending changes
+      sessionStorage.setItem('resume_pending_changes', JSON.stringify({ layout: 'column2-1', sections: [] }))
+
+      const store = useResumeStore()
+      store.initializeDefaults()
+
+      const { saveResume } = useResumeData()
+      await saveResume()
+
+      // After successful save, sessionStorage should be cleared
+      expect(sessionStorage.getItem('resume_pending_changes')).toBeNull()
+    })
+  })
+
+  describe('sessionStorage persistence (authenticated)', () => {
+    it('writes to sessionStorage on auto-save watch when authenticated', async () => {
+      vi.useFakeTimers()
+      const auth = useAuthStore()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
+      )
+      await auth.login('test@test.com', 'password')
+
+      // Mock API response for auto-save
+      mockFetch.mockClear()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ id: 'resume-1', layout: 'standard', sections: [] }),
+      )
+
+      // Load resume first (should hit 404 and fall to defaults)
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ message: 'Not Found' }, 404),
+      )
+
+      const store = useResumeStore()
+      store.initializeDefaults()
+      SECTION_TYPES.forEach((t) => store.toggleSection(t))
+
+      const { loadResume, setupAutoSave, teardownAutoSave } = useResumeData()
+      await loadResume()
+      setupAutoSave()
+
+      // Mutate the store — sessionStorage should be written immediately
+      store.setLayout('column2-1')
+      await nextTick()
+
+      const stored = sessionStorage.getItem('resume_pending_changes')
+      expect(stored).not.toBeNull()
+      const parsed = JSON.parse(stored!)
+      expect(parsed.layout).toBe('column2-1')
+
+      teardownAutoSave()
+      vi.useRealTimers()
+    })
+
+    it('does not write to sessionStorage when anonymous', async () => {
+      vi.useFakeTimers()
+      const auth = useAuthStore()
+      auth.logout()
+
+      const store = useResumeStore()
+      store.initializeDefaults()
+      SECTION_TYPES.forEach((t) => store.toggleSection(t))
+
+      const { loadResume, setupAutoSave, teardownAutoSave } = useResumeData()
+      await loadResume()
+      setupAutoSave()
+
+      // Mutate the store
+      store.setLayout('column2-1')
+      await nextTick()
+
+      // sessionStorage should NOT be written for anonymous users
+      expect(sessionStorage.getItem('resume_pending_changes')).toBeNull()
+
+      teardownAutoSave()
+      vi.useRealTimers()
+    })
+
+    it('loads pending changes from sessionStorage on reload when authenticated', async () => {
+      const auth = useAuthStore()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
+      )
+      await auth.login('test@test.com', 'password')
+
+      // Pre-populate sessionStorage with pending changes (simulating a refresh before auto-save)
+      sessionStorage.setItem(
+        'resume_pending_changes',
+        JSON.stringify({
+          layout: 'column2-1',
+          sections: [
+            {
+              sectionId: 'summary',
+              column: 'right',
+              order: 0,
+              entries: [],
+            },
+          ],
+        }),
+      )
+
+      const store = useResumeStore()
+      store.initializeDefaults()
+      SECTION_TYPES.forEach((t) => store.toggleSection(t))
+
+      const { loadResume, dirty } = useResumeData()
+      await loadResume()
+
+      // Should load from sessionStorage, not from API defaults
+      expect(store.layout).toBe('column2-1')
+      expect(store.sections).toHaveLength(1)
+      expect(store.sections[0]!.sectionType).toBe('summary')
+      // Should be marked dirty because changes are pending
+      expect(dirty.value).toBe(true)
+    })
+
+    it('falls back to API when sessionStorage is empty for authenticated user', async () => {
+      const auth = useAuthStore()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
+      )
+      await auth.login('test@test.com', 'password')
+
+      // No sessionStorage data — should load from API
+      sessionStorage.clear()
+
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({
+          id: 'resume-1',
+          layout: 'standard',
+          sections: [
+            {
+              sectionId: 'experience',
+              column: 'right',
+              order: 0,
+              entries: [],
+            },
+          ],
+        }),
+      )
+
+      const store = useResumeStore()
+      store.initializeDefaults()
+      SECTION_TYPES.forEach((t) => store.toggleSection(t))
+
+      const { loadResume, dirty } = useResumeData()
+      await loadResume()
+
+      expect(store.layout).toBe('standard')
+      expect(store.sections).toHaveLength(1)
+      expect(store.sections[0]!.sectionType).toBe('experience')
+      expect(dirty.value).toBe(false)
+    })
+
+    it('handles corrupted sessionStorage gracefully for authenticated user', async () => {
+      const auth = useAuthStore()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
+      )
+      await auth.login('test@test.com', 'password')
+
+      // Corrupted sessionStorage — should fall back to API
+      sessionStorage.setItem('resume_pending_changes', 'not-valid-json{{')
+
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({
+          id: 'resume-1',
+          layout: 'standard',
+          sections: [
+            {
+              sectionId: 'name_contact',
+              column: 'left',
+              order: 0,
+              entries: [],
+            },
+          ],
+        }),
+      )
+
+      const store = useResumeStore()
+      store.initializeDefaults()
+      SECTION_TYPES.forEach((t) => store.toggleSection(t))
+
+      const { loadResume } = useResumeData()
+      await loadResume()
+
+      // Corrupted data is cleared, falls back to API
+      expect(sessionStorage.getItem('resume_pending_changes')).toBeNull()
+      expect(store.sections).toHaveLength(1)
+      expect(store.sections[0]!.sectionType).toBe('name_contact')
     })
   })
 })
