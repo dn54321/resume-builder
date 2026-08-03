@@ -10,7 +10,26 @@ import { RouterLink } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/features/auth/stores/auth'
 
+<<<<<<< HEAD
 const auth = useAuthStore()
+=======
+import { computed } from 'vue'
+import heroIllustrationRaw from '@/assets/illustrations/hero-illustration.svg?raw'
+import tailorIllustrationRaw from '@/assets/illustrations/tailor-illustration.svg?raw'
+import sectionsIllustrationRaw from '@/assets/illustrations/sections-illustration.svg?raw'
+import previewIllustrationRaw from '@/assets/illustrations/preview-illustration.svg?raw'
+import exportIllustrationRaw from '@/assets/illustrations/export-illustration.svg?raw'
+import blob1Raw from '@/assets/illustrations/decorative/blob-1.svg?raw'
+import blob2Raw from '@/assets/illustrations/decorative/blob-2.svg?raw'
+import blob3Raw from '@/assets/illustrations/decorative/blob-3.svg?raw'
+import waveDividerRaw from '@/assets/illustrations/decorative/wave-divider.svg?raw'
+import dotPatternRaw from '@/assets/illustrations/decorative/dot-pattern.svg?raw'
+
+/** URL-encoded dot-pattern for use as a repeating background image */
+const dotPatternBg = computed(
+  () => `url("data:image/svg+xml,${encodeURIComponent(dotPatternRaw)}")`,
+)
+>>>>>>> ticket/res-52
 
 const features = [
   {
@@ -83,10 +102,42 @@ const features = [
       </div>
     </section>
 
+<<<<<<< HEAD
     <!-- Features Grid -->
     <section class="px-4 py-16">
       <div class="max-w-5xl mx-auto">
         <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+=======
+    <!-- Wave divider -->
+    <div class="relative h-16 overflow-hidden" aria-hidden="true">
+      <SvgIllustration :svg="waveDividerRaw" class="absolute inset-0 w-full h-full" />
+    </div>
+
+    <!-- Features Section -->
+    <section
+      class="relative py-16 lg:py-24"
+      :style="{ backgroundImage: dotPatternBg, backgroundRepeat: 'repeat' }"
+    >
+      <!-- Decorative blobs -->
+      <div
+        class="absolute top-20 right-0 w-[350px] h-[350px] opacity-40 pointer-events-none"
+        aria-hidden="true"
+      >
+        <SvgIllustration :svg="blob3Raw" class="w-full h-full" />
+      </div>
+
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-16">
+          <h2 class="text-3xl font-bold text-foreground sm:text-4xl">
+            Everything you need to land the job
+          </h2>
+          <p class="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+            From crafting to tailoring to exporting — all the tools you need in one place.
+          </p>
+        </div>
+
+        <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+>>>>>>> ticket/res-52
           <div
             v-for="feature in features"
             :key="feature.title"
