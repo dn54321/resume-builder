@@ -610,7 +610,7 @@ describe('ResumeBuilder', () => {
     expect(style).toContain('240px 1fr 4px 2fr')
   })
 
-  it('increases preview fr when dragging handle right', async () => {
+  it('decreases preview fr when dragging handle right', async () => {
     const wrapper = mountBuilder()
     await nextTick()
     const grid = wrapper.find('.builder-grid')
@@ -628,7 +628,7 @@ describe('ResumeBuilder', () => {
     dispatchPointer(handle.element, 'pointerdown', { clientX: 800 })
     await nextTick()
 
-    // Drag right by 200px → preview should get wider
+    // Drag right by 200px → handle moves right → preview gets narrower
     dispatchPointer(handle.element, 'pointermove', { clientX: 1000 })
     await nextTick()
 
@@ -636,15 +636,15 @@ describe('ResumeBuilder', () => {
     const match = newStyle.match(/240px 1fr 4px ([\d.]+)fr/)
     expect(match).not.toBeNull()
     const newFr = parseFloat(match![1]!)
-    // Dragging right from 2fr (max) is clamped — preview should stay at 2fr
-    expect(newFr).toBe(2)
+    // Dragging right from 2fr (max) — preview should shrink below 2
+    expect(newFr).toBeLessThan(2)
 
     // End drag — cleanup listeners
     dispatchPointer(handle.element, 'pointerup')
     await nextTick()
   })
 
-  it('decreases preview fr when dragging handle left', async () => {
+  it('increases preview fr when dragging handle left', async () => {
     const wrapper = mountBuilder()
     await nextTick()
     const grid = wrapper.find('.builder-grid')
@@ -657,20 +657,20 @@ describe('ResumeBuilder', () => {
 
     const handle = wrapper.find('[data-testid="drag-handle"]')
 
-    // Start drag
-    dispatchPointer(handle.element, 'pointerdown', { clientX: 800 })
+    // Start at x=1000 (close to right edge) — preview gets small, then drag left to expand
+    dispatchPointer(handle.element, 'pointerdown', { clientX: 1000 })
     await nextTick()
 
-    // Drag left by 200px → preview should get narrower
-    dispatchPointer(handle.element, 'pointermove', { clientX: 600 })
+    // Drag left by 200px → handles moves left → preview gets wider
+    dispatchPointer(handle.element, 'pointermove', { clientX: 800 })
     await nextTick()
 
     const newStyle = grid.attributes('style')!
     const match = newStyle.match(/240px 1fr 4px ([\d.]+)fr/)
     expect(match).not.toBeNull()
     const newFr = parseFloat(match![1]!)
-    // Dragging left decreases FR below default 2
-    expect(newFr).toBeLessThan(2)
+    // Dragging left increases FR above the shrunken value
+    expect(newFr).toBeGreaterThan(1)
 
     dispatchPointer(handle.element, 'pointerup')
     await nextTick()
@@ -693,8 +693,8 @@ describe('ResumeBuilder', () => {
     dispatchPointer(handle.element, 'pointerdown', { clientX: 500 })
     await nextTick()
 
-    // Drag far left — should clamp at 300px minimum
-    dispatchPointer(handle.element, 'pointermove', { clientX: 100 })
+    // Drag far right — should clamp at 300px minimum preview width
+    dispatchPointer(handle.element, 'pointermove', { clientX: 900 })
     await nextTick()
 
     // Convert the FR back to pixels to verify clamping
@@ -803,10 +803,10 @@ describe('ResumeBuilder', () => {
 
     const handle = wrapper.find('[data-testid="drag-handle"]')
 
-    // First drag: move left to decrease FR
+    // First drag: move right to decrease FR
     dispatchPointer(handle.element, 'pointerdown', { clientX: 800 })
     await nextTick()
-    dispatchPointer(handle.element, 'pointermove', { clientX: 700 })
+    dispatchPointer(handle.element, 'pointermove', { clientX: 900 })
     await nextTick()
     dispatchPointer(handle.element, 'pointerup')
     await nextTick()
@@ -815,10 +815,10 @@ describe('ResumeBuilder', () => {
     const match1 = afterFirst.match(/240px 1fr 4px ([\d.]+)fr/)!
     const fr1 = parseFloat(match1[1]!)
 
-    // Second drag: start from the same position, move further left
-    dispatchPointer(handle.element, 'pointerdown', { clientX: 700 })
+    // Second drag: start from the same position, move further right
+    dispatchPointer(handle.element, 'pointerdown', { clientX: 900 })
     await nextTick()
-    dispatchPointer(handle.element, 'pointermove', { clientX: 600 })
+    dispatchPointer(handle.element, 'pointermove', { clientX: 1000 })
     await nextTick()
     dispatchPointer(handle.element, 'pointerup')
     await nextTick()
@@ -827,7 +827,7 @@ describe('ResumeBuilder', () => {
     const match2 = afterSecond.match(/240px 1fr 4px ([\d.]+)fr/)!
     const fr2 = parseFloat(match2[1]!)
 
-    // Second drag should decrease FR below the first
+    // Second drag (further right) should decrease FR below the first
     expect(fr2).toBeLessThan(fr1)
   })
 })
