@@ -5,6 +5,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createWebHistory } from 'vue-router'
 import SignupView from '../SignupView.vue'
 import { useAuthStore } from '../stores/auth'
+import { ApiRequestError } from '@/shared/composables/useApi'
 
 const mockPush = vi.fn<(...args: unknown[]) => Promise<void>>()
 const mockReplace = vi.fn<(...args: unknown[]) => Promise<void>>()
@@ -107,5 +108,107 @@ describe('SignupView', () => {
     await nextTick()
 
     expect(mockReplace).not.toHaveBeenCalled()
+  })
+
+  it('has type="email" on the email input', () => {
+    const wrapper = mountSignup()
+    const input = wrapper.find('#signup-email')
+    expect((input.element as HTMLInputElement).type).toBe('email')
+  })
+
+  it('has autocomplete="email" on the email input', () => {
+    const wrapper = mountSignup()
+    const input = wrapper.find('#signup-email')
+    expect((input.element as HTMLInputElement).autocomplete).toBe('email')
+  })
+
+  it('shows email format error on blur with invalid email', async () => {
+    const wrapper = mountSignup()
+    const emailInput = wrapper.find('#signup-email')
+    await emailInput.setValue('not-an-email')
+    await emailInput.trigger('blur')
+    await nextTick()
+    expect(wrapper.text()).toContain('Please enter a valid email address')
+  })
+
+  it('clears email format error on blur with valid email', async () => {
+    const wrapper = mountSignup()
+    const emailInput = wrapper.find('#signup-email')
+    // First set an invalid email and blur to trigger the error
+    await emailInput.setValue('invalid')
+    await emailInput.trigger('blur')
+    await nextTick()
+    expect(wrapper.text()).toContain('Please enter a valid email address')
+    // Then set a valid email and blur to clear the error
+    await emailInput.setValue('valid@example.com')
+    await emailInput.trigger('blur')
+    await nextTick()
+    expect(wrapper.text()).not.toContain('Please enter a valid email address')
+  })
+
+  it('shows email format error on submit when email is invalid', async () => {
+    const wrapper = mountSignup()
+    await wrapper.find('#signup-email').setValue('not-an-email')
+    await wrapper.find('#signup-password').setValue('password123')
+    await wrapper.find('#signup-confirm').setValue('password123')
+    await wrapper.find('form').trigger('submit.prevent')
+    const alert = wrapper.find('[role="alert"]')
+    expect(alert.exists()).toBe(true)
+    expect(alert.text()).toContain('Please enter a valid email address')
+  })
+
+  it('displays backend validation error verbatim from ApiRequestError.errors', async () => {
+    const store = useAuthStore()
+    const apiError = new ApiRequestError({
+      status: 400,
+      message: 'Validation failed',
+      errors: { email: ['Invalid email domain'] },
+    })
+    vi.spyOn(store, 'signup').mockRejectedValue(apiError)
+
+    const wrapper = mountSignup()
+    await wrapper.find('#signup-email').setValue('test@bad.com')
+    await wrapper.find('#signup-password').setValue('password123')
+    await wrapper.find('#signup-confirm').setValue('password123')
+    await wrapper.find('form').trigger('submit.prevent')
+
+    await nextTick()
+    const alert = wrapper.find('[role="alert"]')
+    expect(alert.text()).toContain('Invalid email domain')
+    expect(alert.text()).not.toContain('An unexpected error occurred')
+  })
+
+  it('displays ApiRequestError.message when no field errors exist', async () => {
+    const store = useAuthStore()
+    const apiError = new ApiRequestError({
+      status: 429,
+      message: 'Too many requests. Try again later.',
+    })
+    vi.spyOn(store, 'signup').mockRejectedValue(apiError)
+
+    const wrapper = mountSignup()
+    await wrapper.find('#signup-email').setValue('test@test.com')
+    await wrapper.find('#signup-password').setValue('password123')
+    await wrapper.find('#signup-confirm').setValue('password123')
+    await wrapper.find('form').trigger('submit.prevent')
+
+    await nextTick()
+    const alert = wrapper.find('[role="alert"]')
+    expect(alert.text()).toContain('Too many requests. Try again later.')
+  })
+
+  it('shows fallback for unexpected non-ApiRequestError errors', async () => {
+    const store = useAuthStore()
+    vi.spyOn(store, 'signup').mockRejectedValue(new Error('Network failure'))
+
+    const wrapper = mountSignup()
+    await wrapper.find('#signup-email').setValue('test@test.com')
+    await wrapper.find('#signup-password').setValue('password123')
+    await wrapper.find('#signup-confirm').setValue('password123')
+    await wrapper.find('form').trigger('submit.prevent')
+
+    await nextTick()
+    const alert = wrapper.find('[role="alert"]')
+    expect(alert.text()).toContain('An unexpected error occurred. Please try again.')
   })
 })

@@ -5,6 +5,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../LoginView.vue'
 import { useAuthStore } from '../stores/auth'
+import { ApiRequestError } from '@/shared/composables/useApi'
 
 const mockPush = vi.fn<(...args: unknown[]) => Promise<void>>()
 const mockReplace = vi.fn<(...args: unknown[]) => Promise<void>>()
@@ -121,5 +122,69 @@ describe('LoginView', () => {
     await wrapper.find('form').trigger('submit.prevent')
 
     expect(mockReplace).toHaveBeenCalledWith('/dashboard')
+  })
+
+  it('shows email format error on blur with invalid email', async () => {
+    const wrapper = mountLogin()
+    const emailInput = wrapper.find('#login-email')
+    await emailInput.setValue('not-an-email')
+    await emailInput.trigger('blur')
+    await nextTick()
+    expect(wrapper.text()).toContain('Please enter a valid email address')
+  })
+
+  it('clears email format error on blur with valid email', async () => {
+    const wrapper = mountLogin()
+    const emailInput = wrapper.find('#login-email')
+    await emailInput.setValue('invalid')
+    await emailInput.trigger('blur')
+    await nextTick()
+    expect(wrapper.text()).toContain('Please enter a valid email address')
+    await emailInput.setValue('good@email.com')
+    await emailInput.trigger('blur')
+    await nextTick()
+    expect(wrapper.text()).not.toContain('Please enter a valid email address')
+  })
+
+  it('does not show email error when field is empty on blur', async () => {
+    const wrapper = mountLogin()
+    const emailInput = wrapper.find('#login-email')
+    await emailInput.trigger('blur')
+    await nextTick()
+    expect(wrapper.text()).not.toContain('Please enter a valid email address')
+  })
+
+  it('displays backend validation error verbatim from ApiRequestError.errors', async () => {
+    const store = useAuthStore()
+    const apiError = new ApiRequestError({
+      status: 401,
+      message: 'Invalid credentials',
+      errors: { email: ['No account found with this email'] },
+    })
+    vi.spyOn(store, 'login').mockRejectedValue(apiError)
+
+    const wrapper = mountLogin()
+    await wrapper.find('#login-email').setValue('nobody@test.com')
+    await wrapper.find('#login-password').setValue('wrongpass')
+    await wrapper.find('form').trigger('submit.prevent')
+
+    await nextTick()
+    const alert = wrapper.find('[role="alert"]')
+    expect(alert.text()).toContain('No account found with this email')
+    expect(alert.text()).not.toContain('An unexpected error occurred')
+  })
+
+  it('shows fallback for unexpected non-ApiRequestError errors', async () => {
+    const store = useAuthStore()
+    vi.spyOn(store, 'login').mockRejectedValue(new Error('Network failure'))
+
+    const wrapper = mountLogin()
+    await wrapper.find('#login-email').setValue('test@test.com')
+    await wrapper.find('#login-password').setValue('password123')
+    await wrapper.find('form').trigger('submit.prevent')
+
+    await nextTick()
+    const alert = wrapper.find('[role="alert"]')
+    expect(alert.text()).toContain('An unexpected error occurred. Please try again.')
   })
 })
