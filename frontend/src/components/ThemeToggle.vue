@@ -45,7 +45,7 @@ const options: ThemeOption[] = [
         :key="option.mode"
         :data-testid="`theme-${option.mode}`"
         :class="{ 'font-semibold': theme === option.mode }"
-        @select="setTheme(option.mode)"
+        @click="setTheme(option.mode)"
       >
         <component :is="option.icon" class="h-4 w-4 mr-2" />
         {{ option.label }}
