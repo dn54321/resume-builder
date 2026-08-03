@@ -27,7 +27,7 @@
   font-size: 8rem;
   font-weight: 700;
   line-height: 1;
-  color: var(--color-text);
+  color: var(--color-foreground);
   opacity: 0.2;
 }
 
@@ -35,12 +35,12 @@
   font-size: 2rem;
   font-weight: 600;
   margin: 1rem 0 0.5rem;
-  color: var(--color-heading);
+  color: var(--color-foreground);
 }
 
 .not-found__description {
   font-size: 1rem;
-  color: var(--color-text);
+  color: var(--color-muted-foreground);
   max-width: 28rem;
   margin-bottom: 2rem;
 }
@@ -50,14 +50,14 @@
   padding: 0.75rem 2rem;
   font-size: 1rem;
   font-weight: 500;
-  color: var(--vt-c-white);
-  background-color: var(--vt-c-indigo);
+  color: var(--color-primary-foreground);
+  background-color: var(--color-primary);
   border-radius: 0.375rem;
   text-decoration: none;
   transition: background-color 0.2s;
 }
 
 .not-found__button:hover {
-  background-color: #1e2a38;
+  opacity: 0.9;
 }
 </style>
