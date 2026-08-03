@@ -303,6 +303,10 @@ async function handleConfirmDelete(): Promise<void> {
   background-color: #fee2e2;
 }
 
+.dark .resume-card__delete-btn:hover {
+  background-color: #450a0a;
+}
+
 .resume-card__date {
   margin: 0;
   font-size: 0.8125rem;

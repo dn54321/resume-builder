@@ -1,8 +1,8 @@
 <template>
-  <div class="live-preview flex flex-col h-full bg-gray-200">
+  <div class="live-preview flex flex-col h-full bg-gray-200 dark:bg-gray-900">
     <!-- Header bar -->
-    <div class="live-preview__header h-8 px-3 border-b border-gray-300 flex items-center justify-between shrink-0">
-      <span class="text-xs font-medium text-gray-500">Preview</span>
+    <div class="live-preview__header h-8 px-3 border-b border-gray-300 dark:border-gray-700 flex items-center justify-between shrink-0">
+      <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Preview</span>
       <Button variant="ghost" size="icon-sm" aria-label="Full screen" @click="isFullscreenOpen = true">
         <Maximize2 class="h-4 w-4" />
       </Button>

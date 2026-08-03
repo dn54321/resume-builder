@@ -67,7 +67,7 @@ dark: utility variants (default is prefers-color-scheme media query). */
   --color-destructive-foreground: #fafafa;
   --color-card: #18181b;
   --color-card-foreground: #fafafa;
-  --color-surface: #0a0a0a;
-  --color-popover: #0a0a0a;
+  --color-surface: #111111;
+  --color-popover: #111111;
   --color-popover-foreground: #fafafa;
 }
