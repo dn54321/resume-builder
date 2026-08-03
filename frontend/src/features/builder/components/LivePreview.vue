@@ -1,27 +1,44 @@
 <template>
-  <div class="live-preview flex justify-center items-start h-full overflow-y-auto py-3 bg-gray-200">
-    <div
-      id="resume-preview"
-      class="live-preview__paper"
-      :style="{ transform: `scale(${scale})` }"
-    >
-      <StandardLayout
-        v-if="store.layout === 'standard'"
-        :sections="store.sections"
-      />
-      <TwoColumnLayout
-        v-else
-        :sections="store.sections"
-      />
+  <div class="live-preview flex flex-col h-full bg-gray-200">
+    <!-- Header bar -->
+    <div class="live-preview__header h-8 px-3 border-b border-gray-300 flex items-center justify-between shrink-0">
+      <span class="text-xs font-medium text-gray-500">Preview</span>
+      <Button variant="ghost" size="icon-sm" aria-label="Full screen" @click="isFullscreenOpen = true">
+        <Maximize2 class="h-4 w-4" />
+      </Button>
     </div>
+
+    <!-- Paper area -->
+    <div ref="bodyRef" class="live-preview__body flex justify-center items-start overflow-y-auto py-3 flex-1">
+      <div
+        id="resume-preview"
+        class="live-preview__paper"
+        :style="{ transform: `scale(${scale})` }"
+      >
+        <StandardLayout
+          v-if="store.layout === 'standard'"
+          :sections="store.sections"
+        />
+        <TwoColumnLayout
+          v-else
+          :sections="store.sections"
+        />
+      </div>
+    </div>
+
+    <!-- Fullscreen modal -->
+    <FullscreenPreview v-model:open="isFullscreenOpen" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { Maximize2 } from '@lucide/vue'
+import { Button } from '@/components/ui/button'
 import { useResumeStore } from '@/features/builder/stores/resume'
 import StandardLayout from './preview/StandardLayout.vue'
 import TwoColumnLayout from './preview/TwoColumnLayout.vue'
+import FullscreenPreview from './FullscreenPreview.vue'
 
 const store = useResumeStore()
 
@@ -31,6 +48,8 @@ const PAPER_WIDTH_PX = 816
 const MAX_SCALE = 1.2
 
 const containerWidth = ref(300)
+const isFullscreenOpen = ref(false)
+const bodyRef = ref<HTMLElement | null>(null)
 
 const scale = computed(() => {
   if (containerWidth.value <= 0) return 0.3
@@ -43,7 +62,7 @@ const scale = computed(() => {
 let resizeObserver: ResizeObserver | null = null
 
 onMounted(() => {
-  const el = document.querySelector('.live-preview')
+  const el = bodyRef.value
   if (el && 'ResizeObserver' in window) {
     // Read initial width
     containerWidth.value = el.clientWidth

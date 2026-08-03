@@ -4,12 +4,30 @@ import { setActivePinia, createPinia } from 'pinia'
 import { useResumeStore } from '@/features/builder/stores/resume'
 import LivePreview from '@/features/builder/components/LivePreview.vue'
 
+let pinia: ReturnType<typeof createPinia>
+
 /**
- *
+ * Get the resume store (must be called after beforeEach sets up pinia).
  */
 function makeStore() {
-  setActivePinia(createPinia())
   return useResumeStore()
+}
+
+/**
+ * Mount LivePreview with required stubs for teleported dialog content.
+ */
+function mountLivePreview() {
+  return mount(LivePreview, {
+    global: {
+      plugins: [pinia],
+      stubs: {
+        Teleport: {
+          props: ['to', 'disabled'],
+          template: '<div class="teleport-target"><slot /></div>',
+        },
+      },
+    },
+  })
 }
 
 // Mock ResizeObserver since it's not available in jsdom
@@ -45,7 +63,71 @@ vi.stubGlobal('ResizeObserver', MockResizeObserver)
 describe('LivePreview', () => {
   beforeEach(() => {
     // Ensure pinia is set up
-    setActivePinia(createPinia())
+    pinia = createPinia()
+    setActivePinia(pinia)
+  })
+
+  it('renders the header bar with Preview label', () => {
+    const store = makeStore()
+    store.initializeDefaults()
+    store.layout = 'standard'
+
+    const wrapper = mountLivePreview()
+
+    const header = wrapper.find('.live-preview__header')
+    expect(header.exists()).toBe(true)
+    expect(header.text()).toContain('Preview')
+  })
+
+  it('renders a full-screen button in the header', () => {
+    const store = makeStore()
+    store.initializeDefaults()
+    store.layout = 'standard'
+
+    const wrapper = mountLivePreview()
+
+    const button = wrapper.find('.live-preview__header button')
+    expect(button.exists()).toBe(true)
+    expect(button.attributes('aria-label')).toBe('Full screen')
+  })
+
+  it('opens FullscreenPreview when full-screen button is clicked', async () => {
+    const store = makeStore()
+    store.initializeDefaults()
+    store.layout = 'standard'
+
+    const wrapper = mountLivePreview()
+
+    // FullscreenPreview should not be open initially
+    const fpComponent = wrapper.findComponent({ name: 'FullscreenPreview' })
+    expect(fpComponent.props('open')).toBe(false)
+
+    // Click the full-screen button
+    const button = wrapper.find('.live-preview__header button')
+    await button.trigger('click')
+
+    // FullscreenPreview should now be open
+    expect(fpComponent.props('open')).toBe(true)
+  })
+
+  it('closes FullscreenPreview when modal emits update:open false', async () => {
+    const store = makeStore()
+    store.initializeDefaults()
+    store.layout = 'standard'
+
+    const wrapper = mountLivePreview()
+
+    // Open the modal
+    const button = wrapper.find('.live-preview__header button')
+    await button.trigger('click')
+
+    const fpComponent = wrapper.findComponent({ name: 'FullscreenPreview' })
+    expect(fpComponent.props('open')).toBe(true)
+
+    // Simulate close from the modal
+    await fpComponent.vm.$emit('update:open', false)
+
+    expect(fpComponent.props('open')).toBe(false)
   })
 
   it('renders a paper container with id="resume-preview"', () => {
@@ -53,7 +135,7 @@ describe('LivePreview', () => {
     store.initializeDefaults()
     store.layout = 'standard'
 
-    const wrapper = mount(LivePreview)
+    const wrapper = mountLivePreview()
 
     const paper = wrapper.find('#resume-preview')
     expect(paper.exists()).toBe(true)
@@ -65,7 +147,7 @@ describe('LivePreview', () => {
     store.initializeDefaults()
     store.layout = 'standard'
 
-    const wrapper = mount(LivePreview)
+    const wrapper = mountLivePreview()
 
     // StandardLayout should be rendered
     expect(wrapper.findComponent({ name: 'StandardLayout' }).exists()).toBe(true)
@@ -77,7 +159,7 @@ describe('LivePreview', () => {
     store.initializeDefaults()
     store.layout = 'column2-1'
 
-    const wrapper = mount(LivePreview)
+    const wrapper = mountLivePreview()
 
     expect(wrapper.findComponent({ name: 'TwoColumnLayout' }).exists()).toBe(true)
     expect(wrapper.findComponent({ name: 'StandardLayout' }).exists()).toBe(false)
@@ -103,7 +185,7 @@ describe('LivePreview', () => {
       ],
     })
 
-    const wrapper = mount(LivePreview)
+    const wrapper = mountLivePreview()
     const standardLayout = wrapper.findComponent({ name: 'StandardLayout' })
     expect(standardLayout.exists()).toBe(true)
     expect(standardLayout.props('sections')).toEqual(store.sections)
@@ -114,7 +196,7 @@ describe('LivePreview', () => {
     store.initializeDefaults()
     store.layout = 'standard'
 
-    const wrapper = mount(LivePreview)
+    const wrapper = mountLivePreview()
 
     const paper = wrapper.find('#resume-preview')
     const style = paper.attributes('style')
@@ -128,7 +210,7 @@ describe('LivePreview', () => {
     store.initializeDefaults()
     store.layout = 'standard'
 
-    const wrapper = mount(LivePreview)
+    const wrapper = mountLivePreview()
 
     const paper = wrapper.find('#resume-preview')
     const style = paper.attributes('style')
@@ -146,7 +228,7 @@ describe('LivePreview', () => {
     // With default 300px: scale = (300-24)/816 = 0.338...
     // This is > 0.3 so the floor behavior is not triggered with factory defaults.
     // Just verify scale is computed and > 0
-    const wrapper = mount(LivePreview)
+    const wrapper = mountLivePreview()
 
     const paper = wrapper.find('#resume-preview')
     const style = paper.attributes('style')
@@ -162,7 +244,7 @@ describe('LivePreview', () => {
     store.initializeDefaults()
     store.layout = 'standard'
 
-    const wrapper = mount(LivePreview)
+    const wrapper = mountLivePreview()
 
     const paper = wrapper.find('#resume-preview')
     // Paper is 816px wide, 1056px tall (US Letter at 96 DPI)
