@@ -77,7 +77,7 @@ describe('SignupView', () => {
     expect(wrapper.find('#signup-password').exists()).toBe(true)
     expect(wrapper.find('#signup-confirm').exists()).toBe(true)
     expect(wrapper.find('button[type="submit"]').exists()).toBe(true)
-    expect(wrapper.text()).toContain('Sign Up')
+    expect(wrapper.text()).toContain('Sign up')
   })
 
   it('shows validation errors for empty fields', async () => {

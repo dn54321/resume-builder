@@ -363,8 +363,8 @@ describe('DashboardView', () => {
     await flushPromises()
 
     // Error alert should show
-    expect(wrapper.find('.alert-error').exists()).toBe(true)
-    expect(wrapper.find('.alert-error').text()).toBe('Failed to delete resume')
+    expect(wrapper.find('[role="alert"]').exists()).toBe(true)
+    expect(wrapper.find('[role="alert"]').text()).toBe('Failed to delete resume')
   })
 
   // ── Create Resume Flow ─────────────────────────────────────
