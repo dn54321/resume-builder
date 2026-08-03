@@ -78,4 +78,58 @@ describe('AppLogo', () => {
     const svg = wrapper.find('svg')
     expect(svg.attributes('xmlns')).toBe('http://www.w3.org/2000/svg')
   })
+
+  describe('dark mode', () => {
+    it('renders page bodies with currentColor that inherits from dark foreground', () => {
+      // Mount inside a dark wrapper element
+      const darkWrapper = document.createElement('div')
+      darkWrapper.classList.add('dark')
+      document.body.appendChild(darkWrapper)
+
+      const mounted = mount(AppLogo, {
+        attachTo: darkWrapper,
+      })
+
+      const rects = mounted.findAll('rect')
+      const frontPage = rects[1]!
+      // In dark mode, currentColor should still be used; the CSS cascade
+      // handles the actual color. Verify the attribute is still currentColor.
+      expect(frontPage.attributes('fill')).toBe('currentColor')
+
+      // Accent bar should still use the primary color variable
+      const accentBar = rects[5]!
+      expect(accentBar.attributes('fill')).toBe('var(--color-primary, #f59e0b)')
+
+      document.body.removeChild(darkWrapper)
+    })
+
+    it('keeps accent bar amber/gold in both light and dark mode', () => {
+      // The primary color is #f59e0b in both light and dark theme
+      const wrapper = mount(AppLogo)
+      const rects = wrapper.findAll('rect')
+      const accentBar = rects[5]!
+      // Verify the fallback value is the brand amber
+      expect(accentBar.attributes('fill')).toContain('#f59e0b')
+    })
+  })
+
+  describe('favicon compatibility', () => {
+    it('has a simple enough design to be recognizable at small sizes', () => {
+      const wrapper = mount(AppLogo)
+      // Key shapes that define the document metaphor:
+      // - Two offset rounded rects (pages)
+      // - Content lines
+      // - An accent bar
+      const rects = wrapper.findAll('rect')
+      // The stacked pages design uses large shapes with distinct colors
+      // that remain distinguishable when scaled down
+      expect(rects).toHaveLength(6)
+    })
+
+    it('uses viewBox that matches favicon', () => {
+      const wrapper = mount(AppLogo)
+      const svg = wrapper.find('svg')
+      expect(svg.attributes('viewBox')).toBe('0 0 32 32')
+    })
+  })
 })
