@@ -10,6 +10,7 @@ interface User {
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
   const token = ref<string | null>(localStorage.getItem('auth_token'))
+  const authReady = ref(false)
 
   const isAuthenticated = computed(() => !!token.value && !!user.value)
 
@@ -57,7 +58,10 @@ export const useAuthStore = defineStore('auth', () => {
    *
    */
   async function checkSession() {
-    if (!token.value) return
+    if (!token.value) {
+      authReady.value = true
+      return
+    }
 
     const api = useApi()
     try {
@@ -68,6 +72,8 @@ export const useAuthStore = defineStore('auth', () => {
         clearToken()
         user.value = null
       }
+    } finally {
+      authReady.value = true
     }
   }
 
@@ -136,6 +142,7 @@ export const useAuthStore = defineStore('auth', () => {
     user,
     token,
     isAuthenticated,
+    authReady,
     getToken,
     signup,
     login,
