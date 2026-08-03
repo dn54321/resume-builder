@@ -52,6 +52,7 @@ import {
   createPR,
   createPRViaApi,
   hasGhCLI,
+  mergeToMaster,
   branchName,
   getGitHubRepo,
   removeWorktree,
@@ -72,8 +73,8 @@ function getWorkerPromptTemplate(): string {
 
 // ─── Agent Config (.env.agent) ──────────────────────────────────────
 
-function loadAgentConfig(): { maxAgents: number; maxRetries: number; portMin: number; portMax: number; githubToken: string | null } {
-  const defaults = { maxAgents: 3, maxRetries: 2, portMin: 9000, portMax: 9099, githubToken: null as string | null };
+function loadAgentConfig(): { maxAgents: number; maxRetries: number; portMin: number; portMax: number; githubToken: string | null; mergeMode: string } {
+  const defaults = { maxAgents: 3, maxRetries: 2, portMin: 9000, portMax: 9099, githubToken: null as string | null, mergeMode: 'direct' };
   try {
     const envPath = path.join(getRepoRoot(), '.env.agent');
     if (!fs.existsSync(envPath)) return defaults;
@@ -91,11 +92,12 @@ function loadAgentConfig(): { maxAgents: number; maxRetries: number; portMin: nu
     const portMin = parseInt(config['AGENT_PORT_MIN'] ?? '', 10) || defaults.portMin;
     const portMax = parseInt(config['AGENT_PORT_MAX'] ?? '', 10) || defaults.portMax;
     const githubToken = config['GITHUB_PAT_KEY']?.trim() || null;
+    const mergeMode = (config['MERGE_MODE']?.trim() || 'direct').toLowerCase();
     if (portMax <= portMin) {
       console.error(`AGENT_PORT_MAX (${portMax}) must be greater than AGENT_PORT_MIN (${portMin}). Using defaults.`);
       return defaults;
     }
-    return { maxAgents, maxRetries, portMin, portMax, githubToken };
+    return { maxAgents, maxRetries, portMin, portMax, githubToken, mergeMode };
   } catch {
     return defaults;
   }
@@ -620,7 +622,7 @@ function buildStateContext(node: GraphNode): string {
   } catch { /* ignore */ }
 
   if (node.state.prUrl) {
-    lines.push(`- **Pull Request:** ${node.state.prUrl}`);
+    lines.push(`- **Merged to master:** ✓`);
   }
 
   // Previous worker error/status (on retries)
@@ -634,7 +636,7 @@ function buildStateContext(node: GraphNode): string {
 function buildWorkerPrompt(
   node: GraphNode,
   assignedPort: number | null,
-  config: { maxAgents: number; portMin: number; portMax: number },
+  config: { maxAgents: number; portMin: number; portMax: number; mergeMode: string },
   extraInstructions?: string,
   perWorkerInstructions?: string,
 ): string {
@@ -696,6 +698,128 @@ ${perWorkerInstructions}
 `;
   }
 
+  const isDirect = config.mergeMode === 'direct';
+
+  const directInstructions = `
+9. **Before finishing** — commit all your changes. The orchestrator will merge your branch to master:
+   \`\`\`bash
+   git add -A && git commit -m "feat: <description>
+
+Closes ${ticket.identifier}"
+   \`\`\`
+10. Write a short summary of your changes to \`completion-summary.md\` in the worktree root.
+`;
+
+  const prInstructions = `
+9. **Before finishing** — commit all your changes. The orchestrator will create a PR:
+   \`\`\`bash
+   git add -A && git commit -m "feat: <description>
+
+Closes ${ticket.identifier}"
+   \`\`\`
+10. Write your PR description to the file \`pr-body.md\` in the worktree root. This is how the orchestrator reads your PR. Do NOT use HTML comment markers — just write the markdown directly.
+
+### PR body format (REQUIRED)
+
+**Critical rules for PR content:**
+- Show the **exact command** AND its **full output**. Never summarize what the output contained.
+- Use the \`sql-query\` skill to verify database rows at rest. **Always show query duration** (\`.timer on\` for sqlite3, \`time\` prefix for other commands).
+- Every verification section must include: **unique ID** (e.g., AC-1), **description** of what is tested, **step-by-step setup**, **test command in code block**, **assertion-based result**, and **database rows at rest with timing**.
+- **Screenshots are for frontend components only.** Terminal output, API responses, and database queries belong in code blocks — never as images.
+- Use the \`screenshot\` skill to capture **every frontend component or layout that was modified.** Components must be shown rendered on the page where they are used, not in isolation. **Capture both normal AND error states** (empty fields, invalid input, wrong credentials, server errors). Upload via the \`imgbb-upload\` skill.
+
+<!-- PR_SUMMARY_START -->
+## Summary of Changes
+- [Brief description of what was built/changed]
+
+## Risks if This Fails
+- [What breaks? Who is affected? Rollback plan?]
+
+## Setup & Verification
+
+### AC-1: [Short description of what this verifies]
+**What this tests:** [One sentence explaining what behavior/state is being verified]
+
+**Setup:**
+\`\`\`bash
+# Step 1: [Description]
+[command]
+
+# Step 2: [Description]
+[command]
+\`\`\`
+
+**Test:**
+\`\`\`bash
+[EXACT command — always in a code block]
+\`\`\`
+
+**Result:**
+[Assertion-based result. Don't just paste output — state what you verified.]
+\`\`\`
+[FULL output — paste it verbatim]
+\`\`\`
+
+**Database at rest:**
+\`\`\`bash
+# Duration shown by .timer on
+[EXACT SQL query command with .timer on]
+\`\`\`
+\`\`\`
+[FULL query output with timing]
+\`\`\`
+
+[Repeat "### AC-N:" block for each distinct thing being verified. Use sequential IDs: AC-2, AC-3, etc.]
+
+## Proof of Changes
+
+### Test Output
+\`\`\`bash
+# Duration shown by time prefix
+$ time pnpm test
+\`\`\`
+\`\`\`
+[FULL test runner output]
+\`\`\`
+
+### API / Functional Proof
+\`\`\`bash
+# With timing via -w flag
+$ curl -s -w "\\nTime: %{time_total}s\\n" -X POST http://localhost:3000/api/v1/auth/register \\
+  -H "Content-Type: application/json" \\
+  -d '{"email":"test@example.com","password":"Test123!","confirmPassword":"Test123!"}' | python3 -m json.tool
+\`\`\`
+\`\`\`
+[FULL response — terminal output, never a screenshot]
+Time: 0.042s
+\`\`\`
+
+### Frontend Screenshots
+[For each component or layout modified, capture both normal AND error states:]
+
+**[Component Name]** — Normal (rendered on its page at /route-path)
+![Component Name](https://i.ibb.co/...)
+
+**[Component Name]** — Error: [state] (rendered on its page at /route-path)
+![Component Error](https://i.ibb.co/...)
+
+**Required error screenshots:**
+- Empty required fields ("Email is required", "Password is required")
+- Invalid input ("Invalid email format", "Password must be at least 8 characters")
+- Wrong credentials ("Invalid email or password" on login, "Passwords do not match" on registration)
+- Server error state if applicable ("Something went wrong")
+
+[Use the screenshot skill to capture pages at their routes in each state, then imgbb-upload skill to host. Only screenshot frontend UI — terminal output belongs in code blocks above.]
+
+## Blockers / Discoveries
+- [Any issues found, pre-existing problems, or follow-up needed]
+<!-- PR_SUMMARY_END -->
+`;
+
+  const modeInstructions = isDirect ? directInstructions : prInstructions;
+  const template = getWorkerPromptTemplate();
+  const filledTemplate = template.replace('{{MERGE_MODE_INSTRUCTIONS}}', modeInstructions);
+
   return `You are working on Linear ticket ${ticket.identifier}: "${ticket.title}"
 
 Dependencies: ${depIds}
@@ -703,7 +827,7 @@ ${portSection}${perWorkerSection}${buildStateContext(node)}
 ## Ticket Description
 ${ticket.description}
 
-${getWorkerPromptTemplate()}${extraSection}`;
+${filledTemplate}${extraSection}`;
 }
 
 /** Extract the PR summary from the agent's log output, delimited by HTML comment markers. */
@@ -738,7 +862,7 @@ async function updateExistingPR(
   body: string,
 ): Promise<string | null> {
   try {
-    const config = loadAgentConfig();
+    const config = getAgentConfig();
     if (!config.githubToken) return null;
     const repo = getGitHubRepo();
     if (!repo) return null;
@@ -769,80 +893,6 @@ async function onWorkerComplete(
   let prError: string | null = null;
 
   if (exitCode === 0) {
-    // Commit changes
-    const hasChanges = !isCleanCheck(worktreePath);
-    if (hasChanges) {
-      const commitMsg = `${node.ticket.title}\n\nCloses ${identifier}`;
-      commitAll(worktreePath, commitMsg);
-      pushBranch(worktreePath, node.state.branch);
-      branchPushed = true;
-
-      // Build PR body with dependency info
-      const prBody = extractPRSummary(node.state.logPath, node.ticket);
-      let prUrl: string | null = null;
-      const depIds = node.dependencies.map(d => d.ticket.identifier);
-      // Fetch PR URLs for each dependency
-      let depSection = '';
-      if (depIds.length > 0) {
-        const depLinks: string[] = [];
-        for (const dep of node.dependencies) {
-          const url = dep.state.prUrl;
-          depLinks.push(url
-            ? `- [${dep.ticket.identifier}](${url}) — ${dep.ticket.title}`
-            : `- ${dep.ticket.identifier} — ${dep.ticket.title}`);
-        }
-        depSection = `\n## Dependencies\n${depLinks.join('')}\n\n**Do not merge before:** ${depIds.join(', ')}\n`;
-      }
-      const fullPrBody = depSection + prBody;
-
-      // Create PR: try gh CLI first, fall back to GitHub API
-      const baseBranch = getDefaultBranch();
-      if (hasGhCLI()) {
-        const pr = createPR(worktreePath, node.state.branch, node.ticket.title, fullPrBody, baseBranch);
-        prUrl = pr.url;
-        prError = pr.error || null;
-      } else {
-        const config = getAgentConfig();
-        if (config.githubToken) {
-          const pr = await createPRViaApi(worktreePath, node.state.branch, node.ticket.title, fullPrBody, baseBranch, config.githubToken);
-          prUrl = pr.url;
-          prError = pr.error || null;
-          if (!prUrl) {
-            // PR creation failed — maybe it already exists, try updating
-            try {
-              prUrl = await updateExistingPR(node, fullPrBody);
-              prError = prUrl ? null : (prError || 'PR update also failed');
-              if (prUrl) {
-                const ls = fs.createWriteStream(node.state.logPath, { flags: 'a' });
-                ls.write(`\n[${new Date().toISOString()}] PR updated: ${prUrl}\n`);
-                ls.end();
-              }
-            } catch { /* ignore */ }
-            if (!prUrl) {
-              const logStream = fs.createWriteStream(node.state.logPath, { flags: 'a' });
-              logStream.write(`\n[${new Date().toISOString()}] PR creation failed: ${pr.error}\n`);
-              logStream.end();
-            }
-          }
-        }
-      }
-      if (prUrl) {
-        node.state.prUrl = prUrl;
-      }
-    }
-
-    // Update Linear ticket with discoveries/blockers from the log
-    try {
-      const logContent = fs.readFileSync(node.state.logPath, 'utf-8');
-      const lastLines = logContent.split('\n').slice(-30).join('\n');
-      updateLinearTicket(node.ticket.id, lastLines);
-    } catch {
-      // best effort
-    }
-
-    // Transition Linear ticket to "Done"
-    transitionTicket(node.ticket.id, 'Done').catch(() => {});
-
     // Verify the worker actually changed something meaningful.
     // Agents that only touch resume.pdf (generated artifact) did no real work.
     if (!hasMeaningfulWork(worktreePath, getDefaultBranch())) {
@@ -856,7 +906,7 @@ async function onWorkerComplete(
         `❌ Worker exited 0 but only modified generated files — no implementation work detected.`,
       ).catch(() => {});
 
-      // Write completion note and bail out early (no prune, no port release in done path)
+      // Write completion note and bail out early
       const failStream = fs.createWriteStream(node.state.logPath, { flags: 'a' });
       failStream.write(`\n[${new Date().toISOString()}] Worker finished. Status: failed (no meaningful work)\n`);
       failStream.end();
@@ -865,6 +915,107 @@ async function onWorkerComplete(
       node._onComplete?.({ exitCode, branchPushed: false, prUrl: null, prError: 'No meaningful changes' });
       return;
     }
+
+    // Commit changes (worker should have already done this, but ensure it)
+    const hasChanges = !isCleanCheck(worktreePath);
+    if (hasChanges) {
+      const commitMsg = `${node.ticket.title}\n\nCloses ${identifier}`;
+      commitAll(worktreePath, commitMsg);
+    }
+
+    const config = getAgentConfig();
+    const isDirect = config.mergeMode === 'direct';
+
+    if (isDirect) {
+      // ── Direct mode: merge to master ──
+      const mergeMsg = `${node.ticket.title}\n\nCloses ${identifier}`;
+      const mergeResult = mergeToMaster(worktreePath, node.state.branch, mergeMsg);
+      if (mergeResult.exitCode !== 0) {
+        const conflictError = mergeResult.stderr || mergeResult.stdout || 'Merge to master failed';
+        console.error(`Merge to master failed for ${identifier}: ${conflictError}`);
+
+        const errStream = fs.createWriteStream(node.state.logPath, { flags: 'a' });
+        errStream.write(`\n[${new Date().toISOString()}] Merge to master FAILED: ${conflictError}\n`);
+        errStream.end();
+
+        node.state.status = 'failed';
+        node.state.finishedAt = new Date().toISOString();
+        node.state.pid = null;
+        node.state.error = `Merge conflict: ${conflictError}`;
+
+        updateLinearTicket(
+          node.ticket.id,
+          `❌ Merge to master failed: ${conflictError}`,
+        ).catch(() => {});
+
+        saveStateSnapshot(node);
+        node._onComplete?.({ exitCode, branchPushed: false, prUrl: null, prError: conflictError });
+        return;
+      }
+      branchPushed = true;
+    } else {
+      // ── PR mode: push branch and create PR ──
+      pushBranch(worktreePath, node.state.branch);
+      branchPushed = true;
+
+      // Build PR body with dependency info
+      const prBody = extractPRSummary(node.state.logPath, node.ticket);
+      const depIds = node.dependencies.map(d => d.ticket.identifier);
+      let depSection = '';
+      if (depIds.length > 0) {
+        const depLinks: string[] = [];
+        for (const dep of node.dependencies) {
+          const url = dep.state.prUrl;
+          depLinks.push(url
+            ? `- [${dep.ticket.identifier}](${url}) — ${dep.ticket.title}`
+            : `- ${dep.ticket.identifier} — ${dep.ticket.title}`);
+        }
+        depSection = `\n## Dependencies\n${depLinks.join('')}\n\n**Do not merge before:** ${depIds.join(', ')}\n`;
+      }
+      const fullPrBody = depSection + prBody;
+
+      const baseBranch = getDefaultBranch();
+      if (hasGhCLI()) {
+        const pr = createPR(worktreePath, node.state.branch, node.ticket.title, fullPrBody, baseBranch);
+        prUrl = pr.url;
+        prError = pr.error || null;
+      } else if (config.githubToken) {
+        const pr = await createPRViaApi(worktreePath, node.state.branch, node.ticket.title, fullPrBody, baseBranch, config.githubToken);
+        prUrl = pr.url;
+        prError = pr.error || null;
+        if (!prUrl) {
+          try {
+            prUrl = await updateExistingPR(node, fullPrBody);
+            prError = prUrl ? null : (prError || 'PR update also failed');
+            if (prUrl) {
+              const ls = fs.createWriteStream(node.state.logPath, { flags: 'a' });
+              ls.write(`\n[${new Date().toISOString()}] PR updated: ${prUrl}\n`);
+              ls.end();
+            }
+          } catch { /* ignore */ }
+          if (!prUrl) {
+            const logStream2 = fs.createWriteStream(node.state.logPath, { flags: 'a' });
+            logStream2.write(`\n[${new Date().toISOString()}] PR creation failed: ${prError}\n`);
+            logStream2.end();
+          }
+        }
+      }
+      if (prUrl) {
+        node.state.prUrl = prUrl;
+      }
+    }
+
+    // Update Linear ticket with summary from the log
+    try {
+      const logContent = fs.readFileSync(node.state.logPath, 'utf-8');
+      const lastLines = logContent.split('\n').slice(-30).join('\n');
+      updateLinearTicket(node.ticket.id, lastLines);
+    } catch {
+      // best effort
+    }
+
+    // Transition Linear ticket to "Done"
+    transitionTicket(node.ticket.id, 'Done').catch(() => {});
 
     node.state.status = 'done';
     node.state.finishedAt = new Date().toISOString();
@@ -941,6 +1092,9 @@ async function onWorkerComplete(
   // Append completion note to log
   const logStream = fs.createWriteStream(node.state.logPath, { flags: 'a' });
   logStream.write(`\n[${new Date().toISOString()}] Worker finished. Status: ${node.state.status}\n`);
+  if (branchPushed) {
+    logStream.write(`[${new Date().toISOString()}] Branch pushed: ${node.state.branch}\n`);
+  }
   if (node.state.prUrl) {
     logStream.write(`[${new Date().toISOString()}] PR: ${node.state.prUrl}\n`);
   }
