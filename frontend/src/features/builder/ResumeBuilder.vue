@@ -260,4 +260,29 @@ function onStay() {
 }
 </script>
 
+<style scoped>
+main {
+  /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: var(--muted-foreground) transparent;
+}
+
+main::-webkit-scrollbar {
+  width: 5px;
+}
+
+main::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+main::-webkit-scrollbar-thumb {
+  background: var(--muted-foreground);
+  border-radius: 4px;
+}
+
+main::-webkit-scrollbar-thumb:hover {
+  background: var(--foreground);
+}
+</style>
+
 

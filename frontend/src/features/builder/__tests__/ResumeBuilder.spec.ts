@@ -526,4 +526,28 @@ describe('ResumeBuilder', () => {
     addSpy.mockRestore()
     removeSpy.mockRestore()
   })
+
+  // ─── Main section scrollbar tests ────────────────────────────
+
+  it('renders main section with overflow-y-auto for scrolling', () => {
+    const wrapper = mountBuilder()
+    const main = wrapper.find('main')
+    expect(main.exists()).toBe(true)
+    expect(main.classes()).toContain('overflow-y-auto')
+  })
+
+  it('renders SectionEditor inside main section', () => {
+    const wrapper = mountBuilder()
+    const main = wrapper.find('main')
+    const sectionEditor = main.find('[data-testid="section-editor"]')
+    expect(sectionEditor.exists()).toBe(true)
+  })
+
+  it('applies scoped styles with data-v attribute on main element', () => {
+    const wrapper = mountBuilder()
+    const main = wrapper.find('main')
+    // When <style scoped> is present, Vue adds a data-v-* attribute to elements
+    const dataAttrs = Object.keys(main.attributes()).filter((k) => k.startsWith('data-v-'))
+    expect(dataAttrs.length).toBe(1)
+  })
 })
