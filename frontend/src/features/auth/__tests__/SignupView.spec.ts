@@ -47,6 +47,22 @@ describe('SignupView', () => {
     vi.clearAllMocks()
   })
 
+  it('renders decorative SVG blobs with aria-hidden', () => {
+    const wrapper = mountSignup()
+
+    // All decorative blobs should render SvgIllustration components
+    const svgIllustrations = wrapper.findAll('.svg-illustration')
+    expect(svgIllustrations.length).toBeGreaterThanOrEqual(5)
+
+    // The decorative containers should have aria-hidden="true"
+    const ariaHiddenContainers = wrapper.findAll('[aria-hidden="true"]')
+    expect(ariaHiddenContainers.length).toBeGreaterThanOrEqual(4)
+
+    // Decorative containers should have pointer-events-none
+    const pointerEventsNone = wrapper.findAll('.pointer-events-none')
+    expect(pointerEventsNone.length).toBeGreaterThanOrEqual(4)
+  })
+
   it('renders email, password, and confirm password fields', () => {
     const wrapper = mountSignup()
     expect(wrapper.find('#signup-email').exists()).toBe(true)
