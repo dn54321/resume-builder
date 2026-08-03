@@ -135,6 +135,45 @@ export function pushBranch(worktreePath: string, branch: string): GitResult {
   return execGit(['push', '-u', 'origin', branch], worktreePath);
 }
 
+/** Merge the worker's branch into master and push.
+ *  Pulls latest master first to avoid conflicts, then merges via checkout+merge.
+ *  The worker branch is preserved (not deleted). */
+export function mergeToMaster(
+  worktreePath: string,
+  branch: string,
+  commitMessage: string,
+): GitResult {
+  const defaultBranch = getDefaultBranch();
+
+  /*
+   * ⚠️ WARNING — Do NOT checkout master inside a worktree.
+   *
+   * git worktrees cannot checkout a branch that is already checked out
+   * in another worktree. Since master is checked out in the main repo,
+   * any `git checkout master` inside a worker worktree will fail with:
+   *   fatal: 'master' is already used by worktree at '/home/...'
+   *
+   * Instead, run all merge operations from the MAIN repo directory
+   * (returned by getRepoRoot()) where master is already checked out.
+   */
+  const mainRepo = getRepoRoot();
+
+  // Fetch latest from origin (from main repo, where master is checked out)
+  const fetchResult = execGit(['fetch', 'origin'], mainRepo);
+  if (fetchResult.exitCode !== 0) return fetchResult;
+
+  // Pull latest master (already checked out in main repo)
+  const pullResult = execGit(['pull', 'origin', defaultBranch], mainRepo);
+  if (pullResult.exitCode !== 0) return pullResult;
+
+  // Merge the worker's branch into master
+  const mergeResult = execGit(['merge', branch, '-m', commitMessage], mainRepo);
+  if (mergeResult.exitCode !== 0) return mergeResult;
+
+  // Push to origin
+  return execGit(['push', 'origin', defaultBranch], mainRepo);
+}
+
 /** Create a PR using gh CLI. Returns PR URL. */
 export function createPR(
   worktreePath: string,
