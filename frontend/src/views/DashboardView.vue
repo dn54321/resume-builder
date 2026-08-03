@@ -213,7 +213,6 @@ function formatDate(dateStr: string): string {
 
 .resume-card:hover {
   border-color: var(--color-text);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .resume-card:focus-visible {
