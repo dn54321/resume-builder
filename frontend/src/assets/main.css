@@ -2,7 +2,7 @@
 
 /* Enable class-based dark mode so the .dark class on <html> triggers
 dark: utility variants (default is prefers-color-scheme media query). */
-@custom-variant dark (&:where(.dark, .dark *));
+@custom-variant dark (&:where(html.dark, html.dark *));
 
 @theme inline {
   --color-background: #ffffff;
@@ -49,7 +49,7 @@ dark: utility variants (default is prefers-color-scheme media query). */
   --popover-foreground: var(--color-popover-foreground);
 }
 
-.dark {
+html.dark {
   --color-background: #111111;
   --color-foreground: #fafafa;
   --color-border: #27272a;
