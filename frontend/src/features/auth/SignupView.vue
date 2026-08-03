@@ -49,6 +49,8 @@ function validate(): boolean {
 
   if (!email.value.trim()) {
     errors.value.push('Email is required')
+  } else if (!EMAIL_RE.test(email.value)) {
+    errors.value.push('Please enter a valid email address')
   }
   if (!password.value) {
     errors.value.push('Password is required')

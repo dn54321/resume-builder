@@ -92,9 +92,12 @@ const dropIndicator = ref<{ type: SectionType; position: 'above' | 'below' } | n
  * Handle label click: select the section and scroll the editor to it.
 <<<<<<< HEAD
  * Toggling is done via the checkbox, not the label.
+<<<<<<< HEAD
 =======
  * For disabled sections, also toggle them on first (enables + scrolls in one click).
 >>>>>>> ticket/res-45
+=======
+>>>>>>> ticket/res-50
  * @param section
  */
 function onLabelClick(section: OrderedSection): void {

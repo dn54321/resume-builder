@@ -74,7 +74,7 @@ async function handleSubmit() {
         errors.value.push(err.message)
       }
     } else {
-      errors.value.push('Something went wrong. Please try again.')
+      errors.value.push('An unexpected error occurred. Please try again.')
     }
   } finally {
     submitting.value = false
