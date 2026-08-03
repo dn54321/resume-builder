@@ -1,6 +1,6 @@
 <template>
   <div class="p-4">
-    <h3 class="text-base font-semibold m-0 mb-4 text-gray-900">Certifications</h3>
+    <h3 class="text-base font-semibold m-0 mb-4 text-foreground">Certifications</h3>
     <EntryList
       :entries="editor.entries.value.filter((e) => !e.parentId)"
       add-label="Add Certification"
@@ -12,32 +12,32 @@
       <template #fields="{ entry }">
         <div class="flex flex-col gap-2.5">
           <div class="flex flex-col gap-1">
-            <label class="text-xs font-medium text-gray-900">Name</label>
+            <label class="text-xs font-medium text-foreground">Name</label>
             <input
               type="text"
               :value="editor.getFieldValue(entry.id, 'name')"
               @input="editor.updateField(entry.id, 'name', ($event.target as HTMLInputElement).value)"
-              class="px-2 py-1.5 border border-gray-300 rounded-sm text-[0.8125rem] font-[inherit] text-gray-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              class="px-2 py-1.5 border border-border rounded-sm text-[0.8125rem] font-[inherit] text-foreground bg-surface focus:outline-hidden focus:border-primary focus:ring-1 focus:ring-primary"
               placeholder="AWS Solutions Architect"
             />
           </div>
           <div class="flex flex-col gap-1">
-            <label class="text-xs font-medium text-gray-900">Issuer</label>
+            <label class="text-xs font-medium text-foreground">Issuer</label>
             <input
               type="text"
               :value="editor.getFieldValue(entry.id, 'issuer')"
               @input="editor.updateField(entry.id, 'issuer', ($event.target as HTMLInputElement).value)"
-              class="px-2 py-1.5 border border-gray-300 rounded-sm text-[0.8125rem] font-[inherit] text-gray-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              class="px-2 py-1.5 border border-border rounded-sm text-[0.8125rem] font-[inherit] text-foreground bg-surface focus:outline-hidden focus:border-primary focus:ring-1 focus:ring-primary"
               placeholder="Amazon Web Services"
             />
           </div>
           <div class="flex flex-col gap-1">
-            <label class="text-xs font-medium text-gray-900">Date</label>
+            <label class="text-xs font-medium text-foreground">Date</label>
             <input
               type="month"
               :value="editor.getFieldValue(entry.id, 'date')"
               @input="editor.updateField(entry.id, 'date', ($event.target as HTMLInputElement).value)"
-              class="px-2 py-1.5 border border-gray-300 rounded-sm text-[0.8125rem] font-[inherit] text-gray-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              class="px-2 py-1.5 border border-border rounded-sm text-[0.8125rem] font-[inherit] text-foreground bg-surface focus:outline-hidden focus:border-primary focus:ring-1 focus:ring-primary"
             />
           </div>
         </div>

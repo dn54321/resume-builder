@@ -43,7 +43,7 @@
 
         <!-- Filter status indicator -->
         <template v-if="store.isFiltered && !tailorError">
-          <span class="text-[0.6875rem] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-100 text-blue-500" data-testid="filtered-badge">
+          <span class="text-[0.6875rem] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary/15 text-primary" data-testid="filtered-badge">
             Filtered
           </span>
           <span class="text-xs text-muted-foreground">
@@ -62,7 +62,7 @@
 
     <div class="grid grid-cols-[240px_1fr_2fr] gap-4 flex-1 min-h-0 max-[1024px]:grid-cols-1 max-[1024px]:grid-rows-[auto_1fr_1fr]">
       <!-- Left sidebar: LayoutPicker + SectionToggles -->
-      <aside class="overflow-y-auto p-4 border border-gray-300 rounded-lg bg-white">
+      <aside class="overflow-y-auto p-4 border border-border rounded-lg bg-surface">
         <LayoutPicker v-model="store.layout" />
         <SectionToggles
           :layout="store.layout"
@@ -78,12 +78,12 @@
       </aside>
 
       <!-- Center: Section editor -->
-      <main class="overflow-y-auto p-4 border border-gray-300 rounded-lg bg-white">
+      <main class="overflow-y-auto p-4 border border-border rounded-lg bg-surface">
         <SectionEditor :selected-section-id="selectedSectionId" />
       </main>
 
       <!-- Right: Live preview -->
-      <aside class="overflow-hidden border border-gray-300 rounded-lg bg-white">
+      <aside class="overflow-hidden border border-border rounded-lg bg-surface">
         <LivePreview />
       </aside>
     </div>

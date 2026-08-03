@@ -22,8 +22,8 @@ describe('LayoutPicker', () => {
     const standardCard = wrapper.findAll('button')[0]!
     const columnCard = wrapper.findAll('button')[1]!
 
-    expect(standardCard.classes()).toContain('border-blue-500!')
-    expect(columnCard.classes()).not.toContain('border-blue-500!')
+    expect(standardCard.classes()).toContain('border-primary!')
+    expect(columnCard.classes()).not.toContain('border-primary!')
   })
 
   it('highlights the selected card (column2-1)', () => {
@@ -34,8 +34,8 @@ describe('LayoutPicker', () => {
     const standardCard = wrapper.findAll('button')[0]!
     const columnCard = wrapper.findAll('button')[1]!
 
-    expect(standardCard.classes()).not.toContain('border-blue-500!')
-    expect(columnCard.classes()).toContain('border-blue-500!')
+    expect(standardCard.classes()).not.toContain('border-primary!')
+    expect(columnCard.classes()).toContain('border-primary!')
   })
 
   it('emits update:modelValue when Standard is clicked', async () => {

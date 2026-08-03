@@ -177,6 +177,6 @@ describe('JdInput', () => {
 
     const wrapper = mountComponent()
     const textarea = wrapper.find('textarea')
-    expect(textarea.classes()).toContain('border-red-600!')
+    expect(textarea.classes()).toContain('border-destructive!')
   })
 })

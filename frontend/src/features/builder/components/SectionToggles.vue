@@ -1,16 +1,16 @@
 <template>
   <div class="mb-6">
-    <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-500 m-0 mb-3">Sections</h3>
+    <h3 class="text-sm font-semibold uppercase tracking-wider text-muted-foreground m-0 mb-3">Sections</h3>
     <ul class="list-none p-0 m-0 flex flex-col gap-2">
       <li
         v-for="section in orderedSections"
         :key="section.type"
-        class="flex items-center gap-2 p-2 rounded-md bg-gray-50 cursor-default transition-all"
+        class="flex items-center gap-2 p-2 rounded-md bg-muted/20 cursor-default transition-all"
         :class="{
           'opacity-55': !section.enabled,
           'opacity-50': dragType === section.type,
-          'border-t-2 border-blue-500': dropIndicator?.type === section.type && dropIndicator?.position === 'above',
-          'border-b-2 border-blue-500': dropIndicator?.type === section.type && dropIndicator?.position === 'below',
+          'border-t-2 border-primary': dropIndicator?.type === section.type && dropIndicator?.position === 'above',
+          'border-b-2 border-primary': dropIndicator?.type === section.type && dropIndicator?.position === 'below',
         }"
         :draggable="section.enabled"
         @dragstart="onDragStart($event, section.type)"
@@ -27,12 +27,12 @@
             class="peer absolute opacity-0 w-0 h-0"
           />
           <span
-            class="relative w-9 h-5 bg-gray-300 rounded-[10px] shrink-0 transition-colors peer-checked:bg-blue-500 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:w-4 after:h-4 after:bg-white after:rounded-full after:transition-transform peer-checked:after:translate-x-4 cursor-pointer"
+            class="relative w-9 h-5 bg-muted/50 rounded-[10px] shrink-0 transition-colors peer-checked:bg-primary after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:w-4 after:h-4 after:bg-white after:rounded-full after:transition-transform peer-checked:after:translate-x-4 cursor-pointer"
             @click.prevent.stop="emit('toggle', section.type)"
           ></span>
           <span
             class="text-[0.8125rem] cursor-pointer"
-            :class="section.type === selectedSectionId ? 'font-semibold text-blue-500' : section.enabled ? 'text-gray-900' : 'text-gray-400'"
+            :class="section.type === selectedSectionId ? 'font-semibold text-primary' : section.enabled ? 'text-foreground' : 'text-muted-foreground/70'"
           >{{ section.label }}</span>
         </label>
 
@@ -40,7 +40,7 @@
           v-if="layout === 'column2-1' && section.enabled"
           :value="section.column"
           @change="emit('setColumn', section.type, ($event.target as HTMLSelectElement).value as 'left' | 'right')"
-          class="text-xs py-1 px-2 border border-gray-300 rounded-sm bg-white text-gray-900 font-[inherit]"
+          class="text-xs py-1 px-2 border border-border rounded-sm bg-surface text-foreground font-[inherit]"
           aria-label="Column assignment for {{ section.label }}"
         >
           <option value="left">Left</option>
@@ -49,7 +49,7 @@
 
         <button
           v-if="section.enabled"
-          class="w-7 h-7 flex items-center justify-center border-none bg-transparent text-gray-400 cursor-grab rounded-sm text-sm hover:bg-gray-200 hover:text-gray-900 active:cursor-grabbing"
+          class="w-7 h-7 flex items-center justify-center border-none bg-transparent text-muted-foreground/70 cursor-grab rounded-sm text-sm hover:bg-muted/50 hover:text-foreground active:cursor-grabbing"
           title="Drag to reorder"
           aria-label="Reorder {{ section.label }}"
         >

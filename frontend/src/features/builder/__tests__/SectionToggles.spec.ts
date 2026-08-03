@@ -470,7 +470,7 @@ describe('SectionToggles', () => {
 
       // Check visual indicator — summary should have border-t-2 (above)
       expect(targetLi.classes()).toContain('border-t-2')
-      expect(targetLi.classes()).toContain('border-blue-500')
+      expect(targetLi.classes()).toContain('border-primary')
     })
 
     it('onDragOver sets dropIndicator below when cursor is in bottom half', async () => {
@@ -494,7 +494,7 @@ describe('SectionToggles', () => {
       await nextTick()
 
       expect(targetLi.classes()).toContain('border-b-2')
-      expect(targetLi.classes()).toContain('border-blue-500')
+      expect(targetLi.classes()).toContain('border-primary')
     })
 
     it('onDragOver does nothing for disabled sections', () => {

@@ -1,5 +1,5 @@
 <template>
-  <div class="live-preview flex justify-center items-start h-full overflow-y-auto py-3 bg-gray-200">
+  <div class="live-preview flex justify-center items-start h-full overflow-y-auto py-3 bg-muted/50">
     <div
       id="resume-preview"
       class="live-preview__paper"

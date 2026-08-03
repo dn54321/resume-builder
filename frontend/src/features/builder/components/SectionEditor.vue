@@ -2,7 +2,7 @@
   <div class="h-full overflow-y-auto">
     <div
       v-if="enabledSectionTypes.length === 0"
-      class="flex items-center justify-center h-full text-sm text-gray-400 italic"
+      class="flex items-center justify-center h-full text-sm text-muted-foreground/70 italic"
     >
       <p>Enable sections from the sidebar to start editing</p>
     </div>
@@ -11,20 +11,20 @@
         v-for="sectionType in enabledSectionTypes"
         :key="sectionType"
         :ref="(el: unknown) => setSectionRef(sectionType, el as HTMLElement | null)"
-        class="border-b border-gray-200 last:border-b-0"
+        class="border-b border-border last:border-b-0"
       >
         <!-- Section header with color accent matching sidebar -->
         <button
-          class="w-full flex items-center gap-2 px-4 py-3 text-left border-l-4 border-blue-500 bg-blue-50 hover:bg-blue-100 transition-colors cursor-pointer"
+          class="w-full flex items-center gap-2 px-4 py-3 text-left border-l-4 border-primary bg-primary/10 hover:bg-primary/15 transition-colors cursor-pointer"
           :aria-expanded="!collapsedSections.has(sectionType)"
           :aria-label="`Toggle ${SECTION_LABELS[sectionType]} section`"
           @click="toggleCollapse(sectionType)"
         >
-          <span class="flex-1 text-sm font-semibold text-blue-700">
+          <span class="flex-1 text-sm font-semibold text-primary">
             {{ SECTION_LABELS[sectionType] }}
           </span>
           <span
-            class="text-blue-500 text-xs transition-transform duration-200 shrink-0"
+            class="text-primary text-xs transition-transform duration-200 shrink-0"
             :class="{ 'rotate-180': !collapsedSections.has(sectionType) }"
           >
             &#x25BC;
@@ -32,7 +32,7 @@
         </button>
 
         <!-- Editor content -->
-        <div v-show="!collapsedSections.has(sectionType)" class="bg-white">
+        <div v-show="!collapsedSections.has(sectionType)" class="bg-surface">
           <component :is="editorMap[sectionType]" :key="sectionType" />
         </div>
       </div>

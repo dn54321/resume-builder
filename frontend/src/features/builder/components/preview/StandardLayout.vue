@@ -1,7 +1,7 @@
 <template>
   <div class="standard-layout p-[48pt] min-h-[960pt]">
     <!-- Empty state watermark -->
-    <div v-if="isEmpty" class="standard-layout__watermark flex items-center justify-center min-h-[600pt] text-[16pt] text-gray-400 italic select-none">
+    <div v-if="isEmpty" class="standard-layout__watermark flex items-center justify-center min-h-[600pt] text-[16pt] text-neutral-400 italic select-none">
       Your resume preview will appear here.
     </div>
 
@@ -28,12 +28,12 @@
         <div v-for="entry in topLevelEntries(section)" :key="entry.id" class="standard-layout__experience-entry mb-[8pt]">
           <div class="standard-layout__experience-header flex justify-between items-baseline">
             <span class="standard-layout__company text-[10pt] font-bold text-black">{{ fieldValue(section, entry.id, 'company') }}</span>
-            <span class="standard-layout__dates text-[10pt] text-gray-700 whitespace-nowrap">{{ formatDateRange(section, entry.id) }}</span>
+            <span class="standard-layout__dates text-[10pt] text-neutral-700 whitespace-nowrap">{{ formatDateRange(section, entry.id) }}</span>
           </div>
           <p v-if="fieldValue(section, entry.id, 'title')" class="standard-layout__experience-title text-[10pt] italic text-black mt-[1pt]">
             {{ fieldValue(section, entry.id, 'title') }}
           </p>
-          <p v-if="fieldValue(section, entry.id, 'location')" class="standard-layout__experience-location text-[10pt] text-gray-700 mt-[1pt]">
+          <p v-if="fieldValue(section, entry.id, 'location')" class="standard-layout__experience-location text-[10pt] text-neutral-700 mt-[1pt]">
             {{ fieldValue(section, entry.id, 'location') }}
           </p>
           <PreviewBulletList :bullets="entryBullets(section, entry.id)" />
@@ -45,7 +45,7 @@
         <div v-for="entry in topLevelEntries(section)" :key="entry.id" class="standard-layout__education-entry mb-[6pt]">
           <div class="standard-layout__education-header flex justify-between items-baseline">
             <span class="standard-layout__school text-[10pt] font-bold text-black">{{ fieldValue(section, entry.id, 'school') }}</span>
-            <span class="standard-layout__dates text-[10pt] text-gray-700 whitespace-nowrap">{{ formatDateRange(section, entry.id) }}</span>
+            <span class="standard-layout__dates text-[10pt] text-neutral-700 whitespace-nowrap">{{ formatDateRange(section, entry.id) }}</span>
           </div>
           <p v-if="fieldValue(section, entry.id, 'degree')" class="standard-layout__education-degree text-[10pt] text-black mt-[1pt]">
             {{ fieldValue(section, entry.id, 'degree') }}
@@ -72,13 +72,13 @@
           <p class="standard-layout__project-name text-[10pt] text-black m-0">
             <strong>{{ fieldValue(section, entry.id, 'name') }}</strong>
             <template v-if="fieldValue(section, entry.id, 'startDate') || fieldValue(section, entry.id, 'endDate')">
-              <span class="standard-layout__dates text-[10pt] text-gray-700 whitespace-nowrap"> | {{ formatDateRange(section, entry.id) }}</span>
+              <span class="standard-layout__dates text-[10pt] text-neutral-700 whitespace-nowrap"> | {{ formatDateRange(section, entry.id) }}</span>
             </template>
           </p>
           <p v-if="fieldValue(section, entry.id, 'description')" class="standard-layout__project-description text-[10pt] text-black mt-[2pt] leading-[1.4]">
             {{ fieldValue(section, entry.id, 'description') }}
           </p>
-          <p v-if="fieldValue(section, entry.id, 'url')" class="standard-layout__project-url text-[10pt] text-gray-700 mt-[2pt] break-all">
+          <p v-if="fieldValue(section, entry.id, 'url')" class="standard-layout__project-url text-[10pt] text-neutral-700 mt-[2pt] break-all">
             {{ fieldValue(section, entry.id, 'url') }}
           </p>
           <PreviewBulletList :bullets="entryBullets(section, entry.id)" />
@@ -94,7 +94,7 @@
               &mdash; {{ fieldValue(section, entry.id, 'issuer') }}
             </template>
             <template v-if="fieldValue(section, entry.id, 'date')">
-              <span class="standard-layout__dates text-[10pt] text-gray-700 whitespace-nowrap"> | {{ formatMonth(fieldValue(section, entry.id, 'date')) }}</span>
+              <span class="standard-layout__dates text-[10pt] text-neutral-700 whitespace-nowrap"> | {{ formatMonth(fieldValue(section, entry.id, 'date')) }}</span>
             </template>
           </p>
         </div>
