@@ -10,13 +10,31 @@
 #   │ Boss     │  agent-3     │
 #   └──────────┴──────────────┘
 #
-# Agent panes run simple bash loops displaying "Waiting for tasks...".
+# Agent panes run FIFO-driven display scripts.
 # The server uses tmux send-keys to attach worker output to panes and
 # reset them when workers finish.
 
-set -euo pipefail
+set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
+AGENT_LOG="$SCRIPT_DIR/.pi/tickets/agent-${TIMESTAMP}.log"
+mkdir -p "$(dirname "$AGENT_LOG")"
+
+# ─── Logging ─────────────────────────────────────────────────────────
+
+log() {
+  local msg="[$(date +%H:%M:%S)] $*"
+  echo "$msg" | tee -a "$AGENT_LOG" >&2
+}
+
+die() {
+  log "FATAL: $*"
+  log "Full log at: $AGENT_LOG"
+  exit 1
+}
+
+# ─── Resolve repo root ───────────────────────────────────────────────
 
 if command -v git &>/dev/null && git -C "$SCRIPT_DIR" rev-parse --show-toplevel &>/dev/null; then
   REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel)"
@@ -24,6 +42,8 @@ else
   REPO_ROOT="$SCRIPT_DIR"
 fi
 cd "$REPO_ROOT"
+log "REPO_ROOT=$REPO_ROOT"
+log "Log file: $AGENT_LOG"
 
 SESSION_NAME="ticket-agents"
 
@@ -34,6 +54,7 @@ if [ -f "$REPO_ROOT/.env.agent" ]; then
   val=$(grep MAX_SPAWN_AGENTS "$REPO_ROOT/.env.agent" 2>/dev/null | cut -d= -f2- | tr -d ' ')
   [ -n "$val" ] && MAX_AGENTS="$val"
 fi
+log "MAX_AGENTS=$MAX_AGENTS"
 
 # ─── Find pi ────────────────────────────────────────────────────────
 
@@ -41,7 +62,7 @@ PI_BIN=""
 for p in "$HOME/.local/share/pnpm/bin/pi" "$HOME/.local/bin/pi" /usr/local/bin/pi pi; do
   if command -v "$p" &>/dev/null || [ -x "$p" ]; then PI_BIN="$p"; break; fi
 done
-[ -z "$PI_BIN" ] && { echo "Error: pi not found"; exit 1; }
+[ -z "$PI_BIN" ] && die "pi binary not found — checked HOME/.local/share/pnpm/bin/pi, HOME/.local/bin/pi, /usr/local/bin/pi, and PATH"
 
 TSX_BIN=""
 for p in "$REPO_ROOT/.pi/npm/node_modules/.bin/tsx" \
@@ -50,10 +71,17 @@ for p in "$REPO_ROOT/.pi/npm/node_modules/.bin/tsx" \
   [ -x "$p" ] && { TSX_BIN="$p"; break; }
 done
 [ -z "$TSX_BIN" ] && TSX_BIN="npx tsx"
+log "PI_BIN=$PI_BIN"
+log "TSX_BIN=$TSX_BIN"
 
 # ─── Load env ────────────────────────────────────────────────────────
 
-[ -f "$REPO_ROOT/.env.agent" ] && { set -a; source "$REPO_ROOT/.env.agent"; set +a; }
+if [ -f "$REPO_ROOT/.env.agent" ]; then
+  set -a; source "$REPO_ROOT/.env.agent"; set +a
+  log "Loaded .env.agent"
+else
+  log "WARNING: .env.agent not found — LINEAR_API_KEY may not be set"
+fi
 
 # ─── Pick tickets ────────────────────────────────────────────────────
 
@@ -99,6 +127,9 @@ except: pass
     echo "  Auto-selecting all: $SELECTED_IDS"
     [ -n "$EPIC_IDS" ] && echo "  Epics:              $EPIC_IDS"
     [ -n "$STANDALONE_IDS" ] && echo "  Tickets:            $STANDALONE_IDS"
+    log "Selected: $SELECTED_IDS"
+    log "Epics: $EPIC_IDS"
+    log "Tickets: $STANDALONE_IDS"
   fi
 fi
 
@@ -110,35 +141,52 @@ if [ -z "${SELECTED_IDS:-}" ]; then
   # Assume all are epics when entered manually (backward-compatible)
   EPIC_IDS="$MANUAL_IDS"
   STANDALONE_IDS=""
+  log "Manual selection: $SELECTED_IDS"
 fi
 
 if [ -z "${SELECTED_IDS:-}" ]; then
   echo "No tickets selected. The server will start idle."
   echo "The boss can send EPIC <id> and TICKET <id> commands to add work."
   SELECTED_IDS=""
+  log "No tickets selected — server will start idle"
 fi
 
 # ─── Clean slate ─────────────────────────────────────────────────────
 
-pkill -f "tsx.*server-daemon" 2>/dev/null || true
-tmux kill-session -t "$SESSION_NAME" 2>/dev/null || true
+log "Cleaning up previous server and session..."
+pkill -f "tsx.*server-daemon" 2>/dev/null && log "  Killed old server daemon" || log "  No old server daemon running"
+tmux kill-session -t "$SESSION_NAME" 2>/dev/null && log "  Killed old tmux session" || log "  No old tmux session"
 sleep 1
 rm -f "$REPO_ROOT/.pi/tickets/state.json" 2>/dev/null || true
 unset TMUX
+log "Clean slate ready"
 
 # ─── Start server daemon ─────────────────────────────────────────────
 
-echo ""
-echo "Starting server daemon..."
+log "Starting server daemon..."
 SERVER_LOG="$REPO_ROOT/.pi/tickets/server.log"
 DASHBOARD_FILE="$REPO_ROOT/.pi/tickets/dashboard.txt"
 mkdir -p "$(dirname "$SERVER_LOG")"
 > "$SERVER_LOG"
 echo "Initializing..." > "$DASHBOARD_FILE"
-$TSX_BIN "$REPO_ROOT/.pi/extensions/ticket/server-daemon.ts" >> "$SERVER_LOG" 2>&1 &
+
+SERVER_SCRIPT="$REPO_ROOT/.pi/extensions/ticket/server-daemon.ts"
+if [ ! -f "$SERVER_SCRIPT" ]; then
+  die "Server script not found: $SERVER_SCRIPT"
+fi
+
+$TSX_BIN "$SERVER_SCRIPT" >> "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
-echo "Server PID: $SERVER_PID"
+log "Server PID: $SERVER_PID"
+
+# Verify server started
 sleep 2
+if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+  log "Server exited immediately. Last 20 lines of server log:"
+  tail -20 "$SERVER_LOG" | while read -r line; do log "  server: $line"; done
+  die "Server daemon failed to start"
+fi
+log "Server daemon running (PID $SERVER_PID)"
 
 # ─── Pane ID directory ───────────────────────────────────────────────
 
@@ -158,6 +206,7 @@ if [ -n "${SELECTED_IDS:-}" ]; then
   INITIAL_COMMANDS="After registration, immediately send: $CMD_PARTS"
 fi
 
+log "Writing boss prompt..."
 cat > "$PROMPT_DIR/boss-prompt.txt" << PROMPTEOF
 You are the BOSS. Oversee the system, fix anything that breaks.
 
@@ -198,6 +247,7 @@ PROMPTEOF
 
 # ─── Dashboard script ────────────────────────────────────────────────
 
+log "Writing dashboard-watch.sh..."
 cat > "$PROMPT_DIR/dashboard-watch.sh" << 'DASHBOARDEOF'
 #!/usr/bin/env bash
 DASHBOARD_FILE="$1"
@@ -214,18 +264,16 @@ DASHBOARDEOF
 chmod +x "$PROMPT_DIR/dashboard-watch.sh"
 
 # ─── Workers header script ───────────────────────────────────────────
-# Shows active worker count and assignments at the top of the RHS.
 
+log "Writing workers-header.sh..."
 cat > "$PROMPT_DIR/workers-header.sh" << 'HEADEREOF'
 #!/usr/bin/env bash
 DASHBOARD_FILE="$1"
 while true; do
   clear
   if [ -f "$DASHBOARD_FILE" ]; then
-    # Show counts line (2nd line of dashboard)
     sed -n '2p' "$DASHBOARD_FILE" 2>/dev/null
     echo ''
-    # Show worker assignments (lines with ◉ or agent-)
     grep -E '(◉|agent-)' "$DASHBOARD_FILE" 2>/dev/null | head -10
   else
     echo '  Waiting for dashboard...'
@@ -235,94 +283,112 @@ done
 HEADEREOF
 chmod +x "$PROMPT_DIR/workers-header.sh"
 
-# ─── Legacy agent pane script (kept for backward compat) ────────────
-
-cat > "$PROMPT_DIR/agent-pane.sh" << 'AGENTEOF'
-#!/usr/bin/env bash
-AGENT_NAME="$1"
-while true; do
-  clear
-  printf '\n  Waiting for tasks... (%s)\n\n' "$AGENT_NAME"
-  sleep 5
-done
-AGENTEOF
-chmod +x "$PROMPT_DIR/agent-pane.sh"
-
 # ─── Create tmux layout ──────────────────────────────────────────────
 
-echo "Creating tmux layout..."
+log "Creating tmux layout..."
+
+# Verify tmux is reachable
+if ! command -v tmux &>/dev/null; then
+  die "tmux is not installed or not on PATH"
+fi
+log "tmux version: $(tmux -V)"
+
+if ! command -v "$PI_BIN" &>/dev/null && [ ! -x "$PI_BIN" ]; then
+  die "pi binary not executable: $PI_BIN"
+fi
 
 # Allow panes to persist after process exit (so server can reuse them)
 tmux set-option -g remain-on-exit on 2>/dev/null || true
 
 # Pane 0: Dashboard (left column, full height)
-tmux new-session -d -s "$SESSION_NAME" -c "$REPO_ROOT" \
-  "$PROMPT_DIR/dashboard-watch.sh '$DASHBOARD_FILE'"
+log "Creating dashboard pane..."
+if ! tmux new-session -d -s "$SESSION_NAME" -c "$REPO_ROOT" \
+  "$PROMPT_DIR/dashboard-watch.sh $DASHBOARD_FILE"; then
+  die "tmux new-session failed"
+fi
 tmux rename-window -t "$SESSION_NAME:0" 'agents'
+log "Dashboard pane created (session: $SESSION_NAME)"
 
 HAS_SELECTIONS="${SELECTED_IDS:-}"
 
 if [ -n "$HAS_SELECTIONS" ]; then
   # ── Workers + Boss layout ──
-  # Layout:
-  #   ┌──────────┬──────────────┐
-  #   │ Dashboard│ Workers: N   │ ← header (5 lines)
-  #   │          ├──────────────┤
-  #   │          │ agent-1      │ ← pane-display.sh (FIFO)
-  #   │          ├──────────────┤
-  #   │          │ agent-2      │
-  #   ├──────────┼──────────────┤
-  #   │ Boss     │ agent-3      │
-  #   └──────────┴──────────────┘
 
   PANE_DISPLAY="$PANES_DIR/pane-display.sh"
+  if [ ! -x "$PANE_DISPLAY" ]; then
+    die "Pane display script not found or not executable: $PANE_DISPLAY"
+  fi
 
   # Pane %1: agent-1 (RHS, split right from dashboard)
-  tmux split-window -h -t "$SESSION_NAME:0" -c "$REPO_ROOT" \
-    "$PANE_DISPLAY agent-1"
-  AGENT1_PANE=$(tmux display-message -p -t "$SESSION_NAME:0.1" '#{pane_id}')
+  log "Creating agent-1 pane..."
+  if ! tmux split-window -h -t "$SESSION_NAME:0" -c "$REPO_ROOT" \
+    "$PANE_DISPLAY agent-1"; then
+    die "tmux split-window for agent-1 failed"
+  fi
+  AGENT1_PANE=$(tmux display-message -p -t "$SESSION_NAME:0.1" '#{pane_id}' 2>/dev/null) || true
+  if [ -z "$AGENT1_PANE" ]; then
+    log "  WARNING: Could not get pane ID via display-message, using fallback..."
+    AGENT1_PANE=$(tmux list-panes -t "$SESSION_NAME:0" -F '#{pane_id}' | tail -1)
+  fi
   echo "$AGENT1_PANE" > "$PANES_DIR/agent-1.pane"
-  echo "  agent-1 → pane $AGENT1_PANE"
+  log "  agent-1 → pane $AGENT1_PANE"
 
   # Workers header (split ABOVE agent-1, 5 lines tall)
-  tmux split-window -v -b -l 5 -t "$AGENT1_PANE" -c "$REPO_ROOT" \
-    "bash $PROMPT_DIR/workers-header.sh '$DASHBOARD_FILE'"
-  echo "  workers-header → created above agent-1"
+  log "Creating workers header..."
+  if ! tmux split-window -v -b -l 5 -t "$AGENT1_PANE" -c "$REPO_ROOT" \
+    "bash $PROMPT_DIR/workers-header.sh $DASHBOARD_FILE"; then
+    log "  WARNING: workers-header split failed (tmux -b requires v3.2+). Skipping header."
+  else
+    log "  workers-header → created above agent-1"
+  fi
 
   # Additional agent panes: split vertically from agent-1
   PREV_PANE="$AGENT1_PANE"
   for i in $(seq 2 "$MAX_AGENTS"); do
-    tmux split-window -v -t "$PREV_PANE" -c "$REPO_ROOT" \
-      "$PANE_DISPLAY agent-$i"
-    PANE_ID=$(tmux display-message -p -t "$SESSION_NAME:0" '#{pane_id}')
+    log "Creating agent-$i pane..."
+    if ! tmux split-window -v -t "$PREV_PANE" -c "$REPO_ROOT" \
+      "$PANE_DISPLAY agent-$i"; then
+      die "tmux split-window for agent-$i failed"
+    fi
+    PANE_ID=$(tmux display-message -p -t "$SESSION_NAME:0" '#{pane_id}' 2>/dev/null) || true
+    if [ -z "$PANE_ID" ]; then
+      PANE_ID=$(tmux list-panes -t "$SESSION_NAME:0" -F '#{pane_id}' | tail -1)
+    fi
     echo "$PANE_ID" > "$PANES_DIR/agent-$i.pane"
-    echo "  agent-$i → pane $PANE_ID"
+    log "  agent-$i → pane $PANE_ID"
     PREV_PANE="$PANE_ID"
   done
 
   # Boss pane (bottom-left, split from dashboard)
-  tmux split-window -v -t "$SESSION_NAME:0.0" -c "$REPO_ROOT" -l 10 \
-    "$PI_BIN --append-system-prompt @$PROMPT_DIR/boss-prompt.txt Start"
+  log "Creating boss pane..."
+  if ! tmux split-window -v -t "$SESSION_NAME:0.0" -c "$REPO_ROOT" -l 10 \
+    "$PI_BIN --append-system-prompt @$PROMPT_DIR/boss-prompt.txt Start"; then
+    die "tmux split-window for boss failed"
+  fi
+  log "  Boss pane created"
 else
   # ── No selections: just Dashboard + Boss ──
-  echo "No tickets selected — starting with boss only."
+  log "No tickets selected — starting with boss only."
 
-  tmux split-window -v -t "$SESSION_NAME:0" -c "$REPO_ROOT" -l 15 \
-    "$PI_BIN --append-system-prompt @$PROMPT_DIR/boss-prompt.txt Start"
+  if ! tmux split-window -v -t "$SESSION_NAME:0" -c "$REPO_ROOT" -l 15 \
+    "$PI_BIN --append-system-prompt @$PROMPT_DIR/boss-prompt.txt Start"; then
+    die "tmux split-window for boss failed"
+  fi
 fi
 
-echo "Panes:"
-tmux list-panes -t "$SESSION_NAME:0" -F "  #{pane_index}: #{pane_current_command} (id: #{pane_id})"
+log "All panes created. Listing layout:"
+tmux list-panes -t "$SESSION_NAME:0" -F "  #{pane_index}: #{pane_current_command} (id: #{pane_id})" 2>&1 | while read -r line; do log "$line"; done
 
 # ─── Done ────────────────────────────────────────────────────────────
 
-echo ""
-echo "All panes running. Attaching tmux..."
+log "All panes running. Attaching tmux..."
 tmux select-pane -t "$SESSION_NAME:0.0"
+log "Layout ready. Log at: $AGENT_LOG"
 
 cleanup() {
   kill "${SERVER_PID:-}" 2>/dev/null || true
   tmux kill-session -t "$SESSION_NAME" 2>/dev/null || true
+  log "Cleanup complete"
 }
 trap cleanup EXIT INT TERM
 

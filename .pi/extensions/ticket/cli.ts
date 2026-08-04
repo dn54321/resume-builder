@@ -237,6 +237,7 @@ async function main() {
   let selectedIdx = 0;
   let promptTarget: string | null = null;
   let isPrompting = false;
+  let showCompleted = true;
   const logTailer = new LogTailer();
   const workers = new Map<string, cp.ChildProcess>();
   let refreshTimer: ReturnType<typeof setInterval> | null = null;
@@ -246,7 +247,9 @@ async function main() {
     const order: Record<string, number> = {
       running: 0, pending: 1, blocked: 2, failed: 3, done: 4,
     };
-    return [...nodes.keys()].sort((a, b) => {
+    let ids = [...nodes.keys()];
+    if (!showCompleted) ids = ids.filter(id => nodes.get(id)!.state.status !== 'done');
+    return ids.sort((a, b) => {
       const na = nodes.get(a)!;
       const nb = nodes.get(b)!;
       return (order[na.state.status] ?? 5) - (order[nb.state.status] ?? 5);
@@ -836,6 +839,14 @@ async function main() {
   });
 
   // Global quit handler updated for async cleanup
+  screen.key(['h'], () => {
+    if (isPrompting) return;
+    showCompleted = !showCompleted;
+    selectedIdx = 0;
+    helpBar.setContent(` ↑↓:navigate  Tab:switch  p:prompt  r:retry  x:kill  m:merge-check  ${showCompleted ? 'h:hide-done' : 'h:show-all'}  q:quit`);
+    renderAll();
+  });
+
   screen.key(['q', 'C-c'], () => {
     cleanup().then(() => process.exit(0));
   });
