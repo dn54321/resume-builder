@@ -67,10 +67,10 @@ export class AgentPool {
 
     // Run pre.sh
     const worktreePath = path.join(getStateDir(), 'worktrees', name);
-    this.runLifecycleScript(agentDef.pre_script, name, type, port, worktreePath);
+    this.runLifecycleScript(agentDef.pre_script, name, type, port ?? 0, worktreePath);
 
     // Build prompt
-    const promptContent = this.buildPrompt(type, name, port, worktreePath);
+    const promptContent = this.buildPrompt(type, name, port ?? 0, worktreePath);
 
     // Spawn pi process
     const logPath = path.join(getStateDir(), 'logs', `${name}.log`);

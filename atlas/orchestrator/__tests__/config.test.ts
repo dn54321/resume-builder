@@ -196,7 +196,7 @@ describe('Config — deep merge', () => {
 
   it('merges nested objects', () => {
     const base = { a: { x: 1, y: 2 }, b: 3 };
-    const override = { a: { x: 10 } };
+    const override: any = { a: { x: 10 } };
     const result = deepMerge(base, override);
     expect(result.a.x).toBe(10); // overridden
     expect(result.a.y).toBe(2);  // preserved
