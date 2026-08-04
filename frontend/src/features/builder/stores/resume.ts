@@ -172,24 +172,45 @@ export const useResumeStore = defineStore('resume', () => {
   function loadFromPayload(payload: ResumePayload) {
     name.value = payload.name ?? ''
     layout.value = payload.layout
-    sections.value = payload.sections.map((s) => {
-      const sectionType = s.sectionId as SectionType
-      return {
-        sectionId: s.sectionId,
-        sectionType,
-        column: s.column,
-        order: s.order,
-        enabled: (s as { enabled?: boolean }).enabled ?? true,
-        entries: s.entries.map((e) => ({
-          id: generateId(),
-          order: e.order,
-          parentId: e.parentId,
-          fields: e.fields.map((f) => ({
-            key: f.key,
-            value: f.value,
-            order: f.order,
+
+    // Load saved sections, then fill in any new SECTION_TYPES that were
+    // added after the resume was created (e.g. experience). Missing types
+    // get a default empty section so they appear in the sidebar and editor.
+    const savedMap = new Map(
+      payload.sections.map((s) => [s.sectionId, s]),
+    )
+    const maxOrder = payload.sections.reduce((m, s) => Math.max(m, s.order), -1)
+
+    sections.value = SECTION_TYPES.map((type, i) => {
+      const saved = savedMap.get(type)
+      if (saved) {
+        return {
+          sectionId: saved.sectionId,
+          sectionType: type,
+          column: saved.column,
+          order: saved.order,
+          enabled: (saved as { enabled?: boolean }).enabled ?? true,
+          entries: saved.entries.map((e) => ({
+            id: generateId(),
+            order: e.order,
+            parentId: e.parentId,
+            fields: e.fields.map((f) => ({
+              key: f.key,
+              value: f.value,
+              order: f.order,
+            })),
           })),
-        })),
+        }
+      }
+      // Section type added after resume was created — insert as disabled
+      // at the end so it doesn't disrupt the existing layout.
+      return {
+        sectionId: type,
+        sectionType: type,
+        column: 'right',
+        order: maxOrder + 1 + i,
+        enabled: false,
+        entries: [],
       }
     })
   }

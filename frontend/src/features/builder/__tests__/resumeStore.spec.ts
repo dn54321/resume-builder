@@ -251,26 +251,33 @@ describe('useResumeStore', () => {
 
       store.loadFromPayload(payload)
       expect(store.layout).toBe('column2-1')
-      expect(store.sections).toHaveLength(2)
+      // All 10 sections are present — saved ones keep their data,
+      // missing ones are added as disabled defaults
+      expect(store.sections).toHaveLength(10)
 
       const contactSection = store.sections.find((s) => s.sectionType === 'name_contact')
       expect(contactSection).toBeDefined()
       expect(contactSection!.column).toBe('left')
+      expect(contactSection!.enabled).toBe(true)
       expect(contactSection!.entries).toHaveLength(1)
       expect(contactSection!.entries[0]!.fields).toHaveLength(2)
       expect(contactSection!.entries[0]!.fields[0]!.value).toBe('John')
 
       const experienceSection = store.sections.find((s) => s.sectionType === 'experience')
       expect(experienceSection).toBeDefined()
+      expect(experienceSection!.enabled).toBe(true)
       expect(experienceSection!.entries).toHaveLength(2)
+
+      // New sections not in the payload are disabled
+      const summarySection = store.sections.find((s) => s.sectionType === 'summary')
+      expect(summarySection).toBeDefined()
+      expect(summarySection!.enabled).toBe(false)
+      expect(summarySection!.entries).toHaveLength(0)
 
       // Round-trip
       const output = store.toPayload()
       expect(output.layout).toBe('column2-1')
-      expect(output.sections).toHaveLength(2)
-      expect(output.sections[0]!.sectionId).toBe('name_contact')
-      expect(output.sections[0]!.entries[0]!.fields[0]!.value).toBe('John')
-      expect(output.sections[1]!.sectionId).toBe('experience')
+      expect(output.sections).toHaveLength(10)
     })
 
     it('round-trips enabled flag correctly', () => {
@@ -292,10 +299,10 @@ describe('useResumeStore', () => {
       expect(store.isSectionEnabled('hobbies')).toBe(false)
     })
 
-    it('defaults enabled to true for backward-compat payloads without the field', () => {
+    it('fills in missing sections as disabled and keeps saved ones', () => {
       const store = useResumeStore()
 
-      // Payload without `enabled` field (old format)
+      // Payload without `enabled` field and with only 1 of 10 sections
       const oldPayload = {
         layout: 'standard' as const,
         sections: [
@@ -309,9 +316,23 @@ describe('useResumeStore', () => {
       }
 
       store.loadFromPayload(oldPayload)
-      expect(store.sections).toHaveLength(1)
-      expect(store.sections[0]!.enabled).toBe(true)
+      // All 10 sections are present
+      expect(store.sections).toHaveLength(10)
+
+      // Saved section defaults enabled to true for backward compat
+      const summary = store.sections.find((s) => s.sectionType === 'summary')
+      expect(summary!.enabled).toBe(true)
       expect(store.isSectionEnabled('summary')).toBe(true)
+
+      // Missing sections are disabled by default
+      const experience = store.sections.find((s) => s.sectionType === 'experience')
+      expect(experience!.enabled).toBe(false)
+      expect(experience!.entries).toHaveLength(0)
+
+      // Disabled sections can be toggled on
+      store.toggleSection('experience')
+      expect(experience!.enabled).toBe(true)
+      expect(store.isSectionEnabled('experience')).toBe(true)
     })
 
     it('round-trips name field in payload', () => {

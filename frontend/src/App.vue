@@ -14,17 +14,17 @@ import {
 } from '@/components/ui/dropdown-menu'
 
 const router = useRouter()
-const auth = useAuth()
+const { isAuthenticated, authReady, user, checkSession, logout } = useAuth()
 
 onMounted(() => {
-  auth.checkSession()
+  checkSession()
 })
 
 /**
  *
  */
 async function handleLogout() {
-  await auth.logout()
+  await logout()
   router.push('/')
 }
 </script>
@@ -46,13 +46,13 @@ async function handleLogout() {
         <nav class="flex items-center gap-4">
           <ThemeToggle />
 
-          <template v-if="!auth.authReady">
+          <template v-if="!authReady">
             <!-- Skeleton: reserve space to prevent layout shift while session is checked -->
             <span class="h-8 w-16 rounded bg-muted animate-pulse" />
             <span class="h-8 w-20 rounded bg-muted animate-pulse" />
           </template>
 
-          <template v-else-if="auth.isAuthenticated">
+          <template v-else-if="isAuthenticated">
             <RouterLink
               to="/dashboard"
               class="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
@@ -63,7 +63,7 @@ async function handleLogout() {
             <DropdownMenu>
               <DropdownMenuTrigger as-child>
                 <Button variant="ghost" size="sm" class="gap-2">
-                  <span class="text-sm max-w-[160px] truncate">{{ auth.user?.email }}</span>
+                  <span class="text-sm max-w-[160px] truncate">{{ user?.email }}</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" class="w-56">
