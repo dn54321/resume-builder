@@ -117,7 +117,7 @@ agents:
 strategy:
 
   # Default strategy when no override matches
-  default: pr
+  default: direct
 
   # Branch targets for each strategy
   branches:
@@ -138,8 +138,8 @@ strategy:
 
     # Feature branches PR into develop (not main) for integration testing
     - pattern: "feature/*"
-      strategy: pr
-      pr_target: develop
+      strategy: direct
+      #pr_target: develop
 
     # Experimental branches require thorough review before merging
     - pattern: "experiment/*"

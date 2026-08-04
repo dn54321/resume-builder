@@ -1,12 +1,21 @@
 ---
 name: plan-ticket
 description: Generate a structured ticket plan from a milestone spec, write tickets to the milestone's tickets/ folder, iterate with the user, then create them in Linear. Triggers on "plan ticket", "create tickets", "ticket plan", "generate tickets".
-argument-hint: "[milestone-name]"
+argument-hint: "[milestone-name] [--force]"
 ---
 
 # Plan Ticket
 
 Takes a milestone name (e.g., `2026-07-31-152550-resume-builder`), reads its `SPEC.md`, generates a structured ticket breakdown, writes it to a `tickets/` folder in the milestone directory, iterates with the user, and then creates the tickets in Linear.
+
+## `--force` Flag
+
+When `--force` is passed, the skill **skips Phase 4 entirely** — no iteration, no confirmation prompt. After writing the plan, it proceeds directly to Phase 5 and creates all tickets in Linear without asking. The only interaction required is resolving the Linear team (inferred from context if possible, otherwise queried once).
+
+Usage:
+```
+plan ticket for dashboard-builder-ux-overhaul --force
+```
 
 ## Phase 1 — Read the Spec
 
@@ -202,9 +211,11 @@ Write the plan to `milestones/<milestone-name>/tickets/PLAN.md`:
 ...
 ```
 
-## Phase 4 — Iterate with User
+## Phase 4 — Iterate with User (skip if `--force`)
 
-After writing the plan, display a summary:
+**If `--force` is set:** Skip this phase entirely. Go directly to Phase 5.
+
+**Otherwise,** after writing the plan, display a summary:
 
 > Here's the ticket plan for **[Milestone Title]**:
 >
@@ -240,7 +251,9 @@ If no key is found, tell the user:
 
 ### Linear Team and State
 
-Before creating, ask the user for:
+**If `--force` is set:** Resolve the team automatically. Use the `linear_list_teams` tool to find the team. If there's only one team, use it. If there are multiple, pick the one most relevant to the project (e.g., matching the repo name). If ambiguous, ask the user once — but do not enter full iteration mode.
+
+**Otherwise,** before creating, ask the user for:
 - **Team key** or ID (e.g., the short key visible in Linear URLs like `RES`)
 - If not provided, infer from the project context or ask.
 
