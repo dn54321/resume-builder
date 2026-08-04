@@ -86,7 +86,7 @@ describe('AuthController', () => {
         'token-123',
         expect.objectContaining({
           httpOnly: true,
-          secure: true,
+          secure: false,
           sameSite: 'lax',
           path: '/',
         }),

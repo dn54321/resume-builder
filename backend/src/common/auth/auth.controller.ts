@@ -134,9 +134,10 @@ export class AuthController {
   }
 
   private setSessionCookie(res: Response, token: string): void {
+    const isProduction = process.env['NODE_ENV'] === 'production';
     res.cookie(COOKIE_NAME, token, {
       httpOnly: true,
-      secure: true,
+      secure: isProduction,
       sameSite: 'lax',
       path: '/',
       maxAge: COOKIE_MAX_AGE,
