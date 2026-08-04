@@ -469,7 +469,8 @@ export class AgentPool {
       .replace(/\{\{AGENT_PORT\}\}/g, String(port))
       .replace(/\{\{WORKTREE_PATH\}\}/g, worktreePath)
       .replace(/\{\{STRATEGY\}\}/g, strategy.default)
-      .replace(/\{\{PR_TARGET\}\}/g, strategy.branches.pr_target);
+      .replace(/\{\{PR_TARGET\}\}/g, strategy.branches.pr_target)
+      .replace(/\{\{ORCHESTRATOR_NAME\}\}/g, `orchestrator-${process.pid}`);
 
     // Write to a temp file that pi can read
     const tmpPromptPath = path.join(getStateDir(), 'prompts', `${name}-prompt.md`);
