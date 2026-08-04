@@ -937,7 +937,7 @@ async function onWorkerComplete(
     if (isDirect) {
       // ── Direct mode: merge to master ──
       // Reset resume.pdf before merging — it's regenerated during testing
-      execGit(['checkout', '--', 'frontend/resume.pdf'], worktreePath);
+      cp.spawnSync('git', ['checkout', '--', 'frontend/resume.pdf'], { cwd: worktreePath, encoding: 'utf-8', timeout: 10000 });
       const mergeMsg = `${node.ticket.title}\n\nCloses ${identifier}`;
       const mergeResult = mergeToMaster(worktreePath, node.state.branch, mergeMsg);
       if (mergeResult.exitCode !== 0) {
