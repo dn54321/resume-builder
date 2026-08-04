@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# pre-push — Run lint, type-check, and tests before pushing.
-# Fails fast: stops at the first failure.
+# pre-push — Run lint, type-check, and tests for changed directories.
+# Only checks what was modified. Fails fast within each directory group.
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -10,9 +10,54 @@ cd "$REPO_ROOT"
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 FAILED=0
+
+# ─── Detect changed directories ─────────────────────────────────────
+
+# Get the range of commits being pushed.
+# $1 = remote name, $2 = remote URL. stdin = <local-ref> <local-sha> <remote-ref> <remote-sha>
+# We check what files changed relative to the remote.
+CHANGED=""
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+    # New branch — compare against the merge-base with the target branch
+    # (usually main or master). Fall back to HEAD~20 if we can't determine.
+    BASE=$(git merge-base "$local_ref" origin/main 2>/dev/null || git merge-base "$local_ref" origin/master 2>/dev/null || echo "HEAD~20")
+    CHANGED="$CHANGED$(git diff --name-only "$BASE" "$local_sha" 2>/dev/null || true)"$'\n'
+  else
+    CHANGED="$CHANGED$(git diff --name-only "$remote_sha" "$local_sha" 2>/dev/null || true)"$'\n'
+  fi
+done
+
+# If no stdin (e.g., manual run), check against HEAD~1
+if [ -z "$CHANGED" ]; then
+  CHANGED="$(git diff --name-only HEAD~1 2>/dev/null || git diff --name-only --cached 2>/dev/null || true)"
+fi
+
+RUN_BACKEND=false
+RUN_FRONTEND=false
+RUN_ATLAS=false
+
+if echo "$CHANGED" | grep -q '^backend/'; then
+  RUN_BACKEND=true
+fi
+if echo "$CHANGED" | grep -q '^frontend/'; then
+  RUN_FRONTEND=true
+fi
+if echo "$CHANGED" | grep -q '^atlas/'; then
+  RUN_ATLAS=true
+fi
+
+# If nothing matched (e.g., root-level config changes), run everything
+if ! $RUN_BACKEND && ! $RUN_FRONTEND && ! $RUN_ATLAS; then
+  RUN_BACKEND=true
+  RUN_FRONTEND=true
+  RUN_ATLAS=true
+fi
+
+# ─── Helpers ─────────────────────────────────────────────────────────
 
 run_step() {
   local label="$1"
@@ -22,7 +67,6 @@ run_step() {
     printf "${GREEN}OK${NC}\n"
   else
     printf "${RED}FAILED${NC}\n"
-    # Re-run with visible output so the dev can see the errors
     echo ""
     echo "── $label (full output) ──"
     "$@" 2>&1 || true
@@ -31,23 +75,48 @@ run_step() {
   fi
 }
 
+run_group() {
+  local dir="$1"
+  local label="$2"
+  shift 2
+
+  if ! eval "\$RUN_${dir}"; then
+    echo ""
+    echo "${CYAN}═══ ${label} ═══${NC} (skipped — no changes)"
+    return
+  fi
+
+  echo ""
+  echo "${CYAN}═══ ${label} ═══${NC}"
+
+  for step in "$@"; do
+    # step is "label:command" — e.g. "lint:npm --prefix $dir run lint"
+    local step_label="${step%%:*}"
+    local step_cmd="${step#*:}"
+    run_step "$step_label" bash -c "$step_cmd"
+    [ "$FAILED" -eq 1 ] && return
+  done
+}
+
 # ─── Backend ──────────────────────────────────────────────────────────
 
-echo ""
-echo "${CYAN}═══ Backend ═══${NC}"
-
-run_step "lint"            npm --prefix backend run lint
-run_step "type-check"      npm --prefix backend run type-check
-run_step "test:cov"        npm --prefix backend run test:cov
+run_group "BACKEND" "Backend" \
+  "lint:npm --prefix backend run lint" \
+  "type-check:npm --prefix backend run type-check" \
+  "test:cov:npm --prefix backend run test:cov"
 
 # ─── Frontend ─────────────────────────────────────────────────────────
 
-echo ""
-echo "${CYAN}═══ Frontend ═══${NC}"
+run_group "FRONTEND" "Frontend" \
+  "lint:npm --prefix frontend run lint" \
+  "type-check:npm --prefix frontend run type-check" \
+  "test:cov:npm --prefix frontend run test:cov"
 
-run_step "lint"            npm --prefix frontend run lint
-run_step "type-check"      npm --prefix frontend run type-check
-run_step "test:cov"        npm --prefix frontend run test:cov
+# ─── Atlas ────────────────────────────────────────────────────────────
+
+run_group "ATLAS" "Atlas" \
+  "lint:npm --prefix atlas run lint" \
+  "test:cov:npm --prefix atlas run test:cov"
 
 # ─── Result ───────────────────────────────────────────────────────────
 
