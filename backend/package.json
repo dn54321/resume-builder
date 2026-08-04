@@ -100,7 +100,8 @@
       "matching-engine\\.interface\\.ts$",
       "app\\.module\\.ts$",
       "config\\.module\\.ts$",
-      "hybrid\\.engine\\.ts$"
+      "hybrid\\.engine\\.ts$",
+      "\\.integration\\.spec\\.ts$"
     ],
     "coverageDirectory": "../coverage",
     "coverageThreshold": {
