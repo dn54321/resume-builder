@@ -393,7 +393,7 @@ class LinearClient {
 
   async listWorkflowStates(teamId: string): Promise<{ id: string; name: string; type: string }[]> {
     const query = `
-      query($teamId: String!) {
+      query($teamId: ID!) {
         workflowStates(filter: { team: { id: { eq: $teamId } } }) {
           nodes {
             id
