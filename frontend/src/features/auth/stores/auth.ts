@@ -9,27 +9,9 @@ interface User {
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
-  const token = ref<string | null>(localStorage.getItem('auth_token'))
   const authReady = ref(false)
 
-  const isAuthenticated = computed(() => !!token.value && !!user.value)
-
-  /**
-   *
-   * @param t
-   */
-  function persistToken(t: string) {
-    token.value = t
-    localStorage.setItem('auth_token', t)
-  }
-
-  /**
-   *
-   */
-  function clearToken() {
-    token.value = null
-    localStorage.removeItem('auth_token')
-  }
+  const isAuthenticated = computed(() => !!user.value)
 
   /**
    *
@@ -55,21 +37,16 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
-   *
+   * Check the current session by calling /api/v1/auth/me.
+   * The session token is sent automatically via HttpOnly cookie (credentials: 'include').
    */
   async function checkSession() {
-    if (!token.value) {
-      authReady.value = true
-      return
-    }
-
     const api = useApi()
     try {
       const response = await api.get<{ user: User }>('/api/v1/auth/me')
       user.value = response.user
     } catch (err) {
       if (err instanceof ApiRequestError && err.status === 401) {
-        clearToken()
         user.value = null
       }
     } finally {
@@ -84,12 +61,11 @@ export const useAuthStore = defineStore('auth', () => {
    */
   async function login(email: string, password: string) {
     const api = useApi()
-    const response = await api.post<{ user: User; sessionToken: string }>(
+    const response = await api.post<{ user: User }>(
       '/api/v1/auth/login',
       { email, password },
     )
 
-    persistToken(response.sessionToken)
     user.value = response.user
 
     // Anonymous-to-authenticated: import resume data
@@ -103,12 +79,11 @@ export const useAuthStore = defineStore('auth', () => {
    */
   async function signup(email: string, password: string) {
     const api = useApi()
-    const response = await api.post<{ user: User; sessionToken: string }>(
+    const response = await api.post<{ user: User }>(
       '/api/v1/auth/signup',
       { email, password },
     )
 
-    persistToken(response.sessionToken)
     user.value = response.user
 
     // Anonymous-to-authenticated: import resume data
@@ -116,34 +91,23 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
-   *
+   * Log out the current user. Calls the API to clear the cookie,
+   * then clears local user state.
    */
   async function logout() {
-    if (token.value) {
-      const api = useApi()
-      try {
-        await api.post('/api/v1/auth/logout')
-      } catch {
-        // Logout should always clear locally even if API fails
-      }
+    const api = useApi()
+    try {
+      await api.post('/api/v1/auth/logout')
+    } catch {
+      // Logout should always clear locally even if API fails
     }
-    clearToken()
     user.value = null
-  }
-
-  /**
-   *
-   */
-  function getToken(): string | null {
-    return token.value
   }
 
   return {
     user,
-    token,
     isAuthenticated,
     authReady,
-    getToken,
     signup,
     login,
     logout,

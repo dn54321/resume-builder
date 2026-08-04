@@ -168,7 +168,6 @@ describe('Router configuration', () => {
     it('allows authenticated users to access /dashboard', async () => {
       const router = await createGuardedRouter();
       const auth = useAuthStore();
-      auth.token = 'valid-token';
       auth.user = { id: '1', email: 'test@test.com' };
 
       await router.push('/dashboard');
@@ -180,7 +179,6 @@ describe('Router configuration', () => {
     it('allows authenticated users to access /builder/:id', async () => {
       const router = await createGuardedRouter();
       const auth = useAuthStore();
-      auth.token = 'valid-token';
       auth.user = { id: '1', email: 'test@test.com' };
 
       await router.push('/builder/my-resume');

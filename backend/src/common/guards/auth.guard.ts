@@ -5,18 +5,18 @@ import {
   ExecutionContext,
   UnauthorizedException,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { AuthService } from '../auth/auth.service';
+
+const COOKIE_NAME = 'session_token';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(@Inject(AuthService) private readonly authService: AuthService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context
-      .switchToHttp()
-      .getRequest<{ headers: Record<string, string | undefined> }>();
-    const authorization = request.headers['authorization'];
-    const sessionToken = this.extractSessionToken(authorization);
+    const request = context.switchToHttp().getRequest<Request>();
+    const sessionToken = this.extractSessionToken(request);
     if (!sessionToken) {
       throw new UnauthorizedException('Authentication required');
     }
@@ -26,17 +26,16 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException('Invalid or expired session');
     }
 
-    (request as Record<string, unknown>)['user'] = result.user;
+    (request as unknown as Record<string, unknown>)['user'] = result.user;
     return true;
   }
 
-  private extractSessionToken(
-    authorization: string | undefined,
-  ): string | null {
-    if (!authorization) {
-      return null;
+  private extractSessionToken(req: Request): string | null {
+    const token: string | undefined = req.cookies?.[COOKIE_NAME] as
+      string | undefined;
+    if (typeof token === 'string' && token.length > 0) {
+      return token;
     }
-    const match = /^Bearer\s+(.+)$/i.exec(authorization);
-    return match ? match[1] : null;
+    return null;
   }
 }

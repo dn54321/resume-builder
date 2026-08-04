@@ -117,7 +117,6 @@ describe('SignupView', () => {
 
   it('redirects to /dashboard when already authenticated', async () => {
     const store = useAuthStore()
-    store.token = 'existing-token'
     store.user = { id: '1', email: 'test@test.com' }
 
     mountSignup()

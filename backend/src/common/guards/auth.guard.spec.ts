@@ -3,6 +3,8 @@ import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from './auth.guard';
 import { AuthService } from '../auth/auth.service';
 
+const COOKIE_NAME = 'session_token';
+
 describe('AuthGuard', () => {
   let guard: AuthGuard;
   let mockAuthService: { validateSession: jest.Mock };
@@ -23,15 +25,15 @@ describe('AuthGuard', () => {
   });
 
   /**
-   *
-   * @param authorization
+   * Create a mock ExecutionContext with a cookies object.
+   * @param cookieValue
    */
-  function createMockContext(authorization?: string): ExecutionContext {
+  function createMockContext(cookieValue?: string): ExecutionContext {
     const request = {
-      headers: {} as Record<string, string | undefined>,
+      cookies: {} as Record<string, string | undefined>,
     };
-    if (authorization) {
-      request.headers['authorization'] = authorization;
+    if (cookieValue !== undefined) {
+      request.cookies[COOKIE_NAME] = cookieValue;
     }
     return {
       switchToHttp: () => ({
@@ -44,24 +46,19 @@ describe('AuthGuard', () => {
     expect(guard).toBeDefined();
   });
 
-  it('should throw UnauthorizedException when no authorization header', async () => {
+  it('should throw UnauthorizedException when no session cookie', async () => {
     const ctx = createMockContext();
     await expect(guard.canActivate(ctx)).rejects.toThrow(UnauthorizedException);
   });
 
-  it('should throw UnauthorizedException for empty authorization header', async () => {
+  it('should throw UnauthorizedException for empty session cookie', async () => {
     const ctx = createMockContext('');
-    await expect(guard.canActivate(ctx)).rejects.toThrow(UnauthorizedException);
-  });
-
-  it('should throw UnauthorizedException for malformed Bearer token', async () => {
-    const ctx = createMockContext('InvalidFormat');
     await expect(guard.canActivate(ctx)).rejects.toThrow(UnauthorizedException);
   });
 
   it('should throw UnauthorizedException when session is invalid', async () => {
     mockAuthService.validateSession.mockResolvedValue(null);
-    const ctx = createMockContext('Bearer valid-looking-token');
+    const ctx = createMockContext('valid-looking-token');
 
     await expect(guard.canActivate(ctx)).rejects.toThrow(UnauthorizedException);
     expect(mockAuthService.validateSession).toHaveBeenCalledWith(
@@ -74,7 +71,7 @@ describe('AuthGuard', () => {
     mockAuthService.validateSession.mockResolvedValue({ user });
 
     const request: Record<string, unknown> = {
-      headers: { authorization: 'Bearer valid-token' },
+      cookies: { [COOKIE_NAME]: 'valid-token' },
     };
     const ctx = {
       switchToHttp: () => ({

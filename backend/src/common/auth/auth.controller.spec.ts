@@ -5,6 +5,7 @@ jest.mock('../../generated/prisma/client', () => ({
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import type { Response } from 'express';
 
 describe('AuthController', () => {
   let authController: AuthController;
@@ -16,6 +17,28 @@ describe('AuthController', () => {
     changePassword: jest.Mock;
     deleteAccount: jest.Mock;
   };
+
+  /**
+   *
+   */
+  function mockResponse() {
+    return {
+      cookie: jest.fn(),
+      clearCookie: jest.fn(),
+    } as Partial<Response>;
+  }
+
+  /**
+   *
+   * @param cookieValue
+   */
+  function mockRequest(cookieValue?: string): {
+    cookies: Record<string, string | undefined>;
+  } {
+    return {
+      cookies: { session_token: cookieValue },
+    };
+  }
 
   beforeEach(async () => {
     mockAuthService = {
@@ -36,82 +59,123 @@ describe('AuthController', () => {
   });
 
   describe('signup', () => {
-    it('calls authService.signup and returns the result', async () => {
+    it('calls authService.signup, sets cookie, and returns user only', async () => {
       const expected = {
         user: { id: 'user-1', email: 'test@example.com' },
         sessionToken: 'token-123',
       };
       mockAuthService.signup.mockResolvedValue(expected);
+      const res = mockResponse() as Response;
 
-      const result = await authController.signup({
-        email: 'test@example.com',
-        password: 'password123',
+      const result = await authController.signup(
+        { email: 'test@example.com', password: 'password123' },
+        res,
+      );
+
+      expect(result).toEqual({
+        user: { id: 'user-1', email: 'test@example.com' },
       });
-
-      expect(result).toEqual(expected);
+      expect(result).not.toHaveProperty('sessionToken');
       expect(mockAuthService.signup).toHaveBeenCalledWith(
         'test@example.com',
         'password123',
+      );
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(res.cookie).toHaveBeenCalledWith(
+        'session_token',
+        'token-123',
+        expect.objectContaining({
+          httpOnly: true,
+          secure: true,
+          sameSite: 'lax',
+          path: '/',
+        }),
       );
     });
   });
 
   describe('login', () => {
-    it('calls authService.login and returns the result', async () => {
+    it('calls authService.login, sets cookie, and returns user only', async () => {
       const expected = {
         user: { id: 'user-1', email: 'test@example.com' },
         sessionToken: 'token-123',
       };
       mockAuthService.login.mockResolvedValue(expected);
+      const res = mockResponse() as Response;
 
-      const result = await authController.login({
-        email: 'test@example.com',
-        password: 'password123',
+      const result = await authController.login(
+        { email: 'test@example.com', password: 'password123' },
+        res,
+      );
+
+      expect(result).toEqual({
+        user: { id: 'user-1', email: 'test@example.com' },
       });
-
-      expect(result).toEqual(expected);
+      expect(result).not.toHaveProperty('sessionToken');
     });
   });
 
   describe('logout', () => {
-    it('calls authService.logout with Bearer token', async () => {
-      await authController.logout('Bearer token-abc');
+    it('calls authService.logout with cookie token and clears cookie', async () => {
+      const req = mockRequest('token-abc');
+      const res = mockResponse() as Response;
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+      await authController.logout(req as any, res);
 
       expect(mockAuthService.logout).toHaveBeenCalledWith('token-abc');
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(res.clearCookie).toHaveBeenCalledWith('session_token', {
+        path: '/',
+      });
     });
 
-    it('does not throw when no authorization header', async () => {
-      await expect(authController.logout('')).resolves.toBeUndefined();
+    it('does not call logout when no cookie present', async () => {
+      const req = mockRequest(undefined);
+      const res = mockResponse() as Response;
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+      await authController.logout(req as any, res);
+
+      expect(mockAuthService.logout).not.toHaveBeenCalled();
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(res.clearCookie).toHaveBeenCalledWith('session_token', {
+        path: '/',
+      });
     });
   });
 
   describe('me', () => {
-    it('returns user when session is valid', async () => {
+    it('returns user when session cookie is valid', async () => {
       mockAuthService.validateSession.mockResolvedValue({
         user: { id: 'user-1', email: 'test@example.com' },
       });
+      const req = mockRequest('valid-token');
 
-      const result = await authController.me('Bearer valid-token');
+      const result = await authController.me(req as any);
 
       expect(result).toEqual({
         user: { id: 'user-1', email: 'test@example.com' },
       });
     });
 
-    it('returns null user when no token provided', async () => {
-      const result = await authController.me('');
+    it('returns null user when no cookie present', async () => {
+      const req = mockRequest(undefined);
+
+      const result = await authController.me(req as any);
 
       expect(result).toEqual({ user: null });
     });
   });
 
   describe('changePassword', () => {
-    it('changes password when session is valid', async () => {
+    it('changes password when session cookie is valid', async () => {
       mockAuthService.validateSession.mockResolvedValue({
         user: { id: 'user-1', email: 'test@example.com' },
       });
+      const req = mockRequest('valid-token');
 
-      await authController.changePassword('Bearer valid-token', {
+      await authController.changePassword(req as any, {
         currentPassword: 'old-password',
         newPassword: 'new-password-123',
       });
@@ -123,9 +187,11 @@ describe('AuthController', () => {
       );
     });
 
-    it('throws UnauthorizedException when no token provided', async () => {
+    it('throws UnauthorizedException when no cookie present', async () => {
+      const req = mockRequest(undefined);
+
       await expect(
-        authController.changePassword('', {
+        authController.changePassword(req as any, {
           currentPassword: 'old',
           newPassword: 'new-password-123',
         }),
@@ -134,9 +200,10 @@ describe('AuthController', () => {
 
     it('throws UnauthorizedException when session is invalid', async () => {
       mockAuthService.validateSession.mockResolvedValue(null);
+      const req = mockRequest('bad-token');
 
       await expect(
-        authController.changePassword('Bearer bad-token', {
+        authController.changePassword(req as any, {
           currentPassword: 'old',
           newPassword: 'new-password-123',
         }),
@@ -145,12 +212,13 @@ describe('AuthController', () => {
   });
 
   describe('deleteAccount', () => {
-    it('deletes account when session is valid and password is correct', async () => {
+    it('deletes account when session cookie is valid and password is correct', async () => {
       mockAuthService.validateSession.mockResolvedValue({
         user: { id: 'user-1', email: 'test@example.com' },
       });
+      const req = mockRequest('valid-token');
 
-      await authController.deleteAccount('Bearer valid-token', {
+      await authController.deleteAccount(req as any, {
         password: 'current-password',
       });
 
@@ -160,17 +228,20 @@ describe('AuthController', () => {
       );
     });
 
-    it('throws UnauthorizedException when no token provided', async () => {
+    it('throws UnauthorizedException when no cookie present', async () => {
+      const req = mockRequest(undefined);
+
       await expect(
-        authController.deleteAccount('', { password: 'pw' }),
+        authController.deleteAccount(req as any, { password: 'pw' }),
       ).rejects.toThrow('Authentication required');
     });
 
     it('throws UnauthorizedException when session is invalid', async () => {
       mockAuthService.validateSession.mockResolvedValue(null);
+      const req = mockRequest('bad-token');
 
       await expect(
-        authController.deleteAccount('Bearer bad-token', {
+        authController.deleteAccount(req as any, {
           password: 'pw',
         }),
       ).rejects.toThrow('Invalid or expired session');
