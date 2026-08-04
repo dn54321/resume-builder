@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
 # agent.sh — Launch the ticket agent system.
 #
-# Layout (MAX_AGENTS=3):
-#   ┌──────────┬──────────────┐
-#   │ Dashboard│  agent-1     │
-#   │          ├──────────────┤
-#   │          │  agent-2     │
-#   ├──────────┤              │
-#   │ Boss     │  agent-3     │
-#   └──────────┴──────────────┘
+# Layout:
+#   ┌──────────┬──────────────────┐
+#   │          │                  │
+#   │ Dashboard│  Workers (0/3)   │
+#   │          │                  │
+#   │          │                  │
+#   ├──────────┤                  │
+#   │ Boss     │                  │
+#   └──────────┴──────────────────┘
 #
-# Agent panes run FIFO-driven display scripts.
-# The server uses tmux send-keys to attach worker output to panes and
-# reset them when workers finish.
+# The workers placeholder shows a live count of active workers.
+# When the server spawns workers, it splits this placeholder pane
+# to create worker panes for log output. When workers finish, their
+# panes are killed (space returns to the placeholder).
 
 set -uo pipefail
 
@@ -263,26 +265,6 @@ done
 DASHBOARDEOF
 chmod +x "$PROMPT_DIR/dashboard-watch.sh"
 
-# ─── Workers header script ───────────────────────────────────────────
-
-log "Writing workers-header.sh..."
-cat > "$PROMPT_DIR/workers-header.sh" << 'HEADEREOF'
-#!/usr/bin/env bash
-DASHBOARD_FILE="$1"
-while true; do
-  clear
-  if [ -f "$DASHBOARD_FILE" ]; then
-    sed -n '2p' "$DASHBOARD_FILE" 2>/dev/null
-    echo ''
-    grep -E '(◉|agent-)' "$DASHBOARD_FILE" 2>/dev/null | head -10
-  else
-    echo '  Waiting for dashboard...'
-  fi
-  sleep 2
-done
-HEADEREOF
-chmod +x "$PROMPT_DIR/workers-header.sh"
-
 # ─── Create tmux layout ──────────────────────────────────────────────
 
 log "Creating tmux layout..."
@@ -309,72 +291,37 @@ fi
 tmux rename-window -t "$SESSION_NAME:0" 'agents'
 log "Dashboard pane created (session: $SESSION_NAME)"
 
-HAS_SELECTIONS="${SELECTED_IDS:-}"
+# ─── Workers placeholder pane ────────────────────────────────────
 
-if [ -n "$HAS_SELECTIONS" ]; then
-  # ── Workers + Boss layout ──
-
-  PANE_DISPLAY="$PANES_DIR/pane-display.sh"
-  if [ ! -x "$PANE_DISPLAY" ]; then
-    die "Pane display script not found or not executable: $PANE_DISPLAY"
-  fi
-
-  # Pane %1: agent-1 (RHS, split right from dashboard)
-  log "Creating agent-1 pane..."
-  if ! tmux split-window -h -t "$SESSION_NAME:0" -c "$REPO_ROOT" \
-    "$PANE_DISPLAY agent-1"; then
-    die "tmux split-window for agent-1 failed"
-  fi
-  AGENT1_PANE=$(tmux display-message -p -t "$SESSION_NAME:0.1" '#{pane_id}' 2>/dev/null) || true
-  if [ -z "$AGENT1_PANE" ]; then
-    log "  WARNING: Could not get pane ID via display-message, using fallback..."
-    AGENT1_PANE=$(tmux list-panes -t "$SESSION_NAME:0" -F '#{pane_id}' | tail -1)
-  fi
-  echo "$AGENT1_PANE" > "$PANES_DIR/agent-1.pane"
-  log "  agent-1 → pane $AGENT1_PANE"
-
-  # Workers header (split ABOVE agent-1, 5 lines tall)
-  log "Creating workers header..."
-  if ! tmux split-window -v -b -l 5 -t "$AGENT1_PANE" -c "$REPO_ROOT" \
-    "bash $PROMPT_DIR/workers-header.sh $DASHBOARD_FILE"; then
-    log "  WARNING: workers-header split failed (tmux -b requires v3.2+). Skipping header."
-  else
-    log "  workers-header → created above agent-1"
-  fi
-
-  # Additional agent panes: split vertically from agent-1
-  PREV_PANE="$AGENT1_PANE"
-  for i in $(seq 2 "$MAX_AGENTS"); do
-    log "Creating agent-$i pane..."
-    if ! tmux split-window -v -t "$PREV_PANE" -c "$REPO_ROOT" \
-      "$PANE_DISPLAY agent-$i"; then
-      die "tmux split-window for agent-$i failed"
-    fi
-    PANE_ID=$(tmux display-message -p -t "$SESSION_NAME:0" '#{pane_id}' 2>/dev/null) || true
-    if [ -z "$PANE_ID" ]; then
-      PANE_ID=$(tmux list-panes -t "$SESSION_NAME:0" -F '#{pane_id}' | tail -1)
-    fi
-    echo "$PANE_ID" > "$PANES_DIR/agent-$i.pane"
-    log "  agent-$i → pane $PANE_ID"
-    PREV_PANE="$PANE_ID"
-  done
-
-  # Boss pane (bottom-left, split from dashboard)
-  log "Creating boss pane..."
-  if ! tmux split-window -v -t "$SESSION_NAME:0.0" -c "$REPO_ROOT" -l 10 \
-    "$PI_BIN --append-system-prompt @$PROMPT_DIR/boss-prompt.txt Start"; then
-    die "tmux split-window for boss failed"
-  fi
-  log "  Boss pane created"
-else
-  # ── No selections: just Dashboard + Boss ──
-  log "No tickets selected — starting with boss only."
-
-  if ! tmux split-window -v -t "$SESSION_NAME:0" -c "$REPO_ROOT" -l 15 \
-    "$PI_BIN --append-system-prompt @$PROMPT_DIR/boss-prompt.txt Start"; then
-    die "tmux split-window for boss failed"
-  fi
+WORKERS_PLACEHOLDER="$PANES_DIR/workers-placeholder.sh"
+if [ ! -x "$WORKERS_PLACEHOLDER" ]; then
+  die "Workers placeholder script not found or not executable: $WORKERS_PLACEHOLDER"
 fi
+
+# Pane %1: Workers placeholder (RHS, split right from dashboard)
+# This single pane shows "Workers: 0/N active". When the server spawns
+# workers, it splits this pane dynamically. When workers finish, their
+# panes are killed and the placeholder expands back.
+log "Creating workers placeholder pane..."
+if ! tmux split-window -h -t "$SESSION_NAME:0" -c "$REPO_ROOT" \
+  "$WORKERS_PLACEHOLDER $MAX_AGENTS"; then
+  die "tmux split-window for workers placeholder failed"
+fi
+WORKERS_PANE=$(tmux display-message -p -t "$SESSION_NAME:0.1" '#{pane_id}' 2>/dev/null) || true
+if [ -z "$WORKERS_PANE" ]; then
+  log "  WARNING: Could not get pane ID via display-message, using fallback..."
+  WORKERS_PANE=$(tmux list-panes -t "$SESSION_NAME:0" -F '#{pane_id}' | tail -1)
+fi
+echo "$WORKERS_PANE" > "$PANES_DIR/workers.pane"
+log "  workers placeholder → pane $WORKERS_PANE"
+
+# Boss pane (bottom-left, split from dashboard)
+log "Creating boss pane..."
+if ! tmux split-window -v -t "$SESSION_NAME:0.0" -c "$REPO_ROOT" -l 10 \
+  "$PI_BIN --append-system-prompt @$PROMPT_DIR/boss-prompt.txt Start"; then
+  die "tmux split-window for boss failed"
+fi
+log "  Boss pane created"
 
 log "All panes created. Listing layout:"
 tmux list-panes -t "$SESSION_NAME:0" -F "  #{pane_index}: #{pane_current_command} (id: #{pane_id})" 2>&1 | while read -r line; do log "$line"; done
