@@ -351,11 +351,7 @@ describe('ExperienceEditor', () => {
       const wrapper = mount(ExperienceEditor)
       await expandAllEntries(wrapper)
 
-      // Find the "Add bullet point" button (it's the one with text "+ Add bullet point")
-      const addBulletBtn = wrapper.find('button')
-      // Wait... there are multiple buttons. "Add Job" button is outside EntryList.
-      // Inside EntryList (now expanded), there's a BulletList with "+ Add bullet point" button.
-      // We need to find it more carefully.
+      // Find the "Add bullet point" button inside the expanded EntryList
       const buttons = wrapper.findAll('button')
       // The "Add bullet point" button should have text containing "Add bullet point"
       const addBulletButton = buttons.find((b) => b.text().includes('Add bullet point'))
