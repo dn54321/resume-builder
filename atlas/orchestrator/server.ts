@@ -216,8 +216,8 @@ async function launchReady(): Promise<void> {
       if (pool.getByType('worker').length < config.agents.worker.max_instances) {
         const newAgent = await pool.spawn('worker');
         if (newAgent) {
-          // Give it a moment to register
-          await new Promise((r) => setTimeout(r, 2000));
+          // Workers take ~10s to fully start (pi startup + AI init + intercom)
+          await new Promise((r) => setTimeout(r, 10000));
           await assignToIdleWorker(node);
         }
       }
@@ -228,10 +228,12 @@ async function launchReady(): Promise<void> {
 }
 
 async function assignToIdleWorker(node: GraphNode): Promise<void> {
+  // Also consider agents that are still spawning (not yet registered)
   const idleWorkers = pool.getIdle('worker');
-  if (idleWorkers.length === 0) return;
+  const spawningWorkers = pool.getByType('worker').filter(a => a.status === 'spawning' && a.currentTask === null);
+  const agent = idleWorkers[0] || spawningWorkers[0];
+  if (!agent) return;
 
-  const agent = idleWorkers[0]!;
   await pool.assignTask(agent, node);
   log(`Assigned ${node.ticket.identifier} to ${agent.name}`);
   writeDashboard();
