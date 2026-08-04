@@ -51,10 +51,24 @@ log "MAX_WORKERS=$MAX_WORKERS"
 # ─── Find binaries ───────────────────────────────────────────────
 
 PI_BIN=""
-for p in "$HOME/.local/share/pnpm/bin/pi" "$HOME/.local/bin/pi" /usr/local/bin/pi pi; do
-  if command -v "$p" &>/dev/null || [ -x "$p" ]; then PI_BIN="$p"; break; fi
+# Try nvm-managed versions first (pnpm shims fail with ENOENT from tmux).
+# Verify each candidate actually spawns successfully before accepting it.
+for p in "$HOME/.local/share/nvm"/*/bin/pi "$HOME/.local/bin/pi" /usr/local/bin/pi; do
+  if [ -x "$p" ]; then
+    if "$p" --version >/dev/null 2>&1; then
+      PI_BIN="$p"
+      break
+    fi
+  fi
 done
-[ -z "$PI_BIN" ] && die "pi binary not found"
+# Fallback: bare 'pi' on PATH
+if [ -z "$PI_BIN" ] && command -v pi &>/dev/null; then
+  pi_path="$(command -v pi)"
+  if "$pi_path" --version >/dev/null 2>&1; then
+    PI_BIN="$pi_path"
+  fi
+fi
+[ -z "$PI_BIN" ] && die "pi binary not found or not working (--version failed)"
 
 TSX_BIN=""
 for p in "$SCRIPT_DIR/node_modules/.bin/tsx" \
