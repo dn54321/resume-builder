@@ -82,7 +82,7 @@ const SPAWN_LIFETIME_COUNT = new Map<string, number>(); // agentType → total s
 const MAX_CONSECUTIVE_FAILURES = 5;
 const BASE_COOLDOWN_MS = 1000;  // 1 second base, doubles each failure
 const MAX_LIFETIME_SPAWNS: Record<string, number> = {
-  worker: 10,       // Hard cap: will not spawn more than 10 workers total
+  worker: 20,       // Hard cap: will not spawn more than 20 workers total per session
   reviewer: 5,
   pr_manager: 5,
 };
@@ -186,7 +186,7 @@ export class AgentPool {
     // pi 0.83+ removed -s; use --system-prompt for interactive sessions
     const proc = cp.spawn(PI_BIN, ['--system-prompt', `@${promptContent}`], {
       cwd: spawnCwd,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['pipe', 'pipe', 'pipe'],  // stdin must be open (pipe, not ignore) for pi to stay alive
       env: {
         ...process.env,
         ATLAS_AGENT_NAME: name,
