@@ -96,6 +96,8 @@ If you find a bug in Atlas itself (orchestrator, integrations, agents):
    git add <files> && git commit -m "fix(atlas): <description>" && git push origin master
    ```
 3. Do NOT create a PR for Atlas fixes — deploy immediately.
+4. Do not push with --no-verify
+5. Do not implement hacky solutions that are gitignored. Always implement highly maintainable solutions.
 
 If you find a bug in an agent's prompt or skills, update the files in
 `agents/<type>/` — the next spawned agent picks up the changes.
