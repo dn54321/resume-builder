@@ -32,7 +32,7 @@ echo "[pre.sh] Main repo root: $MAIN_REPO_ROOT"
 # pi auto-discovers skills from .agents/skills/ relative to the git root.
 # By symlinking the main repo's .agents/ into the worktree, the worker
 # can access all shared skills: create-pr, screenshot, sql-query,
-# e2e-test, imgbb-upload, pi-intercom, and boss-kill-warning.
+# e2e-test, imgbb-upload, and pi-intercom.
 
 AGENTS_LINK="${ATLAS_WORKTREE}/.agents"
 AGENTS_SRC="${MAIN_REPO_ROOT}/.agents"

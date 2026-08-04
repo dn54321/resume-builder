@@ -46,6 +46,33 @@ Never attempt these — they are rejected to protect the system:
 Also never use `kill <pid>` in bash to stop agents or the orchestrator.
 Use the intercom commands above instead.
 
+### Process Hierarchy
+
+```
+Orchestrator (background — scheduler, webhooks, ngrok, agent pool)
+ ├── worker-1 (interactive pi session — registered via intercom)
+ ├── worker-2 (interactive pi session)
+ └── worker-3 (interactive pi session)
+```
+
+Agents are persistent — they register, receive TASK messages, report
+STATUS, and go IDLE between tickets. They never exit on their own.
+
+### What Happens When You Kill
+
+| You kill | Result |
+|----------|--------|
+| **Orchestrator** | Everything dies. Agents, webhooks, ngrok, scheduler — all gone. State is saved but in-progress work may be lost. |
+| **An agent** | That agent's tmux pane dies. The orchestrator detects this and re-queues the task. Other agents keep running. |
+| **The banner pane** | Right column collapses. Dashboard and boss stretch to fill the window. The two-column layout cannot be restored without restarting `./agent.sh`. **NEVER kill the banner pane.** |
+
+### Critical Rules
+
+1. **Never kill the orchestrator** — use `STOP` to halt agents cleanly.
+2. **Never kill the banner pane** — it is the structural anchor of the tmux layout.
+3. **Never kill yourself** — `STOP boss` is blocked. Don't `kill` your own pi process.
+4. **Stop agents via intercom** — send `STOP worker-2`. Never use `kill <pid>` directly.
+
 ### Adjusting Intervals
 
 View current intervals: `GET_CONFIG`
