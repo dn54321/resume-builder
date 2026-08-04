@@ -204,6 +204,7 @@ export class AgentPool {
         ATLAS_WORKTREE: worktreePath,
         ATLAS_CONFIG: path.join(process.cwd(), 'atlas.config.yaml'),
         ATLAS_STATE_DIR: getStateDir(),
+        ATLAS_ORCHESTRATOR: orchName,
       },
     });
 
@@ -215,6 +216,7 @@ export class AgentPool {
       name,
       type,
       processPid: proc.pid ?? null,
+      process: proc,
       status: 'spawning',
       currentTask: null,
       port: port ?? 0,
@@ -223,6 +225,23 @@ export class AgentPool {
       spawnedAt: Date.now(),
       lastHeartbeat: Date.now(),
     };
+
+    // Send registration commands via stdin so the worker auto-registers.
+    // Workers have a PTY via script(1), so we can write to stdin.
+    const uuid = instance.id;
+    const orchNameForReg = `orchestrator-${process.pid}`;
+    setTimeout(() => {
+      if (proc.exitCode !== null) return; // already exited
+      proc.stdin?.write(`/name ${name}\n`);
+    }, 3000); // wait for pi to finish startup
+    setTimeout(() => {
+      if (proc.exitCode !== null) return;
+      proc.stdin?.write(`intercom({ action: "send", to: "${orchNameForReg}", message: "REGISTER ${uuid} worker ${name}" })\n`);
+    }, 5000);
+    setTimeout(() => {
+      if (proc.exitCode !== null) return;
+      proc.stdin?.write(`intercom({ action: "send", to: "${orchNameForReg}", message: "IDLE ${uuid}" })\n`);
+    }, 6000);
 
     proc.on('close', (code) => {
       logStream.end();

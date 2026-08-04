@@ -29,6 +29,7 @@ export interface AgentInstance {
   name: string;
   type: AgentType;
   processPid: number | null;
+  process: import('child_process').ChildProcess | null;  // for sending stdin commands
   status: AgentStatus;
   currentTask: string | null;
   port: number;
