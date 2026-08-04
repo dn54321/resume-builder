@@ -77,3 +77,21 @@ The current strategy is **{{STRATEGY}}** targeting branch **{{PR_TARGET}}**.
 - Never run `prisma migrate dev`, `prisma db push`, or `pnpm format`
 - Write `agent-status.txt` with current phase (one line per step)
 - If stuck: `intercom({ action: "ask", to: "boss", message: "ASK <uuid> ..." })`
+
+## Available Skills
+
+Your worktree has been set up with symlinks to the project's shared skills.
+These are available via pi's skill system (read the SKILL.md when needed):
+
+| Skill | Use for |
+|-------|---------|
+| `create-pr` | Creating GitHub pull requests |
+| `screenshot` | Capturing frontend component screenshots |
+| `imgbb-upload` | Hosting screenshots for PR body |
+| `sql-query` | Verifying database rows at rest |
+| `e2e-test` | Running end-to-end tests |
+| `pi-intercom` | Communicating with orchestrator and boss |
+
+Use the `pi-intercom` skill for the intercom() function used throughout
+this prompt. It handles registration, TASK receipt, STATUS updates, and
+IDLE reporting to the orchestrator.

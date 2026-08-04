@@ -10,6 +10,7 @@ import * as path from 'node:path';
 import { IntercomClient } from '../integrations/intercom/client';
 import { Scheduler } from './scheduler';
 import { AgentPool } from './pool';
+import { PaneManager } from '../tui/pane-manager';
 import { buildGraph, readyTickets } from './graph';
 import { executeStrategy } from './strategist';
 import {
@@ -675,6 +676,16 @@ export async function startOrchestrator(): Promise<void> {
   fs.mkdirSync(path.join(stateDir, 'worktrees'), { recursive: true });
   fs.mkdirSync(path.join(stateDir, 'panes', 'fifos'), { recursive: true });
   fs.mkdirSync(path.join(stateDir, 'prompts'), { recursive: true });
+
+  // Write pane scripts (banner.sh, worker-pane.sh, dashboard-watch.sh)
+  // Must happen before atlas.sh's 2-second sleep expires and it checks for banner.sh
+  const config = getConfig();
+  const paneManager = new PaneManager({
+    sessionName: 'atlas',
+    stateDir,
+    maxWorkers: config.agents.worker.max_instances,
+  });
+  paneManager.init();
 
   // Intercom
   intercom = new IntercomClient('orchestrator');
