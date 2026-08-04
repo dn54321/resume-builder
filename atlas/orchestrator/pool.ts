@@ -204,7 +204,6 @@ export class AgentPool {
         ATLAS_WORKTREE: worktreePath,
         ATLAS_CONFIG: path.join(process.cwd(), 'atlas.config.yaml'),
         ATLAS_STATE_DIR: getStateDir(),
-        ATLAS_ORCHESTRATOR: orchName,
       },
     });
 
