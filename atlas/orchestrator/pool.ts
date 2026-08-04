@@ -207,15 +207,17 @@ export class AgentPool {
     ], {
       cwd: spawnCwd,
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: {
-        ...process.env,
-        ATLAS_AGENT_NAME: name,
-        ATLAS_AGENT_TYPE: type,
-        ATLAS_AGENT_PORT: String(port ?? ''),
-        ATLAS_WORKTREE: worktreePath,
-        ATLAS_CONFIG: path.join(process.cwd(), 'atlas.config.yaml'),
-        ATLAS_STATE_DIR: getStateDir(),
-      },
+      env: (() => {
+        const env = { ...process.env };
+        delete env.PI_INTERCOM_SESSION_ID;  // prevent clash with boss session
+        env.ATLAS_AGENT_NAME = name;
+        env.ATLAS_AGENT_TYPE = type;
+        env.ATLAS_AGENT_PORT = String(port ?? '');
+        env.ATLAS_WORKTREE = worktreePath;
+        env.ATLAS_CONFIG = path.join(process.cwd(), 'atlas.config.yaml');
+        env.ATLAS_STATE_DIR = getStateDir();
+        return env;
+      })(),
     });
 
     proc.stdout?.pipe(logStream);
