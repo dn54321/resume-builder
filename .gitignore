@@ -11,3 +11,4 @@ frontend/resume.pdf
 atlas/state/
 atlas/node_modules/
 atlas/coverage/
+playwright-report/
