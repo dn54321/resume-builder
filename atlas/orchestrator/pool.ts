@@ -170,7 +170,8 @@ export class AgentPool {
     const logPath = path.join(getStateDir(), 'logs', `${name}.log`);
     const logStream = fs.createWriteStream(logPath, { flags: 'a' });
 
-    const proc = cp.spawn(PI_BIN, ['-s', '--append-system-prompt', `@${promptContent}`], {
+    // pi 0.83+ removed -s; use --system-prompt for interactive sessions
+    const proc = cp.spawn(PI_BIN, ['--system-prompt', `@${promptContent}`], {
       cwd: worktreePath || getRepoRoot(),
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
@@ -220,7 +221,8 @@ export class AgentPool {
     });
 
     this.agents.set(instance.id, instance);
-    recordSpawnSuccess(type); // Mark initial spawn as successful (process started)
+    // Do NOT call recordSpawnSuccess here — the close handler decides success/failure.
+    // Calling it here resets the failure counter on every spawn, defeating cooldowns.
 
     logStream.write(`[${new Date().toISOString()}] ${name} spawned (type=${type}, port=${port})\n`);
 
