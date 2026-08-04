@@ -178,21 +178,32 @@ export class AgentPool {
     // Spawn pi process inside 'script' to provide a pseudo-TTY.
     // pi requires a TTY to stay alive in interactive mode; without it
     // the process exits immediately even with stdio pipes open.
+    //
+    // We feed initial commands (registration) then keep stdin open with
+    // tail -f /dev/null so pi stays alive waiting for intercom TASK messages.
     const logPath = path.join(getStateDir(), 'logs', `${name}.log`);
     const logStream = fs.createWriteStream(logPath, { flags: 'a' });
 
     // cwd must exist or spawn fails with ENOENT.
-    // worktreePath may not exist yet (created later by assignTask).
     const spawnCwd = fs.existsSync(worktreePath) ? worktreePath : getRepoRoot();
 
-    // Use script -q to give pi a PTY so it stays alive.
-    // script -q: quiet mode, -c: command to run
-    const piArgs = ['--system-prompt', `@${promptContent}`];
-    const proc = cp.spawn('script', [
-      '-q',
+    // Write auto-registration commands to a temp file
+    const uuid = this.generateUUID();
+    const orchNameForReg = `orchestrator-${process.pid}`;
+    const stdinFile = path.join(getStateDir(), 'prompts', `${name}-stdin.txt`);
+    fs.mkdirSync(path.dirname(stdinFile), { recursive: true });
+    fs.writeFileSync(stdinFile, [
+      `/name ${name}`,
+      `intercom({ action: "send", to: "${orchNameForReg}", message: "REGISTER ${uuid} worker ${name}" })`,
+      `intercom({ action: "send", to: "${orchNameForReg}", message: "IDLE ${uuid}" })`,
+      '',
+    ].join('\n'), 'utf-8');
+
+    // Spawn: (cat init; tail -f /dev/null) | script -q -c "pi ..." /dev/null
+    // The tail -f keeps stdin open so pi doesn't exit after processing init commands.
+    const proc = cp.spawn('bash', [
       '-c',
-      `${PI_BIN} ${piArgs.map(a => `'${a.replace(/'/g, "'\\''")}'`).join(' ')}`,
-      '/dev/null',
+      `(cat '${stdinFile}'; tail -f /dev/null) | script -q -c "${PI_BIN} --system-prompt @${promptContent}" /dev/null`,
     ], {
       cwd: spawnCwd,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -211,7 +222,7 @@ export class AgentPool {
     proc.stderr?.pipe(logStream);
 
     const instance: AgentInstance = {
-      id: this.generateUUID(),
+      id: uuid,
       name,
       type,
       processPid: proc.pid ?? null,
@@ -224,23 +235,6 @@ export class AgentPool {
       spawnedAt: Date.now(),
       lastHeartbeat: Date.now(),
     };
-
-    // Send registration commands via stdin so the worker auto-registers.
-    // Workers have a PTY via script(1), so we can write to stdin.
-    const uuid = instance.id;
-    const orchNameForReg = `orchestrator-${process.pid}`;
-    setTimeout(() => {
-      if (proc.exitCode !== null) return; // already exited
-      proc.stdin?.write(`/name ${name}\n`);
-    }, 3000); // wait for pi to finish startup
-    setTimeout(() => {
-      if (proc.exitCode !== null) return;
-      proc.stdin?.write(`intercom({ action: "send", to: "${orchNameForReg}", message: "REGISTER ${uuid} worker ${name}" })\n`);
-    }, 5000);
-    setTimeout(() => {
-      if (proc.exitCode !== null) return;
-      proc.stdin?.write(`intercom({ action: "send", to: "${orchNameForReg}", message: "IDLE ${uuid}" })\n`);
-    }, 6000);
 
     proc.on('close', (code) => {
       logStream.end();
