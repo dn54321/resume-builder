@@ -42,7 +42,7 @@ function onEmailBlur() {
 }
 
 onMounted(() => {
-  if (isAuthenticated) {
+  if (isAuthenticated.value) {
     router.replace('/dashboard')
   }
 })

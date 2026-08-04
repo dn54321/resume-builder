@@ -32,7 +32,7 @@ const renameError = ref('')
 const renameLoading = ref(false)
 
 onMounted(async () => {
-  if (!auth.isAuthenticated) {
+  if (!auth.isAuthenticated.value) {
     router.replace('/login')
     return
   }

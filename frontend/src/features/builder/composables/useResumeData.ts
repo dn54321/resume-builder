@@ -121,7 +121,7 @@ export function useResumeData() {
    *
    */
   async function loadResume() {
-    if (isAuthenticated) {
+    if (isAuthenticated.value) {
       // Check sessionStorage first for pending changes that survived a refresh.
       // This is the safety net: if the user edited and refreshed before the
       // debounced auto-save fired, sessionStorage still has the pending state.
@@ -201,7 +201,7 @@ export function useResumeData() {
     try {
       const payload = store.toPayload()
 
-      if (isAuthenticated) {
+      if (isAuthenticated.value) {
         try {
           await api.put('/api/v1/resumes', payload)
         } catch (err) {
@@ -249,7 +249,7 @@ export function useResumeData() {
       () => {
         // Immediate safety net: write to sessionStorage on every change
         // so edits survive page refreshes before the debounced API save fires.
-        if (isAuthenticated) {
+        if (isAuthenticated.value) {
           writeToSessionStorage(store.toPayload())
         }
 

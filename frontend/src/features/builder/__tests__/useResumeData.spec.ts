@@ -66,9 +66,12 @@ describe('useResumeData', () => {
       await loadResume()
 
       expect(store.layout).toBe('column2-1')
-      expect(store.sections).toHaveLength(1)
-      expect(store.sections[0]!.sectionType).toBe('name_contact')
-      expect(store.sections[0]!.column).toBe('left')
+      // loadFromPayload fills missing sections to 10 — saved one is enabled
+      expect(store.sections).toHaveLength(10)
+      const nc = store.sections.find((s) => s.sectionType === 'name_contact')
+      expect(nc).toBeDefined()
+      expect(nc!.enabled).toBe(true)
+      expect(nc!.column).toBe('left')
     })
 
     it('loads defaults when localStorage is empty', async () => {
@@ -247,8 +250,10 @@ describe('useResumeData', () => {
       await loadResume()
 
       expect(store.layout).toBe('column2-1')
-      expect(store.sections).toHaveLength(1)
-      expect(store.sections[0]!.sectionType).toBe('name_contact')
+      // loadFromPayload fills missing sections — the saved one is enabled, rest are disabled
+      expect(store.sections).toHaveLength(10)
+      const nc = store.sections.find((s) => s.sectionType === 'name_contact')
+      expect(nc!.enabled).toBe(true)
     })
 
     it('falls back to defaults on 404', async () => {
@@ -608,8 +613,10 @@ describe('useResumeData', () => {
 
       // Should load from sessionStorage, not from API defaults
       expect(store.layout).toBe('column2-1')
-      expect(store.sections).toHaveLength(1)
-      expect(store.sections[0]!.sectionType).toBe('summary')
+      // loadFromPayload fills missing sections to 10 — saved one is enabled
+      expect(store.sections).toHaveLength(10)
+      const summ = store.sections.find((s) => s.sectionType === 'summary')
+      expect(summ!.enabled).toBe(true)
       // Should be marked dirty because changes are pending
       expect(dirty.value).toBe(true)
     })
@@ -647,8 +654,10 @@ describe('useResumeData', () => {
       await loadResume()
 
       expect(store.layout).toBe('standard')
-      expect(store.sections).toHaveLength(1)
-      expect(store.sections[0]!.sectionType).toBe('experience')
+      // loadFromPayload fills missing sections to 10 — saved one is enabled
+      expect(store.sections).toHaveLength(10)
+      const exp = store.sections.find((s) => s.sectionType === 'experience')
+      expect(exp!.enabled).toBe(true)
       expect(dirty.value).toBe(false)
     })
 
@@ -686,8 +695,10 @@ describe('useResumeData', () => {
 
       // Corrupted data is cleared, falls back to API
       expect(sessionStorage.getItem('resume_pending_changes')).toBeNull()
-      expect(store.sections).toHaveLength(1)
-      expect(store.sections[0]!.sectionType).toBe('name_contact')
+      // loadFromPayload fills missing sections to 10 — saved one is enabled
+      expect(store.sections).toHaveLength(10)
+      const nc = store.sections.find((s) => s.sectionType === 'name_contact')
+      expect(nc!.enabled).toBe(true)
     })
   })
 })

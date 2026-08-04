@@ -22,6 +22,11 @@ global.fetch = mockFetch
 /** Flush pending work by yielding to the macrotask queue. */
 const flush = () => new Promise<void>(r => setTimeout(r, 0))
 
+/**
+ *
+ * @param data
+ * @param status
+ */
 function mockJsonResponse(data: unknown, status = 200): Response {
   return {
     ok: status >= 200 && status < 300,
@@ -31,6 +36,9 @@ function mockJsonResponse(data: unknown, status = 200): Response {
   } as Response
 }
 
+/**
+ *
+ */
 function makeRouter() {
   return createRouter({
     history: createWebHistory(),
