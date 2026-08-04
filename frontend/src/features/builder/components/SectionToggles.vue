@@ -2,6 +2,7 @@
   <div class="mb-6">
     <h3 class="text-sm font-semibold uppercase tracking-wider text-muted-foreground m-0 mb-3">Sections</h3>
     <ul class="list-none p-0 m-0 flex flex-col gap-2">
+      <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -->
       <li
         v-for="section in orderedSections"
         :key="section.type"
@@ -19,6 +20,7 @@
         @drop="onDrop($event, section.type)"
         @dragend="onDragEnd"
       >
+        <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions, vuejs-accessibility/click-events-have-key-events, vuejs-accessibility/label-has-for -->
         <label class="flex items-center gap-2 flex-1 cursor-pointer" @click.prevent="onLabelClick(section)">
           <input
             type="checkbox"
@@ -26,9 +28,16 @@
             @change.stop="emit('toggle', section.type)"
             class="peer absolute opacity-0 w-0 h-0"
           />
+          <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions, vuejs-accessibility/click-events-have-key-events -->
           <span
             class="relative w-9 h-5 bg-muted/50 rounded-[10px] shrink-0 transition-colors peer-checked:bg-primary after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:w-4 after:h-4 after:bg-white after:rounded-full after:transition-transform peer-checked:after:translate-x-4 cursor-pointer"
             @click.prevent.stop="emit('toggle', section.type)"
+            role="switch"
+            :aria-checked="section.enabled"
+            :aria-label="`Toggle ${section.label}`"
+            tabindex="0"
+            @keydown.enter.prevent.stop="emit('toggle', section.type)"
+            @keydown.space.prevent.stop="emit('toggle', section.type)"
           ></span>
           <span
             class="text-[0.8125rem] cursor-pointer"

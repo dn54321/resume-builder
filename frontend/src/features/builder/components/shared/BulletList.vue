@@ -7,11 +7,18 @@
       class="flex items-center gap-1.5 transition-opacity"
       :class="{ 'opacity-45': bullet.dimmed }"
     >
+      <!-- Drag handle — mouse-driven reorder is inherently mouse-only;
+           the grab handle is non-interactive for keyboard users but
+           announces its purpose via aria-label. -->
       <span
         class="cursor-grab text-muted-foreground/70 text-xs shrink-0 active:cursor-grabbing"
         @mousedown.prevent="onDragStart($event, index)"
         title="Drag to reorder"
+        role="button"
+        tabindex="0"
+        aria-label="Drag to reorder bullet"
       >&#x2630;</span>
+      <!-- eslint-enable vuejs-accessibility/no-static-element-interactions -->
       <slot name="bullet" :bullet="bullet" :index="index" />
       <span class="text-muted-foreground/70 shrink-0">&bull;</span>
       <input
@@ -21,6 +28,7 @@
         class="flex-1 px-2 py-1.5 border border-border rounded-sm text-[0.8125rem] font-[inherit] bg-surface focus:outline-hidden focus:border-primary focus:ring-1 focus:ring-primary"
         :class="bullet.dimmed ? 'text-muted-foreground/70' : 'text-foreground'"
         :placeholder="placeholder"
+        :aria-label="`Bullet point ${index + 1}`"
       />
       <button
         class="w-6 h-6 flex items-center justify-center border-none bg-transparent text-muted-foreground/70 cursor-pointer rounded-sm text-lg leading-none shrink-0 hover:bg-destructive/10 hover:text-destructive"

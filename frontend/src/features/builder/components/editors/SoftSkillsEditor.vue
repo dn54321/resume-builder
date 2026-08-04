@@ -17,10 +17,14 @@
         class="flex items-center gap-1.5 transition-opacity"
         :class="{ 'opacity-45': entry.dimmed }"
       >
+        <!-- Drag handle — mouse-only for reorder -->
         <span
           class="cursor-grab text-muted-foreground/70 text-xs shrink-0 active:cursor-grabbing"
           @mousedown.prevent="onDragStart($event, index)"
           title="Drag to reorder"
+          role="button"
+          tabindex="0"
+          aria-label="Drag to reorder soft skill"
         >&#x2630;</span>
         <span
           v-if="store.isFiltered"
