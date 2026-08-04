@@ -175,7 +175,9 @@ export class AgentPool {
     // Build prompt
     const promptContent = this.buildPrompt(type, name, port ?? 0, worktreePath);
 
-    // Spawn pi process
+    // Spawn pi process inside 'script' to provide a pseudo-TTY.
+    // pi requires a TTY to stay alive in interactive mode; without it
+    // the process exits immediately even with stdio pipes open.
     const logPath = path.join(getStateDir(), 'logs', `${name}.log`);
     const logStream = fs.createWriteStream(logPath, { flags: 'a' });
 
@@ -183,10 +185,17 @@ export class AgentPool {
     // worktreePath may not exist yet (created later by assignTask).
     const spawnCwd = fs.existsSync(worktreePath) ? worktreePath : getRepoRoot();
 
-    // pi 0.83+ removed -s; use --system-prompt for interactive sessions
-    const proc = cp.spawn(PI_BIN, ['--system-prompt', `@${promptContent}`], {
+    // Use script -q to give pi a PTY so it stays alive.
+    // script -q: quiet mode, -c: command to run
+    const piArgs = ['--system-prompt', `@${promptContent}`];
+    const proc = cp.spawn('script', [
+      '-q',
+      '-c',
+      `${PI_BIN} ${piArgs.map(a => `'${a.replace(/'/g, "'\\''")}'`).join(' ')}`,
+      '/dev/null',
+    ], {
       cwd: spawnCwd,
-      stdio: ['pipe', 'pipe', 'pipe'],  // stdin must be open (pipe, not ignore) for pi to stay alive
+      stdio: ['pipe', 'pipe', 'pipe'],
       env: {
         ...process.env,
         ATLAS_AGENT_NAME: name,
