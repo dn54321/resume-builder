@@ -31,9 +31,9 @@ jobs:
         working-directory: backend
         run: npx prisma generate
 
-      - name: Run E2E tests
+      - name: Run integration tests
         working-directory: backend
-        run: pnpm test:e2e
+        run: pnpm test:integration
 
   frontend-e2e:
     name: Frontend E2E (Playwright)
@@ -49,7 +49,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
 
@@ -65,9 +65,9 @@ jobs:
         working-directory: frontend
         run: npx playwright install --with-deps
 
-      - name: Run E2E tests
+      - name: Run integration tests
         working-directory: frontend
-        run: pnpm test:e2e
+        run: pnpm test:integration
 
       - uses: actions/upload-artifact@v4
         if: always()
