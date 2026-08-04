@@ -7,6 +7,7 @@
 import * as cp from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { homedir } from 'node:os';
 import type { AgentInstance, AgentType, GraphNode, TicketInfo } from './types';
 import { getConfig } from './config';
 import { getStateDir, allocatePort, releasePort } from './state';
@@ -18,6 +19,28 @@ import {
 import { resolveStrategy } from './strategist';
 import { IntercomClient } from '../integrations/intercom/client';
 import { transitionTicket } from '../integrations/linear/client';
+
+// ─── Pi binary resolution ─────────────────────────────────────────
+
+function findPiBinary(): string {
+  // Check the same paths as atlas.sh
+  const candidates = [
+    path.join(homedir(), '.local', 'share', 'pnpm', 'bin', 'pi'),
+    path.join(homedir(), '.local', 'bin', 'pi'),
+    '/usr/local/bin/pi',
+    'pi',
+  ];
+  for (const candidate of candidates) {
+    try {
+      fs.accessSync(candidate, fs.constants.X_OK);
+      return candidate;
+    } catch { /* try next */ }
+  }
+  // Fall back to 'pi' and hope it's in PATH
+  return 'pi';
+}
+
+const PI_BIN = findPiBinary();
 
 // ─── Agent Pool ─────────────────────────────────────────────────────
 
@@ -76,7 +99,7 @@ export class AgentPool {
     const logPath = path.join(getStateDir(), 'logs', `${name}.log`);
     const logStream = fs.createWriteStream(logPath, { flags: 'a' });
 
-    const proc = cp.spawn('pi', ['-s', '--append-system-prompt', `@${promptContent}`], {
+    const proc = cp.spawn(PI_BIN, ['-s', '--append-system-prompt', `@${promptContent}`], {
       cwd: worktreePath || getRepoRoot(),
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
@@ -85,7 +108,7 @@ export class AgentPool {
         ATLAS_AGENT_TYPE: type,
         ATLAS_AGENT_PORT: String(port ?? ''),
         ATLAS_WORKTREE: worktreePath,
-        ATLAS_CONFIG: path.join(getRepoRoot(), 'atlas', 'atlas.config.yaml'),
+        ATLAS_CONFIG: path.join(process.cwd(), 'atlas.config.yaml'),
         ATLAS_STATE_DIR: getStateDir(),
       },
     });
@@ -350,7 +373,7 @@ export class AgentPool {
           ATLAS_AGENT_TYPE: type,
           ATLAS_AGENT_PORT: String(port),
           ATLAS_WORKTREE: worktreePath,
-          ATLAS_CONFIG: path.join(getRepoRoot(), 'atlas', 'atlas.config.yaml'),
+          ATLAS_CONFIG: path.join(process.cwd(), 'atlas.config.yaml'),
           ATLAS_STATE_DIR: getStateDir(),
         },
         timeout: 30_000,

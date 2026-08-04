@@ -18,6 +18,7 @@ import {
   saveState,
   saveFullState,
   getStateDir,
+  setStateDir,
 } from './state';
 import { transitionTicket, findActiveEpics, closeTicket } from '../integrations/linear/client';
 import {
@@ -671,6 +672,7 @@ export async function startOrchestrator(): Promise<void> {
 
   // State dir
   const stateDir = path.join(getRepoRoot(), 'atlas', 'state');
+  setStateDir(stateDir);
   fs.mkdirSync(stateDir, { recursive: true });
   fs.mkdirSync(path.join(stateDir, 'logs'), { recursive: true });
   fs.mkdirSync(path.join(stateDir, 'worktrees'), { recursive: true });

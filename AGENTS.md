@@ -101,6 +101,31 @@ Empirical verification catches what code review misses.
 - Render the component with themed (ANSI-wrapped) strings and measure
   visible line widths against the target column width
 
+## No Hacky Workarounds
+
+### Always implement proper, maintainable solutions
+
+When a tool or dependency isn't available, fix the root cause — never create a
+throwaway script that bypasses the intended architecture. Hacky workarounds
+create technical debt, confuse future agents, and break when the underlying
+system changes.
+
+**Rules:**
+- Never write a one-off script to work around a missing tool or extension.
+  If an extension isn't loading, fix the extension loading mechanism.
+- Never create files in gitignored directories as a workaround.
+  If state needs to be stored, put it in the proper state directory.
+- Never duplicate functionality that already exists in a loaded package.
+  Understand why it's not working and fix that.
+- If you're tempted to write a hack: step back, diagnose the root cause,
+  and implement a proper fix that all future agents can rely on.
+
+**Examples of hacky workarounds:**
+- Writing a Node.js script to bypass the intercom broker because the
+  pi-intercom extension isn't loaded (fix: load the extension properly)
+- Shell scripts that duplicate what a properly configured tool does
+- Hardcoding paths that should come from config
+
 ## Agent-to-Agent Warnings
 
 ### If you discover a catastrophic path, leave a warning

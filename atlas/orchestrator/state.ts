@@ -20,7 +20,8 @@ export function setStateDir(dir: string): void {
 
 export function getStateDir(): string {
   if (!_stateDir) {
-    _stateDir = path.join(process.cwd(), 'atlas', 'state');
+    // process.cwd() is already the atlas/ directory (orchestrator runs from there)
+    _stateDir = path.join(process.cwd(), 'state');
     fs.mkdirSync(_stateDir, { recursive: true });
   }
   return _stateDir;
