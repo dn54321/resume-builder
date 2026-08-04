@@ -6,11 +6,26 @@
       class="border border-border rounded-md overflow-hidden"
       data-entry-panel
     >
-      <div class="flex items-center gap-2 px-3 py-2 bg-muted/20 cursor-pointer select-none hover:bg-muted/50" @click="toggleEntry(entry.id)">
+      <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions, vuejs-accessibility/click-events-have-key-events -->
+      <div
+        class="flex items-center gap-2 px-3 py-2 bg-muted/20 cursor-pointer select-none hover:bg-muted/50"
+        role="button"
+        tabindex="0"
+        :aria-expanded="isExpanded(entry.id)"
+        :aria-label="`Toggle ${entryTitle(entry, index)}`"
+        @click="toggleEntry(entry.id)"
+        @keydown.enter.prevent="toggleEntry(entry.id)"
+        @keydown.space.prevent="toggleEntry(entry.id)"
+      >
+        <!-- Drag handle — mouse-only; announces purpose via aria-label -->
+        <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -->
         <span
           class="cursor-grab text-muted-foreground/70 text-sm p-0.5 shrink-0 active:cursor-grabbing"
           @mousedown.prevent="onDragStart($event, index)"
           title="Drag to reorder"
+          role="button"
+          tabindex="0"
+          aria-label="Drag to reorder entry"
         >&#x2630;</span>
         <span class="flex-1 text-[0.8125rem] font-medium text-foreground overflow-hidden text-ellipsis whitespace-nowrap">{{ entryTitle(entry, index) }}</span>
         <button

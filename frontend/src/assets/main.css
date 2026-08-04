@@ -1,73 +1,113 @@
 @import "tailwindcss";
 
-/* Enable class-based dark mode so the .dark class on <html> triggers
-dark: utility variants (default is prefers-color-scheme media query). */
+/*
+ * Enable class-based dark mode so the .dark class on <html> triggers
+ * dark: utility variants (default is prefers-color-scheme media query).
+ */
 @custom-variant dark (&:where(html.dark, html.dark *));
 
+/*
+ * Design tokens for Tailwind utility classes.
+ *
+ * IMPORTANT: Tailwind v4 inlines @theme inline values directly into utility
+ * classes.  To make dark mode work, every --color-* references a var() that
+ * is toggled between light and dark values below.  If you ever add a bare
+ * colour literal here, that utility will be frozen to that value in every
+ * theme — it won't respond to html.dark.
+ */
 @theme inline {
-  --color-background: #ffffff;
-  --color-foreground: #0a0a0a;
-  --color-border: #e2e2e2;
-  --color-input: #e2e2e2;
-  --color-ring: #0a0a0a;
-  --color-primary: #f59e0b;
-  --color-primary-foreground: #ffffff;
-  --color-secondary: #f4f4f5;
-  --color-secondary-foreground: #18181b;
-  --color-muted: #f4f4f5;
-  --color-muted-foreground: #71717a;
-  --color-accent: #f4f4f5;
-  --color-accent-foreground: #18181b;
-  --color-destructive: #ef4444;
-  --color-destructive-foreground: #ffffff;
-  --color-card: #ffffff;
-  --color-card-foreground: #0a0a0a;
-  --color-surface: #ffffff;
-  --color-popover: #ffffff;
-  --color-popover-foreground: #0a0a0a;
+  --color-background: var(--_tw-bg);
+  --color-foreground: var(--_tw-fg);
+  --color-border: var(--_tw-border);
+  --color-input: var(--_tw-input);
+  --color-ring: var(--_tw-ring);
+  --color-primary: var(--_tw-primary);
+  --color-primary-foreground: var(--_tw-primary-fg);
+  --color-secondary: var(--_tw-secondary);
+  --color-secondary-foreground: var(--_tw-secondary-fg);
+  --color-muted: var(--_tw-muted);
+  --color-muted-foreground: var(--_tw-muted-fg);
+  --color-accent: var(--_tw-accent);
+  --color-accent-foreground: var(--_tw-accent-fg);
+  --color-destructive: var(--_tw-destructive);
+  --color-destructive-foreground: var(--_tw-destructive-fg);
+  --color-card: var(--_tw-card);
+  --color-card-foreground: var(--_tw-card-fg);
+  --color-surface: var(--_tw-surface);
+  --color-popover: var(--_tw-popover);
+  --color-popover-foreground: var(--_tw-popover-fg);
 }
 
+/* ── Light-mode palette (default) ──────────────────────────── */
 :root {
-  --background: var(--color-background);
-  --foreground: var(--color-foreground);
-  --border: var(--color-border);
-  --input: var(--color-input);
-  --ring: var(--color-ring);
-  --primary: var(--color-primary);
-  --primary-foreground: var(--color-primary-foreground);
-  --secondary: var(--color-secondary);
-  --secondary-foreground: var(--color-secondary-foreground);
-  --muted: var(--color-muted);
-  --muted-foreground: var(--color-muted-foreground);
-  --accent: var(--color-accent);
-  --accent-foreground: var(--color-accent-foreground);
-  --destructive: var(--color-destructive);
-  --destructive-foreground: var(--color-destructive-foreground);
-  --card: var(--color-card);
-  --card-foreground: var(--color-card-foreground);
-  --popover: var(--color-popover);
-  --popover-foreground: var(--color-popover-foreground);
+  --_tw-bg: #ffffff;
+  --_tw-fg: #0a0a0a;
+  --_tw-border: #e2e2e2;
+  --_tw-input: #e2e2e2;
+  --_tw-ring: #0a0a0a;
+  --_tw-primary: #f59e0b;
+  --_tw-primary-fg: #ffffff;
+  --_tw-secondary: #f4f4f5;
+  --_tw-secondary-fg: #18181b;
+  --_tw-muted: #f4f4f5;
+  --_tw-muted-fg: #71717a;
+  --_tw-accent: #f4f4f5;
+  --_tw-accent-fg: #18181b;
+  --_tw-destructive: #ef4444;
+  --_tw-destructive-fg: #ffffff;
+  --_tw-card: #ffffff;
+  --_tw-card-fg: #0a0a0a;
+  --_tw-surface: #ffffff;
+  --_tw-popover: #ffffff;
+  --_tw-popover-fg: #0a0a0a;
+
+  /* Legacy shadcn/vuetify aliases — keep for scoped-CSS consumers */
+  --background: var(--_tw-bg);
+  --foreground: var(--_tw-fg);
+  --border: var(--_tw-border);
+  --input: var(--_tw-input);
+  --ring: var(--_tw-ring);
+  --primary: var(--_tw-primary);
+  --primary-foreground: var(--_tw-primary-fg);
+  --secondary: var(--_tw-secondary);
+  --secondary-foreground: var(--_tw-secondary-fg);
+  --muted: var(--_tw-muted);
+  --muted-foreground: var(--_tw-muted-fg);
+  --accent: var(--_tw-accent);
+  --accent-foreground: var(--_tw-accent-fg);
+  --destructive: var(--_tw-destructive);
+  --destructive-foreground: var(--_tw-destructive-fg);
+  --card: var(--_tw-card);
+  --card-foreground: var(--_tw-card-fg);
+  --popover: var(--_tw-popover);
+  --popover-foreground: var(--_tw-popover-fg);
+
+  /* Tell the browser we support both colour schemes (needed by form controls) */
+  color-scheme: light;
 }
 
+/* ── Dark-mode palette ─────────────────────────────────────── */
 html.dark {
-  --color-background: #111111;
-  --color-foreground: #fafafa;
-  --color-border: #27272a;
-  --color-input: #27272a;
-  --color-ring: #fafafa;
-  --color-primary: #f59e0b;
-  --color-primary-foreground: #0a0a0a;
-  --color-secondary: #27272a;
-  --color-secondary-foreground: #fafafa;
-  --color-muted: #27272a;
-  --color-muted-foreground: #a1a1aa;
-  --color-accent: #27272a;
-  --color-accent-foreground: #fafafa;
-  --color-destructive: #7f1d1d;
-  --color-destructive-foreground: #fafafa;
-  --color-card: #18181b;
-  --color-card-foreground: #fafafa;
-  --color-surface: #111111;
-  --color-popover: #111111;
-  --color-popover-foreground: #fafafa;
+  --_tw-bg: #111111;
+  --_tw-fg: #fafafa;
+  --_tw-border: #27272a;
+  --_tw-input: #27272a;
+  --_tw-ring: #fafafa;
+  --_tw-primary: #f59e0b;
+  --_tw-primary-fg: #0a0a0a;
+  --_tw-secondary: #27272a;
+  --_tw-secondary-fg: #fafafa;
+  --_tw-muted: #27272a;
+  --_tw-muted-fg: #a1a1aa;
+  --_tw-accent: #27272a;
+  --_tw-accent-fg: #fafafa;
+  --_tw-destructive: #7f1d1d;
+  --_tw-destructive-fg: #fafafa;
+  --_tw-card: #18181b;
+  --_tw-card-fg: #fafafa;
+  --_tw-surface: #111111;
+  --_tw-popover: #111111;
+  --_tw-popover-fg: #fafafa;
+
+  color-scheme: dark;
 }

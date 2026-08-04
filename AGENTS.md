@@ -135,6 +135,31 @@ again by someone else, wastes cycles, and damages trust in the system.
  * scripts/patch-prisma-client.js — run `pnpm prisma:generate` instead of
  * bare `prisma generate`.
  */
+
+/**
+ * ⚠️ WARNING — DO NOT put bare colour literals in Tailwind's @theme inline.
+ *
+ * Tailwind v4's @theme inline substitutes values directly into utility
+ * classes (text-foreground → color: #0a0a0a), NOT via var() references.
+ * This means html.dark overrides of --color-foreground have ZERO effect on
+ * Tailwind utilities — the dark theme appears to work (variables are set)
+ * but all utilities are frozen to light-mode colours.
+ *
+ * Fix (RES-72): use var() indirection:
+ *
+ *   @theme inline {
+ *     --color-foreground: var(--_tw-fg);        // ← indirection
+ *   }
+ *   :root    { --_tw-fg: #0a0a0a; }             // light palette
+ *   html.dark { --_tw-fg: #fafafa; }             // dark palette
+ *
+ * Tailwind inlines var(--_tw-fg) into utilities, and the cascade makes
+ * it resolve to the right palette.
+ *
+ * If you ever add a new theme colour, you MUST use this var() pattern.
+ * Adding a bare literal (--color-foo: #abc;) will freeze that colour
+ * across themes.
+ */
 ```
 
 ## Ticket Agent System

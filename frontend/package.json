@@ -30,6 +30,7 @@
     "vue-router": "^5.2.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
     "@lucide/vue": "^1.28.0",
     "@playwright/test": "^1.61.1",
     "@tailwindcss/vite": "^4.3.3",
@@ -49,6 +50,7 @@
     "eslint-plugin-oxlint": "~1.75.0",
     "eslint-plugin-playwright": "^2.10.5",
     "eslint-plugin-vue": "~10.9.2",
+    "eslint-plugin-vuejs-accessibility": "^2.5.0",
     "jiti": "^2.7.0",
     "jsdom": "^29.1.1",
     "npm-run-all2": "^9.0.2",

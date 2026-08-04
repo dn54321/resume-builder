@@ -8,10 +8,14 @@
         data-drag-row="hobby"
         class="flex items-center gap-1.5"
       >
+        <!-- Drag handle — mouse-only for reorder -->
         <span
           class="cursor-grab text-muted-foreground/70 text-xs shrink-0 active:cursor-grabbing"
           @mousedown.prevent="onDragStart($event, index)"
           title="Drag to reorder"
+          role="button"
+          tabindex="0"
+          aria-label="Drag to reorder hobby"
         >&#x2630;</span>
         <input
           type="text"

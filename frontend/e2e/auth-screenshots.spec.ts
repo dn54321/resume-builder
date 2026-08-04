@@ -7,7 +7,7 @@ const SCREENSHOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url))
 test.describe('Auth Screenshots', () => {
   test('LoginView — Normal (empty form)', async ({ page }) => {
     await page.goto('/login')
-    await expect(page.locator('.auth-view h1')).toHaveText('Login')
+    await expect(page.locator('h3')).toContainText('Log in')
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'login-normal.png'), fullPage: true })
   })
 
@@ -22,7 +22,7 @@ test.describe('Auth Screenshots', () => {
 
   test('SignupView — Normal (empty form)', async ({ page }) => {
     await page.goto('/signup')
-    await expect(page.locator('.auth-view h1')).toHaveText('Sign Up')
+    await expect(page.locator('h3')).toContainText('Sign up')
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'signup-normal.png'), fullPage: true })
   })
 
