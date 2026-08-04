@@ -1,9 +1,9 @@
-// Mock PrismaClient for Jest e2e tests.
+// Mock PrismaClient for Jest integration tests.
 // The generated prisma client uses import.meta.url (ESM-only syntax)
 // which cannot be parsed by ts-jest in CJS mode. This mock provides
-// a CJS-compatible replacement for e2e test purposes.
+// a CJS-compatible replacement for integration test purposes.
 //
-// The e2e test validates HTTP layer behavior (routing, middleware, etc.)
+// The integration test validates HTTP layer behavior (routing, middleware, etc.)
 // Database connectivity is tested separately in prisma-schema.spec.ts.
 
 class PrismaClient {

@@ -2,11 +2,12 @@
   "moduleFileExtensions": ["js", "json", "ts"],
   "rootDir": "..",
   "testEnvironment": "node",
-  "testRegex": "test/.*\\.e2e-spec\\.ts$",
+  "testRegex": ".*\\.integration\\.spec\\.ts$",
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   },
   "moduleNameMapper": {
     "generated/prisma/client": "<rootDir>/test/__mocks__/prisma-client-mock.ts"
-  }
+  },
+  "modulePathIgnorePatterns": ["<rootDir>/dist"]
 }

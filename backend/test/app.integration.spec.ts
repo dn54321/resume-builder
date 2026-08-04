@@ -14,7 +14,7 @@ import { AppModule } from './../src/app.module';
 import { PrismaService } from '../src/common/database/prisma.service';
 import { MockPrismaService } from './__mocks__/prisma-service-mock';
 
-describe('AppController (e2e)', () => {
+describe('AppController (integration)', () => {
   let app: INestApplication<App>;
 
   beforeAll(async () => {

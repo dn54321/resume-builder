@@ -1,11 +1,11 @@
 /**
- * Mock PrismaService for e2e tests.
+ * Mock PrismaService for integration tests.
  *
  * The real PrismaService uses native ESM dynamic import() which Jest in CJS
  * mode cannot handle. This mock provides a complete replacement with the
  * same interface, avoiding the dynamic import issue entirely.
  *
- * Since e2e tests validate HTTP-layer behavior (routing, middleware, auth),
+ * Since integration tests validate HTTP-layer behavior (routing, middleware, auth),
  * the database layer is intentionally mocked. Database connectivity is
  * covered by unit tests.
  */

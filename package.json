@@ -1,0 +1,16 @@
+{
+  "name": "resume-builder",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test:e2e": "cd e2e && playwright test",
+    "test:integration:backend": "cd backend && pnpm test:integration",
+    "test:integration:frontend": "cd frontend && pnpm test:integration",
+    "test:integration": "pnpm test:integration:backend && pnpm test:integration:frontend",
+    "test:all": "pnpm test:integration && pnpm test:e2e"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@tsconfig/node24": "^24.0.4"
+  }
+}
