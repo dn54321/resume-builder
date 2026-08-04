@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AuthController } from '../auth.controller';
@@ -12,8 +13,19 @@ type ResBody = {
   message?: string;
 };
 
+const COOKIE_NAME = 'session_token';
 const makeUser = (id: string, email: string) => ({ id, email });
 const body = (r: request.Response): ResBody => r.body as ResBody;
+
+/**
+ * Extract the session_token value from a Set-Cookie header array.
+ */
+function getCookieValue(cookies: string[]): string | null {
+  const sessionCookie = cookies.find((c) => c.startsWith(`${COOKIE_NAME}=`));
+  if (!sessionCookie) return null;
+  const match = /^session_token=([^;]+)/.exec(sessionCookie);
+  return match ? match[1] : null;
+}
 
 describe('Auth Flow (integration)', () => {
   let app: INestApplication<App>;
@@ -38,6 +50,7 @@ describe('Auth Flow (integration)', () => {
     }).compile();
 
     app = mod.createNestApplication();
+    app.use(cookieParser());
     app.setGlobalPrefix('api/v1');
     app.useGlobalPipes(
       new ValidationPipe({
@@ -59,7 +72,7 @@ describe('Auth Flow (integration)', () => {
     const t2 = 'tok-2-xyz';
 
     it('signup → verify → login → verify → logout → verify dead', async () => {
-      // 1. Signup
+      // 1. Signup — returns user in body, token in cookie
       svc.signup.mockResolvedValueOnce({
         user: makeUser(uid, email),
         sessionToken: t1,
@@ -69,16 +82,18 @@ describe('Auth Flow (integration)', () => {
         .send({ email, password: pw })
         .expect(201);
       expect(body(r1).user?.email).toBe(email);
-      expect(body(r1).sessionToken).toBe(t1);
+      expect(body(r1)).not.toHaveProperty('sessionToken');
+      const cookies1 = r1.headers['set-cookie'] as unknown as string[];
+      expect(getCookieValue(cookies1)).toBe(t1);
 
-      // 2. Me with signup token
+      // 2. Me with signup cookie
       svc.validateSession.mockResolvedValueOnce({
         user: makeUser(uid, email),
         sessionToken: t1,
       });
       const r2 = await request(app.getHttpServer())
         .get('/api/v1/auth/me')
-        .set('Authorization', `Bearer ${t1}`)
+        .set('Cookie', `${COOKIE_NAME}=${t1}`)
         .expect(200);
       expect(body(r2).user?.email).toBe(email);
 
@@ -91,31 +106,40 @@ describe('Auth Flow (integration)', () => {
         .post('/api/v1/auth/login')
         .send({ email, password: pw })
         .expect(200);
-      expect(body(r3).sessionToken).toBe(t2);
+      expect(body(r3)).not.toHaveProperty('sessionToken');
+      const cookies3 = r3.headers['set-cookie'] as unknown as string[];
+      expect(getCookieValue(cookies3)).toBe(t2);
 
-      // 4. Login token works
+      // 4. Login cookie works
       svc.validateSession.mockResolvedValueOnce({
         user: makeUser(uid, email),
         sessionToken: t2,
       });
       const r4 = await request(app.getHttpServer())
         .get('/api/v1/auth/me')
-        .set('Authorization', `Bearer ${t2}`)
+        .set('Cookie', `${COOKIE_NAME}=${t2}`)
         .expect(200);
       expect(body(r4).user?.email).toBe(email);
 
-      // 5. Logout signup session
+      // 5. Logout signup session — clears cookie
       svc.logout.mockResolvedValueOnce(undefined);
-      await request(app.getHttpServer())
+      const r5 = await request(app.getHttpServer())
         .post('/api/v1/auth/logout')
-        .set('Authorization', `Bearer ${t1}`)
+        .set('Cookie', `${COOKIE_NAME}=${t1}`)
         .expect(204);
+      const cookies5 = r5.headers['set-cookie'] as unknown as string[];
+      // Should clear (empty value)
+      const clearedCookie = cookies5.find((c) =>
+        c.startsWith(`${COOKIE_NAME}=`),
+      );
+      expect(clearedCookie).toBeDefined();
+      expect(clearedCookie).toContain(`${COOKIE_NAME}=;`);
 
       // 6. Signup session dead
       svc.validateSession.mockResolvedValueOnce(null);
       const r6 = await request(app.getHttpServer())
         .get('/api/v1/auth/me')
-        .set('Authorization', `Bearer ${t1}`)
+        .set('Cookie', `${COOKIE_NAME}=${t1}`)
         .expect(200);
       expect(body(r6).user).toBeNull();
 
@@ -126,7 +150,7 @@ describe('Auth Flow (integration)', () => {
       });
       const r7 = await request(app.getHttpServer())
         .get('/api/v1/auth/me')
-        .set('Authorization', `Bearer ${t2}`)
+        .set('Cookie', `${COOKIE_NAME}=${t2}`)
         .expect(200);
       expect(body(r7).user?.email).toBe(email);
     });

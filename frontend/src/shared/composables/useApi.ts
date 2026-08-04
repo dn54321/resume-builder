@@ -29,33 +29,22 @@ function getBaseUrl(): string {
 
 /**
  *
- */
-function getToken(): string | null {
-  return localStorage.getItem('auth_token')
-}
-
-/**
- *
  * @param path
  * @param options
  */
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const baseUrl = getBaseUrl()
   const url = `${baseUrl}${path}`
-  const token = getToken()
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
   }
 
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`
-  }
-
   const response = await fetch(url, {
     ...options,
     headers,
+    credentials: 'include',
   })
 
   if (!response.ok) {

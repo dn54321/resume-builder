@@ -32,34 +32,33 @@ describe('useAuthStore', () => {
       const store = useAuthStore()
       expect(store.isAuthenticated).toBe(false)
       expect(store.user).toBeNull()
-      expect(store.token).toBeNull()
     })
 
-    it('restores token from localStorage', () => {
+    it('no longer uses localStorage for auth token', () => {
       localStorage.setItem('auth_token', 'test-token')
       // Re-create store after setting localStorage
       setActivePinia(createPinia())
       const store = useAuthStore()
-      expect(store.token).toBe('test-token')
+      // Token in localStorage should be ignored — auth is cookie-based
+      expect(store.isAuthenticated).toBe(false)
     })
   })
 
   describe('signup', () => {
-    it('stores token and user on successful signup', async () => {
+    it('stores user on successful signup (cookie handled by browser)', async () => {
       const store = useAuthStore()
       mockFetch.mockResolvedValueOnce(
         mockJsonResponse({
           user: { id: '1', email: 'test@test.com' },
-          sessionToken: 'signup-token',
         }),
       )
 
       await store.signup('test@test.com', 'Password1')
 
-      expect(store.token).toBe('signup-token')
-      expect(localStorage.getItem('auth_token')).toBe('signup-token')
       expect(store.user).toEqual({ id: '1', email: 'test@test.com' })
       expect(store.isAuthenticated).toBe(true)
+      // Token is no longer stored in localStorage
+      expect(localStorage.getItem('auth_token')).toBeNull()
     })
 
     it('posts resume data from localStorage and clears it on success', async () => {
@@ -71,7 +70,6 @@ describe('useAuthStore', () => {
         .mockResolvedValueOnce(
           mockJsonResponse({
             user: { id: '1', email: 'test@test.com' },
-            sessionToken: 'signup-token',
           }),
         )
         .mockResolvedValueOnce(mockJsonResponse({ id: 'res-1' }, 201))
@@ -97,7 +95,6 @@ describe('useAuthStore', () => {
         .mockResolvedValueOnce(
           mockJsonResponse({
             user: { id: '1', email: 'test@test.com' },
-            sessionToken: 'signup-token',
           }),
         )
         .mockResolvedValueOnce(mockJsonResponse({ message: 'Server error' }, 500))
@@ -112,35 +109,25 @@ describe('useAuthStore', () => {
   })
 
   describe('login', () => {
-    it('stores token and user on successful login', async () => {
+    it('stores user on successful login (cookie handled by browser)', async () => {
       const store = useAuthStore()
       mockFetch.mockResolvedValueOnce(
         mockJsonResponse({
           user: { id: '1', email: 'test@test.com' },
-          sessionToken: 'login-token',
         }),
       )
 
       await store.login('test@test.com', 'Password1')
 
-      expect(store.token).toBe('login-token')
-      expect(localStorage.getItem('auth_token')).toBe('login-token')
       expect(store.user).toEqual({ id: '1', email: 'test@test.com' })
       expect(store.isAuthenticated).toBe(true)
+      // Token is no longer stored in localStorage
+      expect(localStorage.getItem('auth_token')).toBeNull()
     })
   })
 
   describe('checkSession', () => {
-    it('does nothing without a token', async () => {
-      const store = useAuthStore()
-      await store.checkSession()
-      expect(mockFetch).not.toHaveBeenCalled()
-    })
-
-    it('restores user session on valid token', async () => {
-      localStorage.setItem('auth_token', 'valid-token')
-      setActivePinia(createPinia())
-
+    it('always calls /me (session cookie is always sent automatically)', async () => {
       const store = useAuthStore()
       mockFetch.mockResolvedValueOnce(
         mockJsonResponse({ user: { id: '1', email: 'test@test.com' } }),
@@ -152,11 +139,22 @@ describe('useAuthStore', () => {
       expect(store.isAuthenticated).toBe(true)
     })
 
-    it('clears token on 401 response', async () => {
-      localStorage.setItem('auth_token', 'expired-token')
-      setActivePinia(createPinia())
-
+    it('returns null user when no session cookie present (unauthenticated)', async () => {
       const store = useAuthStore()
+      mockFetch.mockResolvedValueOnce(
+        mockJsonResponse({ user: null }),
+      )
+
+      await store.checkSession()
+
+      expect(store.user).toBeNull()
+      expect(store.isAuthenticated).toBe(false)
+    })
+
+    it('clears user on 401 response', async () => {
+      setActivePinia(createPinia())
+      const store = useAuthStore()
+      store.user = { id: '1', email: 'test@test.com' }
       mockFetch.mockResolvedValueOnce(
         mockJsonResponse({ message: 'Unauthorized' }, 401),
       )
@@ -164,42 +162,31 @@ describe('useAuthStore', () => {
       await store.checkSession()
 
       expect(store.user).toBeNull()
-      expect(store.token).toBeNull()
-      expect(localStorage.getItem('auth_token')).toBeNull()
       expect(store.isAuthenticated).toBe(false)
     })
   })
 
   describe('logout', () => {
-    it('clears token and user', async () => {
-      localStorage.setItem('auth_token', 'some-token')
-      setActivePinia(createPinia())
-
+    it('clears user on logout', async () => {
       const store = useAuthStore()
       store.user = { id: '1', email: 'test@test.com' }
       mockFetch.mockResolvedValueOnce(mockJsonResponse({}, 204))
 
       await store.logout()
 
-      expect(store.token).toBeNull()
       expect(store.user).toBeNull()
-      expect(localStorage.getItem('auth_token')).toBeNull()
       expect(store.isAuthenticated).toBe(false)
     })
 
-    it('clears token even when API call fails', async () => {
-      localStorage.setItem('auth_token', 'some-token')
-      setActivePinia(createPinia())
-
+    it('clears user even when API call fails', async () => {
       const store = useAuthStore()
       store.user = { id: '1', email: 'test@test.com' }
       mockFetch.mockRejectedValueOnce(new Error('Network error'))
 
       await store.logout()
 
-      expect(store.token).toBeNull()
       expect(store.user).toBeNull()
-      expect(localStorage.getItem('auth_token')).toBeNull()
+      expect(store.isAuthenticated).toBe(false)
     })
   })
 })

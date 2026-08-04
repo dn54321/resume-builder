@@ -41,8 +41,6 @@ const router = createRouter({
 function createAuthenticatedStore() {
   const store = useAuthStore()
   store.user = { id: 'user-1', email: 'test@example.com' }
-  store.token = 'valid-token'
-  localStorage.setItem('auth_token', 'valid-token')
   return store
 }
 

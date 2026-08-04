@@ -38,8 +38,6 @@ const router = createRouter({
 function createAuthenticatedStore() {
   const store = useAuthStore()
   store.user = { id: 'user-1', email: 'test@example.com' }
-  store.token = 'valid-token'
-  localStorage.setItem('auth_token', 'valid-token')
   return store
 }
 
@@ -206,11 +204,10 @@ describe('AccountView', () => {
       await wrapper.vm.$nextTick()
       await new Promise((resolve) => setTimeout(resolve, 10))
 
-      // After logout, token and user should be cleared
+      // After logout, user should be cleared
       const store = useAuthStore()
-      expect(store.token).toBeNull()
       expect(store.user).toBeNull()
-      expect(localStorage.getItem('auth_token')).toBeNull()
+      expect(store.isAuthenticated).toBe(false)
     })
 
     it('shows error from server on wrong password', async () => {

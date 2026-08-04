@@ -8,6 +8,7 @@ import {
   ValidationPipe,
   UnauthorizedException,
 } from '@nestjs/common';
+import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AuthController } from '../auth.controller';
@@ -15,12 +16,13 @@ import { AuthService } from '../auth.service';
 
 interface AuthResponseBody {
   user: { id: string; email: string };
-  sessionToken: string;
 }
 
 interface MeResponseBody {
   user: { id: string; email: string } | null;
 }
+
+const COOKIE_NAME = 'session_token';
 
 describe('AuthController (integration)', () => {
   let app: INestApplication<App>;
@@ -49,6 +51,7 @@ describe('AuthController (integration)', () => {
     }).compile();
 
     app = module.createNestApplication();
+    app.use(cookieParser());
     app.setGlobalPrefix('api/v1');
     app.useGlobalPipes(
       new ValidationPipe({
@@ -65,7 +68,7 @@ describe('AuthController (integration)', () => {
   });
 
   describe('POST /api/v1/auth/signup', () => {
-    it('should return user and token on success', async () => {
+    it('should set session cookie and return user only', async () => {
       mockAuthService.signup.mockResolvedValue({
         user: { id: 'u1', email: 'test@test.com' },
         sessionToken: 'tok-123',
@@ -78,7 +81,17 @@ describe('AuthController (integration)', () => {
 
       const body = res.body as AuthResponseBody;
       expect(body.user.email).toBe('test@test.com');
-      expect(body.sessionToken).toBe('tok-123');
+      expect(body).not.toHaveProperty('sessionToken');
+
+      // Verify cookie is set
+      const cookies = res.headers['set-cookie'] as unknown as string[];
+      expect(cookies).toBeDefined();
+      const sessionCookie = cookies.find((c) =>
+        c.startsWith(`${COOKIE_NAME}=`),
+      );
+      expect(sessionCookie).toBeDefined();
+      expect(sessionCookie).toContain('HttpOnly');
+      expect(sessionCookie).toContain('SameSite=Lax');
     });
 
     it('should return 400 for missing fields', async () => {
@@ -90,7 +103,7 @@ describe('AuthController (integration)', () => {
   });
 
   describe('POST /api/v1/auth/login', () => {
-    it('should return user and token on success', async () => {
+    it('should set session cookie and return user only', async () => {
       mockAuthService.login.mockResolvedValue({
         user: { id: 'u1', email: 'test@test.com' },
         sessionToken: 'tok-456',
@@ -102,7 +115,13 @@ describe('AuthController (integration)', () => {
         .expect(200);
 
       const body = res.body as AuthResponseBody;
-      expect(body.sessionToken).toBe('tok-456');
+      expect(body).not.toHaveProperty('sessionToken');
+
+      const cookies = res.headers['set-cookie'] as unknown as string[];
+      const sessionCookie = cookies.find((c) =>
+        c.startsWith(`${COOKIE_NAME}=`),
+      );
+      expect(sessionCookie).toBeDefined();
     });
 
     it('should return 401 for invalid credentials', async () => {
@@ -118,38 +137,54 @@ describe('AuthController (integration)', () => {
   });
 
   describe('POST /api/v1/auth/logout', () => {
-    it('should return 204 with valid token', async () => {
+    it('should clear cookie with valid session', async () => {
       mockAuthService.logout.mockResolvedValue(undefined);
 
-      await request(app.getHttpServer())
+      const res = await request(app.getHttpServer())
         .post('/api/v1/auth/logout')
-        .set('Authorization', 'Bearer valid-token')
+        .set('Cookie', `${COOKIE_NAME}=valid-token`)
         .expect(204);
+
+      // Verify cookie is cleared (Set-Cookie with empty/expired value)
+      const cookies = res.headers['set-cookie'] as unknown as string[];
+      expect(cookies).toBeDefined();
+      const clearedCookie = cookies.find((c) =>
+        c.startsWith(`${COOKIE_NAME}=`),
+      );
+      expect(clearedCookie).toBeDefined();
+      expect(clearedCookie).toContain(`${COOKIE_NAME}=;`);
     });
 
-    it('should return 204 without token', async () => {
-      await request(app.getHttpServer())
+    it('should still clear cookie even without session', async () => {
+      const res = await request(app.getHttpServer())
         .post('/api/v1/auth/logout')
         .expect(204);
+
+      const cookies = res.headers['set-cookie'] as unknown as string[];
+      expect(cookies).toBeDefined();
+      const clearedCookie = cookies.find((c) =>
+        c.startsWith(`${COOKIE_NAME}=`),
+      );
+      expect(clearedCookie).toBeDefined();
     });
   });
 
   describe('GET /api/v1/auth/me', () => {
-    it('should return user for valid session', async () => {
+    it('should return user for valid session cookie', async () => {
       mockAuthService.validateSession.mockResolvedValue({
         user: { id: 'u1', email: 'test@test.com' },
       });
 
       const res = await request(app.getHttpServer())
         .get('/api/v1/auth/me')
-        .set('Authorization', 'Bearer valid-token')
+        .set('Cookie', `${COOKIE_NAME}=valid-token`)
         .expect(200);
 
       const body = res.body as MeResponseBody;
       expect(body.user?.email).toBe('test@test.com');
     });
 
-    it('should return null user when no token', async () => {
+    it('should return null user when no cookie', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/auth/me')
         .expect(200);
@@ -168,12 +203,12 @@ describe('AuthController (integration)', () => {
 
       await request(app.getHttpServer())
         .post('/api/v1/auth/change-password')
-        .set('Authorization', 'Bearer valid-token')
+        .set('Cookie', `${COOKIE_NAME}=valid-token`)
         .send({ currentPassword: 'old', newPassword: 'NewPass1' })
         .expect(204);
     });
 
-    it('should return 401 without token', async () => {
+    it('should return 401 without cookie', async () => {
       await request(app.getHttpServer())
         .post('/api/v1/auth/change-password')
         .send({ currentPassword: 'old', newPassword: 'NewPass1' })
@@ -185,7 +220,7 @@ describe('AuthController (integration)', () => {
 
       await request(app.getHttpServer())
         .post('/api/v1/auth/change-password')
-        .set('Authorization', 'Bearer bad-token')
+        .set('Cookie', `${COOKIE_NAME}=bad-token`)
         .send({ currentPassword: 'old', newPassword: 'NewPass1' })
         .expect(401);
     });
@@ -200,12 +235,12 @@ describe('AuthController (integration)', () => {
 
       await request(app.getHttpServer())
         .delete('/api/v1/auth/account')
-        .set('Authorization', 'Bearer valid-token')
+        .set('Cookie', `${COOKIE_NAME}=valid-token`)
         .send({ password: 'Password1' })
         .expect(204);
     });
 
-    it('should return 401 without token', async () => {
+    it('should return 401 without cookie', async () => {
       await request(app.getHttpServer())
         .delete('/api/v1/auth/account')
         .send({ password: 'Password1' })
@@ -217,7 +252,7 @@ describe('AuthController (integration)', () => {
 
       await request(app.getHttpServer())
         .delete('/api/v1/auth/account')
-        .set('Authorization', 'Bearer bad-token')
+        .set('Cookie', `${COOKIE_NAME}=bad-token`)
         .send({ password: 'Password1' })
         .expect(401);
     });

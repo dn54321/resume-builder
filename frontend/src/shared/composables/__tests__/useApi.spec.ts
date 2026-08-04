@@ -29,8 +29,7 @@ describe('useApi', () => {
       )
     })
 
-    it('includes auth token in headers when available', async () => {
-      localStorage.setItem('auth_token', 'test-token')
+    it('includes credentials: include so cookies are sent', async () => {
       global.fetch = vi.fn<typeof global.fetch>().mockResolvedValue({
         ok: true,
         status: 200,
@@ -43,13 +42,9 @@ describe('useApi', () => {
       expect(global.fetch).toHaveBeenCalledWith(
         'http://localhost:3000/api/test',
         expect.objectContaining({
-          headers: expect.objectContaining({
-            Authorization: 'Bearer test-token',
-          }),
+          credentials: 'include',
         }),
       )
-
-      localStorage.removeItem('auth_token')
     })
 
     it('throws ApiRequestError on non-ok response', async () => {
@@ -101,7 +96,7 @@ describe('useApi', () => {
   })
 
   describe('post', () => {
-    it('makes a POST request with JSON body', async () => {
+    it('makes a POST request with JSON body and credentials', async () => {
       const mockData = { success: true }
       global.fetch = vi.fn<typeof global.fetch>().mockResolvedValue({
         ok: true,
@@ -119,6 +114,7 @@ describe('useApi', () => {
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify(body),
+          credentials: 'include',
         }),
       )
     })
@@ -139,7 +135,7 @@ describe('useApi', () => {
   })
 
   describe('put', () => {
-    it('makes a PUT request with JSON body', async () => {
+    it('makes a PUT request with JSON body and credentials', async () => {
       global.fetch = vi.fn<typeof global.fetch>().mockResolvedValue({
         ok: true,
         status: 200,
@@ -151,13 +147,16 @@ describe('useApi', () => {
 
       expect(global.fetch).toHaveBeenCalledWith(
         'http://localhost:3000/api/test',
-        expect.objectContaining({ method: 'PUT' }),
+        expect.objectContaining({
+          method: 'PUT',
+          credentials: 'include',
+        }),
       )
     })
   })
 
   describe('del', () => {
-    it('makes a DELETE request', async () => {
+    it('makes a DELETE request with credentials', async () => {
       global.fetch = vi.fn<typeof global.fetch>().mockResolvedValue({
         ok: true,
         status: 200,
@@ -169,7 +168,10 @@ describe('useApi', () => {
 
       expect(global.fetch).toHaveBeenCalledWith(
         'http://localhost:3000/api/test',
-        expect.objectContaining({ method: 'DELETE' }),
+        expect.objectContaining({
+          method: 'DELETE',
+          credentials: 'include',
+        }),
       )
     })
 
@@ -211,8 +213,7 @@ describe('useApi', () => {
       })
     })
 
-    it('makes request without auth token when none is set', async () => {
-      localStorage.removeItem('auth_token')
+    it('no longer sends Authorization header (cookie-based auth)', async () => {
       global.fetch = vi.fn<typeof global.fetch>().mockResolvedValue({
         ok: true,
         status: 200,
@@ -222,7 +223,9 @@ describe('useApi', () => {
       const { get } = useApi()
       await get('/api/test')
 
-      const headers = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]![1]!.headers as Record<string, string>
+      const callArgs = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]!
+      const headers = callArgs[1]!.headers as Record<string, string>
+      // Should not have Authorization header — cookies handle auth
       expect(headers['Authorization']).toBeUndefined()
     })
   })

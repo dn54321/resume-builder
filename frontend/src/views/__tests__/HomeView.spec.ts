@@ -32,8 +32,6 @@ function mountHome(options?: { authenticated?: boolean }) {
   if (options?.authenticated) {
     const auth = useAuthStore()
     auth.user = { id: 'user-1', email: 'test@example.com' }
-    auth.token = 'valid-token'
-    localStorage.setItem('auth_token', 'valid-token')
   }
 
   const router = createTestRouter()

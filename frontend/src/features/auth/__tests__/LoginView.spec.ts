@@ -97,7 +97,6 @@ describe('LoginView', () => {
   it('redirects to /dashboard when already authenticated', async () => {
     // Simulate authenticated state by setting user and token
     const store = useAuthStore()
-    store.token = 'existing-token'
     store.user = { id: '1', email: 'test@test.com' }
 
     mountLogin()
