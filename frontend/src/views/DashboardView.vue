@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/features/auth/composables/useAuth'
 import { useApi, ApiRequestError } from '@/shared/composables/useApi'
@@ -22,6 +22,14 @@ const isLoading = ref(true)
 const error = ref('')
 const showConfirmModal = ref(false)
 const resumeToDelete = ref<ResumeSummary | null>(null)
+
+// ── Inline rename state ─────────────────────
+
+const editingId = ref<string | null>(null)
+const editValue = ref('')
+const editingOriginal = ref('')
+const renameError = ref('')
+const renameLoading = ref(false)
 
 onMounted(async () => {
   if (!auth.isAuthenticated) {
@@ -83,6 +91,70 @@ function formatDate(dateStr: string): string {
     month: 'short',
     day: 'numeric',
   })
+}
+
+// ── Inline rename ───────────────────────────
+
+/**
+ * Start editing a resume's name.
+ * @param {ResumeSummary} resume - The resume to rename
+ */
+function startEditing(resume: ResumeSummary): void {
+  editingId.value = resume.id
+  editingOriginal.value = resume.name || 'Untitled'
+  editValue.value = resume.name || 'Untitled'
+  renameError.value = ''
+
+  void nextTick(() => {
+    const input = document.querySelector<HTMLInputElement>(
+      `.resume-card__name-input[data-id="${resume.id}"]`,
+    )
+    input?.focus()
+    input?.select()
+  })
+}
+
+/**
+ * Commit the rename via API call.
+ */
+async function commitRename(): Promise<void> {
+  const id = editingId.value
+  if (!id) return
+
+  const trimmed = editValue.value.trim()
+
+  // No change — cancel
+  if (trimmed === editingOriginal.value || trimmed === '') {
+    cancelRename()
+    return
+  }
+
+  renameError.value = ''
+  renameLoading.value = true
+
+  try {
+    await api.put(`/api/v1/resumes/${id}`, { name: trimmed })
+    // Update local state
+    const resume = resumes.value.find((r) => r.id === id)
+    if (resume) resume.name = trimmed
+    editingId.value = null
+  } catch (err) {
+    if (err instanceof ApiRequestError) {
+      renameError.value = err.message
+    } else {
+      renameError.value = 'Failed to rename'
+    }
+  } finally {
+    renameLoading.value = false
+  }
+}
+
+/**
+ * Cancel inline rename, reverting to display state.
+ */
+function cancelRename(): void {
+  editingId.value = null
+  renameError.value = ''
 }
 
 /**
@@ -180,16 +252,52 @@ async function handleConfirmDelete(): Promise<void> {
         @keydown.space.prevent="router.push(`/builder/${resume.id}`)"
       >
         <div class="resume-card__header">
-          <h3 class="resume-card__name">{{ resume.name || resume.layout }}</h3>
+          <!-- Display name (click to edit) -->
+          <h3
+            v-if="editingId !== resume.id"
+            class="resume-card__name"
+            role="button"
+            tabindex="0"
+            :aria-label="`Rename ${resume.name || 'Untitled'}`"
+            @click.stop="startEditing(resume)"
+            @keydown.enter.prevent.stop="startEditing(resume)"
+            @keydown.space.prevent.stop="startEditing(resume)"
+          >
+            {{ resume.name || 'Untitled' }}
+          </h3>
+
+          <!-- Inline rename input -->
+          <div v-else class="resume-card__name-edit" @click.stop @keydown.stop>
+            <input
+              v-model="editValue"
+              :data-id="resume.id"
+              class="resume-card__name-input"
+              :disabled="renameLoading"
+              maxlength="200"
+              @keydown.enter="commitRename()"
+              @keydown.escape="cancelRename()"
+              @blur="commitRename()"
+            />
+            <span v-if="renameLoading" class="rename-spinner" />
+          </div>
+
           <button
             class="resume-card__delete-btn"
             data-testid="delete-btn"
-            :aria-label="`Delete ${resume.name || resume.layout}`"
+            :aria-label="`Delete ${resume.name || 'Untitled'}`"
             @click.stop="handleDeleteClick(resume)"
           >
             🗑️
           </button>
         </div>
+
+        <!-- Rename error -->
+        <p
+          v-if="editingId === resume.id && renameError"
+          class="rename-error"
+        >
+          {{ renameError }}
+        </p>
         <p class="resume-card__date">
           Updated {{ formatDate(resume.updatedAt) }}
         </p>
@@ -283,6 +391,7 @@ async function handleConfirmDelete(): Promise<void> {
   text-transform: capitalize;
   word-break: break-word;
   flex: 1;
+  cursor: text;
 }
 
 .resume-card__delete-btn {
@@ -296,6 +405,51 @@ async function handleConfirmDelete(): Promise<void> {
   border-radius: 4px;
   opacity: 0.5;
   transition: opacity 0.15s, background-color 0.15s;
+}
+
+/* ── Inline Rename ──────────────────────── */
+
+.resume-card__name-edit {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.resume-card__name-input {
+  flex: 1;
+  padding: 0.25rem 0.5rem;
+  font-size: 1.125rem;
+  border: 1px solid var(--color-foreground);
+  border-radius: 4px;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: inherit;
+  outline: none;
+}
+
+.resume-card__name-input:focus {
+  border-color: var(--color-foreground);
+  box-shadow: 0 0 0 2px var(--color-foreground);
+}
+
+.rename-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-foreground);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.rename-error {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  color: #dc2626;
 }
 
 .resume-card__delete-btn:hover {

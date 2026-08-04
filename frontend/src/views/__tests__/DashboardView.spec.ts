@@ -182,7 +182,7 @@ describe('DashboardView', () => {
     const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
     expect(cards.length).toBe(2)
     expect(cards[0]!.find('.resume-card__name').text()).toBe('Software Engineer Resume')
-    expect(cards[1]!.find('.resume-card__name').text()).toBe('modern')
+    expect(cards[1]!.find('.resume-card__name').text()).toBe('Untitled')
   })
 
   it('shows formatted dates on resume cards', async () => {
@@ -307,7 +307,7 @@ describe('DashboardView', () => {
     // Only resume-2 remains
     const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
     expect(cards.length).toBe(1)
-    expect(cards[0]!.find('.resume-card__name').text()).toBe('modern')
+    expect(cards[0]!.find('.resume-card__name').text()).toBe('Untitled')
   })
 
   it('closes modal without deleting when cancel is clicked', async () => {
@@ -554,5 +554,223 @@ describe('DashboardView', () => {
 
     const btn = wrapper.find('.dashboard-header .btn-primary')
     expect(btn.attributes('disabled')).toBeDefined()
+  })
+
+  // ── Inline Rename ─────────────────────────────────────────
+
+  it('swaps name to input on click and focuses it', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    // Click the first resume's name
+    const name = wrapper.findAll('.resume-card__name')[0]!
+    await name.trigger('click')
+    await flushPromises()
+
+    // Should now show an input
+    const input = wrapper.find('.resume-card__name-input')
+    expect(input.exists()).toBe(true)
+    expect((input.element as HTMLInputElement).value).toBe('Software Engineer Resume')
+  })
+
+  it('commits rename on Enter and calls PUT', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    // PUT response for rename
+    mockFetch.mockResolvedValueOnce(
+      mockJsonResponse({ id: 'resume-1', name: 'New Name', layout: 'standard' }),
+    )
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    // Start editing
+    const name = wrapper.findAll('.resume-card__name')[0]!
+    await name.trigger('click')
+    await flushPromises()
+
+    // Type new name and press Enter
+    const input = wrapper.find('.resume-card__name-input')
+    await input.setValue('New Name')
+    await input.trigger('keydown.enter')
+    await flushPromises()
+
+    // Should have called PUT
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/v1/resumes/resume-1',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ name: 'New Name' }),
+      }),
+    )
+
+    // Should be back to display mode
+    expect(wrapper.find('.resume-card__name-input').exists()).toBe(false)
+    expect(wrapper.findAll('.resume-card__name')[0]!.text()).toBe('New Name')
+  })
+
+  it('cancels rename on Escape and reverts to display mode', async () => {
+    createAuthenticatedStore()
+    // Deep-clone to avoid shared-mock mutation from prior tests
+    const data = JSON.parse(JSON.stringify(mockResumes)) as typeof mockResumes
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(data))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    // Start editing
+    const name = wrapper.findAll('.resume-card__name')[0]!
+    await name.trigger('click')
+    await flushPromises()
+
+    // Change value then press Escape
+    const input = wrapper.find('.resume-card__name-input')
+    await input.setValue('Changed')
+    await input.trigger('keydown.escape')
+    await flushPromises()
+
+    // Should be back to display mode (input gone, name shown)
+    expect(wrapper.find('.resume-card__name-input').exists()).toBe(false)
+    expect(wrapper.find('.resume-card__name').exists()).toBe(true)
+    // Name should not be the edited value
+    expect(wrapper.find('.resume-card__name').text()).not.toBe('Changed')
+  })
+
+  it('commits rename on blur', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    mockFetch.mockResolvedValueOnce(
+      mockJsonResponse({ id: 'resume-1', name: 'Blurred Name', layout: 'standard' }),
+    )
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    // Start editing
+    const name = wrapper.findAll('.resume-card__name')[0]!
+    await name.trigger('click')
+    await flushPromises()
+
+    // Type and blur
+    const input = wrapper.find('.resume-card__name-input')
+    await input.setValue('Blurred Name')
+    await input.trigger('blur')
+    await flushPromises()
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/v1/resumes/resume-1',
+      expect.objectContaining({ method: 'PUT' }),
+    )
+  })
+
+  it('cancels rename when trimmed value is empty', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    // Start editing
+    const name = wrapper.findAll('.resume-card__name')[0]!
+    await name.trigger('click')
+    await flushPromises()
+
+    // Clear and press Enter
+    const input = wrapper.find('.resume-card__name-input')
+    await input.setValue('   ')
+    await input.trigger('keydown.enter')
+    await flushPromises()
+
+    // Should cancel — no PUT call, back to display
+    expect(wrapper.find('.resume-card__name-input').exists()).toBe(false)
+  })
+
+  it('shows rename error on failed PUT', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    mockFetch.mockResolvedValueOnce(
+      mockJsonResponse({ message: 'Name already taken' }, 409),
+    )
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    // Start editing
+    const name = wrapper.findAll('.resume-card__name')[0]!
+    await name.trigger('click')
+    await flushPromises()
+
+    // Type and press Enter
+    const input = wrapper.find('.resume-card__name-input')
+    await input.setValue('Conflict Name')
+    await input.trigger('keydown.enter')
+    await flushPromises()
+
+    // Should show rename error and still be in editing mode
+    expect(wrapper.find('.rename-error').exists()).toBe(true)
+    expect(wrapper.find('.rename-error').text()).toBe('Name already taken')
+    expect(wrapper.find('.resume-card__name-input').exists()).toBe(true)
+  })
+
+  it('shows Untitled for null name resumes', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    // Second resume has name: null
+    const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
+    expect(cards[1]!.find('.resume-card__name').text()).toBe('Untitled')
+  })
+
+  it('does not call PUT when name is unchanged', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    // Start editing
+    const name = wrapper.findAll('.resume-card__name')[0]!
+    await name.trigger('click')
+    await flushPromises()
+
+    // Press Enter without changing the value
+    const input = wrapper.find('.resume-card__name-input')
+    await input.trigger('keydown.enter')
+    await flushPromises()
+
+    // Should only have one fetch call (the initial GET)
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+    // Back to display mode
+    expect(wrapper.find('.resume-card__name-input').exists()).toBe(false)
   })
 })
