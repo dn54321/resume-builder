@@ -41,15 +41,7 @@ function findPiBinary(): string {
     '/usr/local/bin',
   ];
 
-  // First try `which pi`
-  try {
-    const result = cp.spawnSync('which', ['pi'], { encoding: 'utf-8', timeout: 3000 });
-    if (result.status === 0 && result.stdout.trim()) {
-      return result.stdout.trim();
-    }
-  } catch { /* ignore */ }
-
-  // Try nvm: find the latest node version's bin directory
+  // Try nvm first (most reliable, avoids PATH-dependent which) — find the latest node version's bin directory
   const nvmBase = path.join(homedir(), '.local', 'share', 'nvm');
   try {
     const versions = fs.readdirSync(nvmBase).filter(d => /^v\d/.test(d)).sort().reverse();
@@ -187,9 +179,13 @@ export class AgentPool {
     const logPath = path.join(getStateDir(), 'logs', `${name}.log`);
     const logStream = fs.createWriteStream(logPath, { flags: 'a' });
 
+    // cwd must exist or spawn fails with ENOENT.
+    // worktreePath may not exist yet (created later by assignTask).
+    const spawnCwd = fs.existsSync(worktreePath) ? worktreePath : getRepoRoot();
+
     // pi 0.83+ removed -s; use --system-prompt for interactive sessions
     const proc = cp.spawn(PI_BIN, ['--system-prompt', `@${promptContent}`], {
-      cwd: worktreePath || getRepoRoot(),
+      cwd: spawnCwd,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
         ...process.env,
