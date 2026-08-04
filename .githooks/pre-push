@@ -96,6 +96,9 @@ run_group() {
     run_step "$step_label" bash -c "$step_cmd"
     [ "$FAILED" -eq 1 ] && return
   done
+  # Ensure the function always returns 0. The last [ ... ] check in the loop
+  # returns 1 when FAILED=0, and with set -e that would kill the entire script.
+  true
 }
 
 # ─── Backend ──────────────────────────────────────────────────────────
