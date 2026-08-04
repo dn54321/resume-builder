@@ -1,111 +1,284 @@
 # =============================================================================
-# Atlas Configuration
+# Atlas Configuration — Multi-Agent Ticket Orchestration System
 # =============================================================================
+#
+# This file defines every aspect of Atlas behavior: agent types and their
+# lifecycles, branch strategies, scheduler intervals, and integration settings.
+#
+# The boss can adjust intervals and strategy at runtime via intercom commands:
+#   SET_INTERVAL pr_scan 60
+#   SET_STRATEGY direct
+#
+# =============================================================================
+
 version: "2.0"
 
+# ─── Agent Definitions ───────────────────────────────────────────────────────
+#
+# Each agent type has:
+#   enabled:          Whether this agent type can be spawned at all
+#   prompt_file:      Path to the Markdown system prompt (relative to atlas/)
+#                     Supports {{PLACEHOLDER}} template variables:
+#                       {{AGENT_NAME}} {{AGENT_TYPE}} {{AGENT_PORT}}
+#                       {{WORKTREE_PATH}} {{STRATEGY}} {{PR_TARGET}}
+#   pre_script:       Bash script run BEFORE the pi session starts
+#                     Receives env vars: ATLAS_AGENT_NAME, ATLAS_AGENT_TYPE,
+#                     ATLAS_AGENT_PORT, ATLAS_WORKTREE, ATLAS_CONFIG
+#   post_script:      Bash script run AFTER the pi session exits
+#                     Receives env vars: ATLAS_AGENT_NAME, ATLAS_AGENT_EXIT_CODE,
+#                     ATLAS_AGENT_LOG, ATLAS_WORKTREE
+#   spawn:            When to spawn instances of this agent type:
+#                       manual      — only via boss command: SPAWN <type>
+#                       on_demand   — automatically when ready tickets exist
+#                       on_pr_opened — when a worker creates a PR
+#                       schedule    — runs periodically (see intervals.scheduled_agents)
+#   max_instances:    Maximum concurrent instances of this type
+#
 agents:
+
+  # ── Global Agent Pool Limit ──────────────────────────────────────────────
+  # Maximum total agents across ALL types combined (workers + reviewers + ...)
+  # The boss is NOT counted in this limit (boss is spawned by atlas.sh)
   max_concurrent: 4
 
+  # ── Boss Agent ──────────────────────────────────────────────────────────
+  # The boss oversees the system, fixes bugs, and answers worker questions.
+  # There can only be ONE boss. It is spawned by atlas.sh, not the pool.
+  # Commands SPAWN boss and KILL boss are blocked by the orchestrator.
   boss:
     enabled: true
     prompt_file: agents/boss/prompt.md
     pre_script: agents/boss/pre.sh
     post_script: agents/boss/post.sh
-    spawn: manual
+    spawn: manual                  # Always manual — atlas.sh creates the boss
 
+  # ── Worker Agent ────────────────────────────────────────────────────────
+  # Workers implement Linear tickets in isolated git worktrees.
+  # They are persistent interactive pi sessions — they register, receive TASK
+  # messages, report STATUS, and go IDLE between tickets. They never exit.
   worker:
     enabled: true
     prompt_file: agents/worker/prompt.md
     pre_script: agents/worker/pre.sh
     post_script: agents/worker/post.sh
-    spawn: on_demand
-    max_instances: 3
-    retry_limit: 2
-    task_timeout_minutes: 30
+    spawn: on_demand               # Auto-spawned when pending tickets exist
+    max_instances: 3               # Up to 3 workers running concurrently
+    retry_limit: 2                 # Max retries per ticket before marking failed
+    task_timeout_minutes: 30       # Kill worker if task takes longer than this
 
+  # ── Reviewer Agent ──────────────────────────────────────────────────────
+  # Reviews PRs for code quality, test coverage, and convention adherence.
+  # Disabled by default — the boss enables it with: SPAWN reviewer
   reviewer:
     enabled: false
     prompt_file: agents/reviewer/prompt.md
     pre_script: agents/reviewer/pre.sh
     post_script: agents/reviewer/post.sh
-    spawn: on_pr_opened
+    spawn: on_pr_opened            # Auto-spawned when a worker opens a PR
     max_instances: 1
-    review_checklist:
+    review_checklist:              # What the reviewer checks (shown in PR comments)
       - "Tests pass and coverage >= 90%"
       - "No security vulnerabilities"
       - "Follows project conventions (AGENTS.md)"
       - "PR body has all AC verification blocks"
       - "Frontend screenshots show normal + error states"
 
+  # ── PR Manager Agent ────────────────────────────────────────────────────
+  # Manages PR lifecycle: auto-merges approved PRs and cleans up stale branches.
+  # Disabled by default — the boss enables it with: SPAWN pr_manager
   pr_manager:
     enabled: false
     prompt_file: agents/pr-manager/prompt.md
     pre_script: agents/pr-manager/pre.sh
     post_script: agents/pr-manager/post.sh
-    spawn: schedule
+    spawn: schedule                # Runs on a timer (see intervals.scheduled_agents)
     max_instances: 1
-    auto_merge_threshold_hours: 24
-    cleanup_stale_branches_days: 7
+    auto_merge_threshold_hours: 24 # Auto-merge PRs approved for this many hours
+    cleanup_stale_branches_days: 7 # Delete merged branches older than this
 
+# ─── Branch Strategy ─────────────────────────────────────────────────────────
+#
+# Determines how completed work reaches the target branch. Three strategies:
+#
+#   pr      — Create a pull request against pr_target.
+#             Reviewer can approve; PR manager can auto-merge.
+#             Use for: feature work, anything needing human review.
+#
+#   direct  — Push directly to direct_push branch (no PR).
+#             Fastest path. Use for: hotfixes, trivial changes, trusted branches.
+#
+#   review  — Create a PR against review_target with a review checklist.
+#             More structured than pr — checklist items must be verified.
+#             Use for: experimental work, changes needing thorough review.
+#
+# Overrides use glob patterns. First match wins. The pattern is matched against
+# the worker's branch name (e.g., "ticket/res-42", "hotfix/security-patch").
+#
 strategy:
+
+  # Default strategy when no override matches
   default: pr
+
+  # Branch targets for each strategy
   branches:
-    pr_target: main
-    review_target: staging
-    direct_push: main
-    worktree_base: main
+    pr_target: main               # PRs are created against this branch
+    review_target: staging        # Review PRs target this branch
+    direct_push: main             # Direct merges push to this branch
+    worktree_base: main           # Worktrees branch off this (the starting point)
+
+  # Per-branch-pattern overrides (glob matching, first match wins)
   overrides:
+    # Hotfix branches skip review — merge directly to main
     - pattern: "hotfix/*"
       strategy: direct
+
+    # Release branches merge directly (already tested on develop)
     - pattern: "release/*"
       strategy: direct
+
+    # Feature branches PR into develop (not main) for integration testing
     - pattern: "feature/*"
       strategy: pr
       pr_target: develop
+
+    # Experimental branches require thorough review before merging
     - pattern: "experiment/*"
       strategy: review
 
+# ─── Main Loop Intervals (seconds) ───────────────────────────────────────────
+#
+# How often the orchestrator runs each scheduled action. The boss can adjust
+# any interval at runtime via: SET_INTERVAL <key> <seconds>
+#
+# Available keys: status_sync, pr_scan, dashboard_refresh, agent_health,
+#                 queue_process, scheduled_agents
+#
 intervals:
+
+  # Sync ticket statuses with Linear.
+  # Checks if tickets were manually transitioned in the Linear UI.
   status_sync: 10
+
+  # Scan open PRs for unaddressed review comments and merge conflicts.
+  # Re-queues tickets if new comments are found on their PRs.
   pr_scan: 10
+
+  # Refresh the tmux dashboard display (state/dashboard.txt).
+  # This is just visual — doesn't affect system behavior.
   dashboard_refresh: 2
+
+  # Health-check all running agents.
+  # Verifies processes are alive (kill -0) and heartbeats are recent.
+  # Dead agents are cleaned up and their tasks re-queued.
   agent_health: 15
+
+  # Check for ready tickets and assign them to idle workers.
+  # This is the core scheduling loop — reduce for faster response.
   queue_process: 5
-  scheduled_agents: 300
+
+  # Run schedule-based agents (e.g., pr_manager).
+  # These run less frequently since they handle cleanup/long-running tasks.
+  scheduled_agents: 300           # Every 5 minutes
+
+  # Timeout for webhook event handler execution.
+  # GitHub expects responses within 10-30 seconds.
   webhook_timeout: 30
 
+# ─── Linear Integration ──────────────────────────────────────────────────────
+#
+# Requires LINEAR_API_KEY set in .env.agent or environment.
+#
 linear:
-  team_key: RES
-  transitions:
-    on_start: "In Progress"
-    on_done: "Done"
-    on_failure: "Todo"
-    on_review: "In Review"
-  cache_ttl_minutes: 15
-  max_retries_on_rate_limit: 3
-  retry_backoff_ms: 1000
-  auto_discover_epics: true
 
+  # Team key prefix for ticket identifiers (e.g., "RES" → tickets like RES-42)
+  team_key: RES
+
+  # State transitions applied to Linear tickets
+  transitions:
+    on_start: "In Progress"       # When a worker starts working on a ticket
+    on_done: "Done"               # When work is merged or PR is created
+    on_failure: "Todo"            # When a ticket fails after all retries
+    on_review: "In Review"        # When a PR is created (pr/review strategies)
+
+  # Disk cache for Linear API responses (avoids rate limits on restart)
+  cache_ttl_minutes: 15           # How long cached responses are considered fresh
+
+  # Rate limit handling
+  max_retries_on_rate_limit: 3    # Retry up to 3 times on 429 responses
+  retry_backoff_ms: 1000          # Wait 1 second between retries (doubles each retry)
+
+  # Auto-discovery on startup
+  auto_discover_epics: true       # Find active epics from Linear automatically
+
+# ─── GitHub Integration ───────────────────────────────────────────────────────
+#
+# Requires GITHUB_TOKEN or GITHUB_PAT_KEY set in .env.agent or environment.
+#
 github:
-  webhook_enabled: true
+
+  # Webhook server for real-time PR event handling
+  webhook_enabled: true           # Start an HTTP server + ngrok tunnel for webhooks
+                                  # When false, relies on periodic pr_scan instead
+
+  # Labels automatically applied to Atlas-created PRs
   pr_labels:
     - "atlas"
     - "ai-generated"
+
+  # Create PRs as drafts? Draft PRs don't trigger CI or notifications.
   pr_draft: false
+
+  # How to merge PRs (applies to pr_manager auto-merge and gh CLI merges)
+  #   merge   — standard merge commit (preserves full history)
+  #   squash  — squash all commits into one (cleaner history)
+  #   rebase  — rebase and fast-forward merge (linear history)
   merge_method: squash
+
+  # Delete the source branch after a PR is merged?
   delete_branch_on_merge: true
+
+  # Number of approving reviews required before auto-merge (pr_manager)
   required_approvals: 1
 
+# ─── Agent Port Pool ──────────────────────────────────────────────────────────
+#
+# Each agent gets a dedicated port from this range for running local servers,
+# docker compose stacks, or e2e test environments. The port is exposed to the
+# agent as ATLAS_AGENT_PORT and {{AGENT_PORT}} in prompts.
+#
 ports:
-  min: 9000
-  max: 9099
+  min: 9000                       # First port in the pool
+  max: 9099                       # Last port in the pool (100 ports available)
 
+# ─── Logging ──────────────────────────────────────────────────────────────────
 logging:
+
+  # Log level for orchestrator output (state/atlas-*.log and console)
+  #   debug — verbose: every command, every state change, every API call
+  #   info  — normal: key events, errors, worker lifecycle
+  #   warn  — quiet: only warnings and errors
+  #   error — silent unless something breaks
   level: info
+
+  # Maximum lines kept per agent log file (older lines are truncated)
   max_log_lines_per_agent: 5000
+
+  # Auto-delete agent logs older than this many days
   retain_logs_days: 30
 
+# ─── Testing ──────────────────────────────────────────────────────────────────
+#
+# Configuration for the test suite (vitest).
+#
 testing:
+
+  # When true, orchestrator uses mock Linear/GitHub servers instead of real APIs.
+  # Set automatically in CI. Never enable in production.
   mock_external_services: false
+
+  # Minimum coverage threshold enforced by vitest.
+  # The build fails if coverage drops below this across any metric.
   coverage_threshold: 90
+
+  # Directory for test fixture data (mock API responses)
   fixtures_dir: tests/fixtures
