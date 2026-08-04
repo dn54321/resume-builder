@@ -90,9 +90,9 @@ run_group() {
   echo "${CYAN}═══ ${label} ═══${NC}"
 
   for step in "$@"; do
-    # step is "label:command" — e.g. "lint:npm --prefix $dir run lint"
-    local step_label="${step%%:*}"
-    local step_cmd="${step#*:}"
+    # step is "label§command" — e.g. "lint§npm --prefix $dir run lint"
+    local step_label="${step%%§*}"
+    local step_cmd="${step#*§}"
     run_step "$step_label" bash -c "$step_cmd"
     [ "$FAILED" -eq 1 ] && return
   done
@@ -101,22 +101,22 @@ run_group() {
 # ─── Backend ──────────────────────────────────────────────────────────
 
 run_group "BACKEND" "Backend" \
-  "lint:npm --prefix backend run lint" \
-  "type-check:npm --prefix backend run type-check" \
-  "test:cov:npm --prefix backend run test:cov"
+  "lint§npm --prefix backend run lint" \
+  "type-check§npm --prefix backend run type-check" \
+  "test:cov§npm --prefix backend run test:cov"
 
 # ─── Frontend ─────────────────────────────────────────────────────────
 
 run_group "FRONTEND" "Frontend" \
-  "lint:npm --prefix frontend run lint" \
-  "type-check:npm --prefix frontend run type-check" \
-  "test:cov:npm --prefix frontend run test:cov"
+  "lint§npm --prefix frontend run lint" \
+  "type-check§npm --prefix frontend run type-check" \
+  "test:cov§npm --prefix frontend run test:cov"
 
 # ─── Atlas ────────────────────────────────────────────────────────────
 
 run_group "ATLAS" "Atlas" \
-  "lint:npm --prefix atlas run lint" \
-  "test:cov:npm --prefix atlas run test:cov"
+  "lint§npm --prefix atlas run lint" \
+  "test§npm --prefix atlas run test"
 
 # ─── Result ───────────────────────────────────────────────────────────
 
