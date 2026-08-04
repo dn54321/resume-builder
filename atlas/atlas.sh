@@ -98,6 +98,43 @@ if ! kill -0 "$ORCHESTRATOR_PID" 2>/dev/null; then
 fi
 log "Orchestrator running (PID $ORCHESTRATOR_PID)"
 
+# ─── Write boss prompt with initial ticket commands ─────────────
+
+BOSS_PROMPT_FILE="$SCRIPT_DIR/agents/boss/prompt.md"
+BOSS_PROMPT_DIR="$SCRIPT_DIR/state/prompts"
+mkdir -p "$BOSS_PROMPT_DIR"
+
+# Build initial commands for the boss to auto-execute on startup
+INITIAL_COMMANDS=""
+if [ -n "${ATLAS_INITIAL_EPICS:-}" ]; then
+  INITIAL_COMMANDS="${INITIAL_COMMANDS}EPIC ${ATLAS_INITIAL_EPICS}"
+fi
+if [ -n "${ATLAS_INITIAL_TICKETS:-}" ]; then
+  INITIAL_COMMANDS="${INITIAL_COMMANDS}${INITIAL_COMMANDS:+; }TICKET ${ATLAS_INITIAL_TICKETS}"
+fi
+
+if [ -n "$INITIAL_COMMANDS" ]; then
+  log "Seeding boss prompt with: $INITIAL_COMMANDS"
+  # Append initial commands to the boss prompt
+  cat "$BOSS_PROMPT_FILE" > "$BOSS_PROMPT_DIR/boss-prompt.md"
+  echo "" >> "$BOSS_PROMPT_DIR/boss-prompt.md"
+  echo "## Immediate Actions" >> "$BOSS_PROMPT_DIR/boss-prompt.md"
+  echo "" >> "$BOSS_PROMPT_DIR/boss-prompt.md"
+  echo "After registering with the orchestrator, immediately send:" >> "$BOSS_PROMPT_DIR/boss-prompt.md"
+  echo "" >> "$BOSS_PROMPT_DIR/boss-prompt.md"
+  for cmd in $INITIAL_COMMANDS; do
+    # Replace ; with actual line breaks
+    echo "\`\`\`" >> "$BOSS_PROMPT_DIR/boss-prompt.md"
+    echo "$cmd" | tr ';' '\n' | while read -r line; do
+      [ -n "$line" ] && echo "intercom({ action: \"send\", to: \"orchestrator\", message: \"$line\" })" >> "$BOSS_PROMPT_DIR/boss-prompt.md"
+    done
+    echo "\`\`\`" >> "$BOSS_PROMPT_DIR/boss-prompt.md"
+  done
+  BOSS_PROMPT_ARG="@$BOSS_PROMPT_DIR/boss-prompt.md"
+else
+  BOSS_PROMPT_ARG="@$BOSS_PROMPT_FILE"
+fi
+
 # ─── Create tmux layout ──────────────────────────────────────────
 
 log "Creating tmux layout..."
@@ -130,7 +167,7 @@ log "  Banner → pane $BANNER_PANE (PERSISTENT)"
 # Pane 2: Boss (bottom-left)
 log "Creating boss pane..."
 tmux split-window -v -t "$SESSION_NAME:0.0" -c "$SCRIPT_DIR" -l 10 \
-  "$PI_BIN --append-system-prompt @$SCRIPT_DIR/agents/boss/prompt.md Start" || die "tmux split-window for boss failed"
+  "$PI_BIN --append-system-prompt ${BOSS_PROMPT_ARG} Start" || die "tmux split-window for boss failed"
 log "  Boss pane created"
 
 # ─── Done ────────────────────────────────────────────────────────
