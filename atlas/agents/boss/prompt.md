@@ -6,10 +6,43 @@ tickets get implemented correctly.
 ## Startup
 
 1. `/name boss`
-2. Register:
+2. Register with the orchestrator:
    ```
-   intercom({ action: "send", to: "orchestrator", message: "BOSS: <session-id>" })
+   intercom({ action: "send", to: "orchestrator", message: "BOSS: registering" })
    ```
+   The orchestrator tracks your intercom session automatically — the message
+   content after `BOSS:` is just a marker.
+3. Check what auto-loaded:
+   ```
+   intercom({ action: "send", to: "orchestrator", message: "STATUS" })
+   ```
+   The orchestrator auto-discovers active epics on startup. Reply arrives as an
+   intercom message in your session.
+4. If the board is empty or you need additional tickets, use `EPIC` / `TICKET`:
+   ```
+   intercom({ action: "send", to: "orchestrator", message: "EPIC RES-79" })
+   intercom({ action: "send", to: "orchestrator", message: "TICKET RES-80" })
+   ```
+
+## Intercom Protocol
+
+All communication with the orchestrator uses the `intercom()` tool provided by
+the pi-intercom extension. Commands are fire-and-forget via `action: "send"`.
+Replies arrive as incoming intercom messages in your session.
+
+```
+// Send a command to the orchestrator
+intercom({ action: "send", to: "orchestrator", message: "STATUS" })
+
+// Ask a worker a question (blocks until reply)
+intercom({ action: "ask", to: "worker-1", message: "What's blocking you?" })
+
+// Reply to an incoming ask
+intercom({ action: "reply", message: "Use the v2 API." })
+
+// List all connected sessions
+intercom({ action: "list" })
+```
 
 ## Your Tools
 
@@ -102,8 +135,77 @@ If you find a bug in Atlas itself (orchestrator, integrations, agents):
 If you find a bug in an agent's prompt or skills, update the files in
 `agents/<type>/` — the next spawned agent picks up the changes.
 
+## Notes — Persist Context Across Restarts
+
+You have a persistent notes file at `state/boss-notes.md`. Use it to carry your
+memory forward so you don't have to rediscover everything on restart.
+
+### Startup
+1. Read `state/boss-notes.md` immediately after registering
+2. If it exists, you'll see what your previous self discovered — loaded tickets,
+   bugs found, decisions made, worker issues. Resume from there.
+3. If it doesn't exist, you're a fresh boss. Note that and start discovering.
+
+### During Operation
+Update the notes whenever you learn something important that a future boss
+would need. Keep it concise and actionable. Write in bullet format with
+sections:
+
+```markdown
+# Boss Notes — <timestamp>
+
+## Loaded
+- RES-79: Polish UI (4 tickets)
+- (add as you EPIC/TICKET more)
+
+## Discovered
+- Bugs found, workarounds, things to watch for
+- pi binary path issues, extension loading gotchas, etc.
+
+## Configuration
+- SET_INTERVAL changes made
+- SPAWN / KILL actions taken
+
+## Decisions
+- Why certain tickets were DROPped or reprioritized
+- Strategy changes or manual interventions
+
+## Worker Notes
+- Which workers are struggling, patterns noticed
+- Any ASK questions answered and the resolution
+```
+
+### Rules
+- **Write before important actions** — if you're about to DROP an epic or
+  KILL a worker, note why first
+- **Update on discovery** — found a bug? Noted a pattern? Write it
+- **Keep it short** — bullet points, not essays. Future you needs facts,
+  not narrative
+- **File goes in `state/boss-notes.md`** — the state directory persists
+  across orchestrator restarts
+
 ## Priority
 1. Fix bugs that block ticket implementation
 2. Answer worker ASK messages immediately
 3. Monitor dashboard for stuck/failed tickets
 4. Proactively re-prioritize (DROP old epics, EPIC new ones)
+
+## Environment
+
+On startup, check these environment variables for initial work:
+
+| Variable | Purpose |
+|----------|---------|
+| `ATLAS_INITIAL_EPICS` | Space-separated epic IDs to load on startup |
+| `ATLAS_INITIAL_TICKETS` | Space-separated ticket IDs to load on startup |
+
+If set, send the corresponding commands after registering:
+```bash
+# In bash, read the env var and send commands
+for id in $ATLAS_INITIAL_EPICS; do
+  intercom({ action: "send", to: "orchestrator", message: "EPIC $id" })
+done
+for id in $ATLAS_INITIAL_TICKETS; do
+  intercom({ action: "send", to: "orchestrator", message: "TICKET $id" })
+done
+```

@@ -113,41 +113,15 @@ if [ ! -f "$READY_FILE" ]; then
 fi
 log "Orchestrator ready (scripts written after ${WAITED}s)"
 
-# ─── Write boss prompt with initial ticket commands ─────────────
+# ─── Boss prompt ────────────────────────────────────────────────
 
 BOSS_PROMPT_FILE="$SCRIPT_DIR/agents/boss/prompt.md"
-BOSS_PROMPT_DIR="$SCRIPT_DIR/state/prompts"
-mkdir -p "$BOSS_PROMPT_DIR"
+BOSS_PROMPT_ARG="@$BOSS_PROMPT_FILE"
 
-# Build initial commands for the boss to auto-execute on startup
-INITIAL_COMMANDS=""
-if [ -n "${ATLAS_INITIAL_EPICS:-}" ]; then
-  INITIAL_COMMANDS="${INITIAL_COMMANDS}EPIC ${ATLAS_INITIAL_EPICS}"
-fi
-if [ -n "${ATLAS_INITIAL_TICKETS:-}" ]; then
-  INITIAL_COMMANDS="${INITIAL_COMMANDS}${INITIAL_COMMANDS:+; }TICKET ${ATLAS_INITIAL_TICKETS}"
-fi
-
-if [ -n "$INITIAL_COMMANDS" ]; then
-  log "Seeding boss prompt with: $INITIAL_COMMANDS"
-  # Append initial commands to the boss prompt
-  cat "$BOSS_PROMPT_FILE" > "$BOSS_PROMPT_DIR/boss-prompt.md"
-  echo "" >> "$BOSS_PROMPT_DIR/boss-prompt.md"
-  echo "## Immediate Actions" >> "$BOSS_PROMPT_DIR/boss-prompt.md"
-  echo "" >> "$BOSS_PROMPT_DIR/boss-prompt.md"
-  echo "After registering with the orchestrator, immediately send:" >> "$BOSS_PROMPT_DIR/boss-prompt.md"
-  echo "" >> "$BOSS_PROMPT_DIR/boss-prompt.md"
-  for cmd in $INITIAL_COMMANDS; do
-    # Replace ; with actual line breaks
-    echo "\`\`\`" >> "$BOSS_PROMPT_DIR/boss-prompt.md"
-    echo "$cmd" | tr ';' '\n' | while read -r line; do
-      [ -n "$line" ] && echo "intercom({ action: \"send\", to: \"orchestrator\", message: \"$line\" })" >> "$BOSS_PROMPT_DIR/boss-prompt.md"
-    done
-    echo "\`\`\`" >> "$BOSS_PROMPT_DIR/boss-prompt.md"
-  done
-  BOSS_PROMPT_ARG="@$BOSS_PROMPT_DIR/boss-prompt.md"
-else
-  BOSS_PROMPT_ARG="@$BOSS_PROMPT_FILE"
+# Initial tickets are passed as env vars (ATLAS_INITIAL_EPICS, ATLAS_INITIAL_TICKETS).
+# The boss prompt instructs the agent to read them after registering.
+if [ -n "${ATLAS_INITIAL_EPICS:-}${ATLAS_INITIAL_TICKETS:-}" ]; then
+  log "Initial work queued via env vars (boss will auto-send on startup)"
 fi
 
 # ─── Create tmux layout ──────────────────────────────────────────

@@ -22,25 +22,90 @@ import { transitionTicket } from '../integrations/linear/client';
 
 // ─── Pi binary resolution ─────────────────────────────────────────
 
+/**
+ * Find the pi binary using the same search logic as atlas.sh.
+ * The orchestrator runs as a child of `npx tsx` which has a limited
+ * PATH — `which pi` often fails. We must search known locations.
+ */
 function findPiBinary(): string {
-  // Check the same paths as atlas.sh
   const candidates = [
-    path.join(homedir(), '.local', 'share', 'pnpm', 'bin', 'pi'),
-    path.join(homedir(), '.local', 'bin', 'pi'),
-    '/usr/local/bin/pi',
-    'pi',
+    // nvm-managed node (most common for development)
+    ...(process.env.HOME ? [
+      path.join(process.env.HOME, '.local', 'share', 'nvm'),
+    ] : []),
+    // pnpm global
+    path.join(homedir(), '.local', 'share', 'pnpm', 'bin'),
+    // Standard user-local
+    path.join(homedir(), '.local', 'bin'),
+    // System
+    '/usr/local/bin',
   ];
-  for (const candidate of candidates) {
+
+  // First try `which pi`
+  try {
+    const result = cp.spawnSync('which', ['pi'], { encoding: 'utf-8', timeout: 3000 });
+    if (result.status === 0 && result.stdout.trim()) {
+      return result.stdout.trim();
+    }
+  } catch { /* ignore */ }
+
+  // Try nvm: find the latest node version's bin directory
+  const nvmBase = path.join(homedir(), '.local', 'share', 'nvm');
+  try {
+    const versions = fs.readdirSync(nvmBase).filter(d => /^v\d/.test(d)).sort().reverse();
+    for (const ver of versions) {
+      const piPath = path.join(nvmBase, ver, 'bin', 'pi');
+      try {
+        fs.accessSync(piPath, fs.constants.X_OK);
+        return piPath;
+      } catch { /* try next version */ }
+    }
+  } catch { /* nvm not found */ }
+
+  // Try static paths
+  for (const dir of candidates) {
+    const piPath = path.join(dir, 'pi');
     try {
-      fs.accessSync(candidate, fs.constants.X_OK);
-      return candidate;
+      fs.accessSync(piPath, fs.constants.X_OK);
+      return piPath;
     } catch { /* try next */ }
   }
-  // Fall back to 'pi' and hope it's in PATH
+
+  // Last resort
   return 'pi';
 }
 
 const PI_BIN = findPiBinary();
+
+// ─── Spawn rate limiter ────────────────────────────────────────────
+// Prevent crash-loops: if agents repeatedly fail to spawn or exit
+// immediately, back off to avoid thousands of processes.
+
+const SPAWN_COOLDOWNS = new Map<string, number>(); // agentType → cooldownUntil timestamp
+const SPAWN_FAILURES = new Map<string, number>();   // agentType → consecutive failure count
+const MAX_CONSECUTIVE_FAILURES = 5;
+const BASE_COOLDOWN_MS = 1000;  // 1 second base, doubles each failure
+
+function canSpawnNow(type: string): boolean {
+  const cooldown = SPAWN_COOLDOWNS.get(type);
+  if (cooldown && Date.now() < cooldown) return false;
+  return true;
+}
+
+function recordSpawnFailure(type: string): void {
+  const count = (SPAWN_FAILURES.get(type) ?? 0) + 1;
+  SPAWN_FAILURES.set(type, count);
+  if (count >= MAX_CONSECUTIVE_FAILURES) {
+    const backoff = BASE_COOLDOWN_MS * Math.pow(2, Math.min(count - MAX_CONSECUTIVE_FAILURES, 5));
+    SPAWN_COOLDOWNS.set(type, Date.now() + backoff);
+    console.error(`[Pool] ${type} spawn failing repeatedly — backing off for ${backoff}ms`);
+  }
+}
+
+function recordSpawnSuccess(type: string): void {
+  SPAWN_FAILURES.delete(type);
+  SPAWN_COOLDOWNS.delete(type);
+}
 
 // ─── Agent Pool ─────────────────────────────────────────────────────
 
@@ -56,6 +121,12 @@ export class AgentPool {
   // ─── Spawn ────────────────────────────────────────────────────────
 
   async spawn(type: AgentType): Promise<AgentInstance | null> {
+    // Rate limit: if spawns are failing, back off
+    if (!canSpawnNow(type)) {
+      console.log(`[Pool] Spawn cooldown active for ${type} — skipping`);
+      return null;
+    }
+
     const config = getConfig();
     const agentDef = config.agents[type];
     if (!agentDef?.enabled) {
@@ -132,16 +203,24 @@ export class AgentPool {
 
     proc.on('close', (code) => {
       logStream.end();
+      // Track whether the agent actually ran or crashed immediately
+      if (Date.now() - instance.spawnedAt < 5000 && code !== 0) {
+        recordSpawnFailure(type);
+      } else {
+        recordSpawnSuccess(type);
+      }
       this.handleAgentExit(instance, code ?? 1);
     });
 
     proc.on('error', (err) => {
       logStream.end();
+      recordSpawnFailure(type);
       console.error(`[Pool] ${name} spawn error: ${err.message}`);
       instance.status = 'stopping';
     });
 
     this.agents.set(instance.id, instance);
+    recordSpawnSuccess(type); // Mark initial spawn as successful (process started)
 
     logStream.write(`[${new Date().toISOString()}] ${name} spawned (type=${type}, port=${port})\n`);
 
