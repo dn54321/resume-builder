@@ -21,11 +21,11 @@ describe('AuthController', () => {
   /**
    *
    */
-  function mockResponse(): Partial<Response> {
+  function mockResponse() {
     return {
       cookie: jest.fn(),
       clearCookie: jest.fn(),
-    };
+    } as Partial<Response>;
   }
 
   /**
@@ -80,6 +80,7 @@ describe('AuthController', () => {
         'test@example.com',
         'password123',
       );
+      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(res.cookie).toHaveBeenCalledWith(
         'session_token',
         'token-123',
@@ -119,9 +120,11 @@ describe('AuthController', () => {
       const req = mockRequest('token-abc');
       const res = mockResponse() as Response;
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       await authController.logout(req as any, res);
 
       expect(mockAuthService.logout).toHaveBeenCalledWith('token-abc');
+      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(res.clearCookie).toHaveBeenCalledWith('session_token', {
         path: '/',
       });
@@ -131,9 +134,11 @@ describe('AuthController', () => {
       const req = mockRequest(undefined);
       const res = mockResponse() as Response;
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       await authController.logout(req as any, res);
 
       expect(mockAuthService.logout).not.toHaveBeenCalled();
+      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(res.clearCookie).toHaveBeenCalledWith('session_token', {
         path: '/',
       });
