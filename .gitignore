@@ -3,6 +3,11 @@
 
 node_modules
 agent-status.txt
-.pi/tickets/
 pr-*
-screenshotsfrontend/resume.pdf
+screenshots
+frontend/resume.pdf
+
+# Atlas agent system state
+atlas/state/
+atlas/node_modules/
+atlas/coverage/

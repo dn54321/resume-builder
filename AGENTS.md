@@ -164,8 +164,8 @@ again by someone else, wastes cycles, and damages trust in the system.
 
 ## Ticket Agent System
 
-The ticket agent system (`agent.sh` + `.pi/extensions/ticket/`) spawns
-parallel AI workers that implement Linear tickets in isolated git worktrees.
+The ticket agent system is now **Atlas** (`atlas/`). See `atlas/ARCHITECTURE.md`
+for the full architecture.
 
 ### Quickstart
 
@@ -173,8 +173,10 @@ parallel AI workers that implement Linear tickets in isolated git worktrees.
 ./agent.sh
 ```
 
-Picks an active epic/ticket from Linear (via fzf), then opens a terminal
-dashboard with live agent output, queue status, and manual controls.
+Launches the Atlas multi-agent orchestration system. The orchestrator
+auto-discovers active tickets from Linear on startup. The boss (an
+interactive pi session) can add work via `EPIC <id>` and `TICKET <id>`
+commands.
 
 ### Secrets
 
@@ -187,27 +189,29 @@ All secrets go in `.env.agent` (template: `.env.agent.template`):
 | `NGROK_AUTHTOKEN` | ngrok tunnel for receiving GitHub webhooks on localhost | [dashboard.ngrok.com](https://dashboard.ngrok.com/get-started/your-authtoken) (free tier works) |
 | `IMGBB_API_KEY` | imgbb image hosting for PR screenshots | [api.imgbb.com](https://api.imgbb.com) |
 
-Agent config (also in `.env.agent`):
-
-| Key | Default | Purpose |
-|-----|---------|---------|
-| `MAX_SPAWN_AGENTS` | `3` | Maximum concurrent worker processes |
-| `AGENT_PORT_MIN` | `9000` | Start of port pool for workers + webhook server |
-| `AGENT_PORT_MAX` | `9099` | End of port pool |
+Agent config is now in `atlas/atlas.config.yaml` (not `.env.agent`).
 
 ### Architecture
 
 ```
-agent.sh                      # Interactive launcher (fzf picker)
-└─ cli.ts                     # Blessed TUI dashboard
-     ├─ orchestrator.ts       # Graph builder, worker spawner, state machine
-     │    ├─ linear.ts        # Linear GraphQL client
-     │    ├─ git.ts           # Git worktree + branch + PR management
-     │    └─ worker-prompt.md # Static worker instructions template
-     ├─ queue.ts              # Priority queue (review > conflict > pending > blocked)
-     ├─ github-pr.ts          # GitHub API: PR comments, merge conflicts, webhooks
-     ├─ server.ts             # HTTP webhook server + ngrok tunnel
-     └─ types.ts              # Shared types
+atlas/
+├── atlas.sh                     # Interactive launcher (tmux layout)
+├── atlas.config.yaml            # All configuration
+├── orchestrator/                # Core engine
+│   ├── server.ts                # Intercom server + main loop
+│   ├── scheduler.ts             # Configurable interval scheduler
+│   ├── graph.ts                 # Dependency graph builder
+│   ├── pool.ts                  # Agent lifecycle manager
+│   ├── strategist.ts            # PR/direct/review strategy resolver
+│   ├── state.ts                 # State persistence & recovery
+│   └── types.ts                 # Shared types
+├── agents/                      # Agent type definitions
+│   ├── boss/prompt.md           # Boss system prompt
+│   └── worker/                  # Worker prompt + pre/post scripts
+├── integrations/                # Linear, GitHub, Intercom clients
+├── git/                         # Worktree + branch operations
+├── tui/                         # Tmux pane manager + scripts
+└── skills/                      # Shared agent skills
 ```
 
 ### How it works
@@ -215,84 +219,38 @@ agent.sh                      # Interactive launcher (fzf picker)
 1. **Graph building:** Fetches a ticket and all its children/dependencies from
    Linear, builds a DAG. Blocked tickets wait for their dependencies to finish.
 
-2. **Queue:** Tickets are prioritized:
-   - `review` — open PR has unaddressed human comments
-   - `conflict` — PR touches files that overlap with another open PR
-   - `pending` — all dependencies done, ready to run
-   - `blocked` — waiting on unfinished dependencies
+2. **Agent pool:** Workers are persistent interactive pi sessions that register
+   via intercom. They receive TASK assignments, report STATUS, and go IDLE
+   when finished. No headless processes — all agents are interactive.
 
-3. **Workers:** Each worker is a headless `pi` process running in an isolated
-   git worktree. Workers get an assigned port from the pool and a prompt
-   containing the ticket description, dependency info, and an optional context
-   (PR review comments or merge conflict details).
+3. **Completion:** On success, the strategist determines how to deliver the
+   work: create a PR (`pr` strategy), merge directly (`direct`), or create a
+   review PR (`review`). Strategy is configurable with glob-based overrides
+   per branch pattern.
 
-4. **Completion:** On success, the worker commits changes, pushes the branch,
-   creates a PR (via `gh` CLI or GitHub API), and transitions the Linear ticket
-   to "Done". On failure with retries remaining, the worker restarts with the
-   previous attempt's output as context.
+4. **Webhooks:** A local HTTP server receives GitHub events. Ngrok exposes it
+   to the internet. On `pull_request` and comment events, merge conflicts and
+   unaddressed comments are re-scanned.
 
-5. **Webhooks:** A local HTTP server receives GitHub events. Ngrok exposes it
-   to the internet. On `pull_request` (push/sync), merge conflicts are
-   re-scanned. On `issue_comment` / `pull_request_review_comment`, unaddressed
-   comments are re-scanned. The queue is re-prioritized and agents are spawned
-   or preempted accordingly.
+5. **Banner persistence:** The right column of the tmux layout has a
+   persistent banner pane that is never killed. Worker panes split from
+   it vertically. This guarantees the two-column layout is always available.
 
-6. **Preemption:** If a running agent is blocked on unfinished dependencies
-   and a higher-priority ticket is ready, the agent is killed (SIGTERM) and
-   re-queued. The higher-priority ticket gets spawned.
-
-### Dashboard (tmux)
-
-```
-┌──────────────────────────┬──────────────────────────────┐
-│ ══ Ticket Agents         │ agent-1 (pi)                 │
-│     Dashboard  12:34:56  │                              │
-│                           ├──────────────────────────────┤
-│ 2 epic(s) · 8 tickets    │ agent-2 (pi)                 │
-│ 2 running · 3 done       │                              │
-│                           │                              │
-│ ── RES-10: Auth System ─ │                              │
-│   ◉ RES-11  Add login    │                              │
-│   ✓ RES-12  Add JWT      ├──────────────────────────────┤
-│                           │ agent-3 (pi)                 │
-│ ── RES-20: Database ──── │                              │
-│   ◉ RES-21  Migrations   │                              │
-│   ○ RES-22  Seeds        │                              │
-│                           │                              │
-│ ── Workers ──             │                              │
-│   ◉ agent-1 → RES-11     │                              │
-│   ◉ agent-2 → RES-21     │                              │
-│   ○ agent-3  idle        │                              │
-├───────────────────────────┴──────────────────────────────┤
-│ boss (pi) — small pane at bottom                         │
-└──────────────────────────────────────────────────────────┘
-```
-
-The left pane shows a **static dashboard** that refreshes every 2 seconds.
-The right panes are interactive pi sessions for workers and the boss.
-
-Server commands (send via intercom to "server"):
-- `EPIC <id1> <id2> ...` — add one or more epic graphs
-- `DROP <id>` — remove an epic from management
-- `TICKET <id>` — add a single ticket as a mini-graph
-- `STOP` / `STOP agent-N` — halt all or a specific worker
-- `ASSIGN agent-N TICKET-ID` — manually assign a ticket
-- `CLOSE <id>` — close a ticket in Linear
-- `STATUS` — get current state summary
+6. **Boss control:** The boss can adjust scheduler intervals at runtime
+   (`SET_INTERVAL pr_scan 30`), spawn/kill agent types (`SPAWN reviewer`),
+   and change strategies. See `atlas/ARCHITECTURE.md` for full protocol.
 
 ### State persistence
 
-State is saved to `.pi/tickets/state.json`. On restart, the system loads
-previous state and resumes: previously-running agents are checked for
-liveness, failed tickets with retries left are reset to pending, done
-tickets stay done.
+State is saved to `atlas/state/atlas.json`. On restart, the system loads
+previous state, checks liveness of running agents, and recovers completed
+work from worktree commits.
 
 ### Testing conventions
 
 When testing agent system changes:
-1. Start with `./agent.sh` and pick a ticket
-2. Verify the dashboard renders with the agent list, output, and status bar
-3. Press `p` on an agent and send a prompt — verify the worker restarts
-4. Press `q` to quit — verify `ps aux | grep pi` shows no orphaned workers
-5. Check `.pi/tickets/logs/` for worker output and `.pi/tickets/state.json`
-   for saved state
+1. Start with `./agent.sh`
+2. Verify the tmux layout renders (dashboard, banner, boss)
+3. Send `STATUS` via the boss — verify agents are spawning
+4. Press `q` to quit — verify `ps aux | grep pi` shows no orphaned processes
+5. Check `atlas/state/atlas.json` for saved state

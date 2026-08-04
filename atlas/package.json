@@ -1,0 +1,27 @@
+{
+  "name": "atlas",
+  "version": "2.0.0",
+  "description": "Atlas — Multi-Agent Ticket Orchestration System",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "start": "npx tsx orchestrator/index.ts",
+    "dev": "npx tsx watch orchestrator/index.ts",
+    "test": "vitest run",
+    "test:cov": "vitest run --coverage",
+    "test:watch": "vitest",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf state/worktrees state/logs state/cache state/prompts",
+    "setup": "bash scripts/setup.sh"
+  },
+  "dependencies": {
+    "tsx": "^4.0.0",
+    "yaml": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0",
+    "@vitest/coverage-v8": "^1.0.0"
+  }
+}

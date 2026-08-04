@@ -9,12 +9,14 @@ const mockLogout = vi.fn<() => Promise<void>>()
 
 // Create mock auth state that we can mutate per test
 let mockIsAuthenticated = false
+let mockAuthReady = true
 const mockUser = { id: '1', email: 'test@example.com' }
 let mockUserValue: { id: string; email: string } | null = null
 
 vi.mock('@/features/auth/composables/useAuth', () => ({
   useAuth: () => ({
     isAuthenticated: mockIsAuthenticated,
+    authReady: mockAuthReady,
     user: mockUserValue,
     checkSession: mockCheckSession,
     logout: mockLogout,
@@ -69,6 +71,7 @@ describe('App', () => {
     setActivePinia(pinia)
     vi.clearAllMocks()
     mockIsAuthenticated = false
+    mockAuthReady = true
     mockUserValue = null
   })
 
@@ -90,6 +93,25 @@ describe('App', () => {
       const wrapper = await mountApp(router)
       // Logo/brand acts as the home link — no separate "Home" text needed
       expect(wrapper.text()).toContain('Resume Builder')
+    })
+  })
+
+  describe('auth readiness', () => {
+    beforeEach(() => {
+      mockAuthReady = false
+    })
+
+    it('shows skeleton placeholders while auth is not ready', async () => {
+      const router = makeRouter()
+      const wrapper = await mountApp(router)
+
+      // Skeleton placeholders are visible
+      expect(wrapper.find('.animate-pulse').exists()).toBe(true)
+
+      // Auth-dependent content is not shown
+      expect(wrapper.text()).not.toContain('Log in')
+      expect(wrapper.text()).not.toContain('Sign up')
+      expect(wrapper.text()).not.toContain('My Resumes')
     })
   })
 

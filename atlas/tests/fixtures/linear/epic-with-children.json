@@ -1,0 +1,21 @@
+{
+  "issues": {
+    "nodes": [
+      {
+        "id": "id-res-10",
+        "identifier": "RES-10",
+        "title": "Auth Epic",
+        "description": "ref: none",
+        "parent": null,
+        "url": "https://linear.app/issue/RES-10",
+        "children": {
+          "nodes": [
+            { "id": "id-res-11" },
+            { "id": "id-res-12" },
+            { "id": "id-res-13" }
+          ]
+        }
+      }
+    ]
+  }
+}

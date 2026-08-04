@@ -1,0 +1,111 @@
+# =============================================================================
+# Atlas Configuration
+# =============================================================================
+version: "2.0"
+
+agents:
+  max_concurrent: 4
+
+  boss:
+    enabled: true
+    prompt_file: agents/boss/prompt.md
+    pre_script: agents/boss/pre.sh
+    post_script: agents/boss/post.sh
+    spawn: manual
+
+  worker:
+    enabled: true
+    prompt_file: agents/worker/prompt.md
+    pre_script: agents/worker/pre.sh
+    post_script: agents/worker/post.sh
+    spawn: on_demand
+    max_instances: 3
+    retry_limit: 2
+    task_timeout_minutes: 30
+
+  reviewer:
+    enabled: false
+    prompt_file: agents/reviewer/prompt.md
+    pre_script: agents/reviewer/pre.sh
+    post_script: agents/reviewer/post.sh
+    spawn: on_pr_opened
+    max_instances: 1
+    review_checklist:
+      - "Tests pass and coverage >= 90%"
+      - "No security vulnerabilities"
+      - "Follows project conventions (AGENTS.md)"
+      - "PR body has all AC verification blocks"
+      - "Frontend screenshots show normal + error states"
+
+  pr_manager:
+    enabled: false
+    prompt_file: agents/pr-manager/prompt.md
+    pre_script: agents/pr-manager/pre.sh
+    post_script: agents/pr-manager/post.sh
+    spawn: schedule
+    max_instances: 1
+    auto_merge_threshold_hours: 24
+    cleanup_stale_branches_days: 7
+
+strategy:
+  default: pr
+  branches:
+    pr_target: main
+    review_target: staging
+    direct_push: main
+    worktree_base: main
+  overrides:
+    - pattern: "hotfix/*"
+      strategy: direct
+    - pattern: "release/*"
+      strategy: direct
+    - pattern: "feature/*"
+      strategy: pr
+      pr_target: develop
+    - pattern: "experiment/*"
+      strategy: review
+
+intervals:
+  status_sync: 10
+  pr_scan: 10
+  dashboard_refresh: 2
+  agent_health: 15
+  queue_process: 5
+  scheduled_agents: 300
+  webhook_timeout: 30
+
+linear:
+  team_key: RES
+  transitions:
+    on_start: "In Progress"
+    on_done: "Done"
+    on_failure: "Todo"
+    on_review: "In Review"
+  cache_ttl_minutes: 15
+  max_retries_on_rate_limit: 3
+  retry_backoff_ms: 1000
+  auto_discover_epics: true
+
+github:
+  webhook_enabled: true
+  pr_labels:
+    - "atlas"
+    - "ai-generated"
+  pr_draft: false
+  merge_method: squash
+  delete_branch_on_merge: true
+  required_approvals: 1
+
+ports:
+  min: 9000
+  max: 9099
+
+logging:
+  level: info
+  max_log_lines_per_agent: 5000
+  retain_logs_days: 30
+
+testing:
+  mock_external_services: false
+  coverage_threshold: 90
+  fixtures_dir: tests/fixtures

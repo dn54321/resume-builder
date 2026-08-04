@@ -9,6 +9,7 @@ export function useAuth() {
   return {
     user: store.user,
     isAuthenticated: store.isAuthenticated,
+    authReady: store.authReady,
     login: store.login,
     signup: store.signup,
     logout: store.logout,
