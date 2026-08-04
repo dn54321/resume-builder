@@ -1,4 +1,4 @@
-jest.mock('../../generated/prisma/client', () => ({
+jest.mock('../../../generated/prisma/client', () => ({
   PrismaClient: jest.fn().mockImplementation(() => ({})),
 }));
 
@@ -10,8 +10,8 @@ import {
 } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
-import { AuthController } from './auth.controller';
-import { AuthService } from './auth.service';
+import { AuthController } from '../auth.controller';
+import { AuthService } from '../auth.service';
 
 interface AuthResponseBody {
   user: { id: string; email: string };
@@ -22,7 +22,7 @@ interface MeResponseBody {
   user: { id: string; email: string } | null;
 }
 
-describe('AuthController (e2e)', () => {
+describe('AuthController (integration)', () => {
   let app: INestApplication<App>;
   let mockAuthService: {
     signup: jest.Mock;
