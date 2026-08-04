@@ -677,8 +677,7 @@ export async function startOrchestrator(): Promise<void> {
   fs.mkdirSync(path.join(stateDir, 'panes', 'fifos'), { recursive: true });
   fs.mkdirSync(path.join(stateDir, 'prompts'), { recursive: true });
 
-  // Write pane scripts (banner.sh, worker-pane.sh, dashboard-watch.sh)
-  // Must happen before atlas.sh's 2-second sleep expires and it checks for banner.sh
+  // Write pane scripts FIRST (synchronous — must exist before atlas.sh checks)
   const config = getConfig();
   const paneManager = new PaneManager({
     sessionName: 'atlas',
@@ -686,10 +685,16 @@ export async function startOrchestrator(): Promise<void> {
     maxWorkers: config.agents.worker.max_instances,
   });
   paneManager.init();
+  log('Pane scripts written (banner.sh, worker-pane.sh, dashboard-watch.sh)');
 
-  // Intercom
+  // Signal that the orchestrator has written the required scripts.
+  // atlas.sh waits for this file (with timeout) before creating tmux panes.
+  fs.writeFileSync(path.join(stateDir, 'ready'), new Date().toISOString(), 'utf-8');
+
+  // Intercom (async — takes time to connect to broker)
   intercom = new IntercomClient('orchestrator');
   await intercom.connect();
+  log('Intercom connected');
 
   // Scheduler
   scheduler = new Scheduler();
@@ -787,6 +792,9 @@ export async function startOrchestrator(): Promise<void> {
   scheduler.register('agent_health', checkAgentHealth);
   scheduler.register('queue_process', processQueue);
   scheduler.register('scheduled_agents', runScheduledAgents);
+
+  // Write initial dashboard immediately (before scheduler's first tick)
+  writeDashboard();
 
   // Start scheduler
   scheduler.start();

@@ -85,18 +85,33 @@ mkdir -p "$SCRIPT_DIR/state"/{logs,worktrees,cache,panes/fifos,prompts}
 
 log "Starting orchestrator..."
 ORCHESTRATOR_LOG="$SCRIPT_DIR/state/orchestrator.log"
+READY_FILE="$SCRIPT_DIR/state/ready"
+rm -f "$READY_FILE"  # Clear stale ready file
 cd "$SCRIPT_DIR"
 $TSX_BIN orchestrator/index.ts >> "$ORCHESTRATOR_LOG" 2>&1 &
 ORCHESTRATOR_PID=$!
 log "Orchestrator PID: $ORCHESTRATOR_PID"
 
-sleep 2
-if ! kill -0 "$ORCHESTRATOR_PID" 2>/dev/null; then
-  log "Orchestrator exited immediately. Last 20 lines:"
+# Wait for orchestrator to write pane scripts (banner.sh, etc).
+# The orchestrator writes state/ready after PaneManager.init().
+# Use a timeout of 15 seconds — if it takes longer, something is wrong.
+WAITED=0
+while [ ! -f "$READY_FILE" ] && [ $WAITED -lt 15 ]; do
+  if ! kill -0 "$ORCHESTRATOR_PID" 2>/dev/null; then
+    log "Orchestrator exited during startup. Last 20 lines:"
+    tail -20 "$ORCHESTRATOR_LOG" | while read -r line; do log "  orch: $line"; done
+    die "Orchestrator failed to start"
+  fi
+  sleep 0.5
+  WAITED=$((WAITED + 1))
+done
+
+if [ ! -f "$READY_FILE" ]; then
+  log "Timeout waiting for orchestrator ready file. Last 20 lines:"
   tail -20 "$ORCHESTRATOR_LOG" | while read -r line; do log "  orch: $line"; done
-  die "Orchestrator failed to start"
+  die "Orchestrator did not become ready within 15 seconds"
 fi
-log "Orchestrator running (PID $ORCHESTRATOR_PID)"
+log "Orchestrator ready (scripts written after ${WAITED}s)"
 
 # ─── Write boss prompt with initial ticket commands ─────────────
 

@@ -45,9 +45,12 @@ export class IntercomClient {
 
     const repoRoot = findRepoRoot();
 
-    // Try to spawn broker if needed
+    // Try to spawn broker if needed.
+    // modulePath = .../pi-intercom/broker/client.ts
+    // dirname   = .../pi-intercom/broker/
+    // spawn.ts lives alongside client.ts in broker/, not broker/broker/
     try {
-      const spawnMod = await import(path.join(path.dirname(modulePath), 'broker', 'spawn.ts'));
+      const spawnMod = await import(path.join(path.dirname(modulePath), 'spawn.ts'));
       await spawnMod.spawnBrokerIfNeeded('npx', ['--no-install', 'tsx']);
     } catch { /* broker may already be running */ }
 
