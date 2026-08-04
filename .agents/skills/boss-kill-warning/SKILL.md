@@ -1,27 +1,23 @@
 ---
 name: boss-kill-warning
 description: |
-  Boss setup and critical warnings for the ticket agent system.
+  Boss setup and critical warnings for the Atlas agent system.
   Triggers on "boss", "kill server", "kill agent", "kill worker",
-  "kill process", "stop agent", "stop server", "shutdown", "start boss".
+  "kill process", "stop agent", "stop server", "shutdown", "start boss",
+  "kill banner", "kill pane".
 ---
 
 # Boss Setup & Kill Warning
 
-## FIRST — Register as "boss" with the server
+## FIRST — Register as "boss" with the orchestrator
 
-**Do this before anything else.** The server and workers send messages to the
-boss session. If you don't register, you won't receive status updates, questions,
-or completion notifications.
-
-Send a registration to the server via intercom:
+**Do this before anything else.** The orchestrator and agents send messages to
+the boss session. If you don't register, you won't receive status updates,
+questions, or completion notifications.
 
 ```
-intercom({ action: "send", to: "server", message: "BOSS: I am the boss" })
+intercom({ action: "send", to: "orchestrator", message: "BOSS: <session-id>" })
 ```
-
-The server will reply with a confirmation. After that, `tellBoss()`
-from the server and `send`/`ask` from workers will reach you.
 
 Verify it worked:
 
@@ -29,7 +25,8 @@ Verify it worked:
 intercom({ action: "list" })
 ```
 
-You should see both `server` and your boss session connected.
+You should see `orchestrator` and your boss session connected. Agents appear
+as they are spawned (e.g., `worker-1`, `reviewer`).
 
 ---
 
@@ -37,54 +34,99 @@ You should see both `server` and your boss session connected.
 
 ## The Dashboard
 
-The left pane of the tmux layout shows a **static dashboard** that refreshes
-every 2 seconds. It displays:
-- All managed epics and their tickets with status icons
-- Worker assignments (which agent is working on which ticket)
-- Summary counts
+Read it with: `cat atlas/state/dashboard.txt`
 
-Read it with: `cat .pi/tickets/dashboard.txt`
-
-The server log is at `.pi/tickets/server.log` if you need detailed output.
-
-## Multi-Epic Support
-
-The server manages **multiple epics simultaneously**. Workers are shared across
-all epics and assigned to ready tickets from any epic.
-
-Commands:
-- `EPIC RES-10 RES-20` — add one or more epics
-- `DROP RES-10` — remove an epic (frees its workers)
-- `TICKET RES-42` — add a single ticket as a mini-graph
-- All other commands (STOP, ASSIGN, CLOSE, STATUS) work across all epics
+The orchestrator log is at `atlas/state/orchestrator.log`.
 
 ## Process hierarchy
 
 ```
-Server (manages all panes, webhooks, ngrok, multiple epics)
- ├── Agent-1 worker (pane 1)
- ├── Agent-2 worker (pane 2)
- └── Agent-3 worker (pane 3)
+Orchestrator (background — manages scheduler, webhooks, ngrok, agent pool)
+ ├── worker-1 (interactive pi session — registered via intercom)
+ ├── worker-2 (interactive pi session)
+ └── worker-3 (interactive pi session)
 ```
+
+Agents are **persistent interactive pi sessions**. They register, wait for
+TASK assignments, report STATUS, and go IDLE when done. They do NOT exit
+between tickets.
 
 ## What happens when you kill
 
 | You kill | Result |
 |----------|--------|
-| **Server** | **ALL panes die.** Workers, webhooks, ngrok — everything goes down. State is lost. |
-| **A worker** | **Only that worker's pane dies.** Other workers and the server keep running. |
+| **Orchestrator** | **Everything dies.** Agents, webhooks, ngrok, scheduler — all gone. State is saved but work in progress may be lost. |
+| **An agent** | **That agent's tmux pane dies.** The orchestrator detects the dead agent and re-queues its task. Other agents keep running. |
+| **The banner pane** | **Right column collapses.** Dashboard and boss stretch to fill the window. The two-column layout cannot be restored without restarting `./agent.sh`. **NEVER kill the banner pane.** |
 
-## Rule
+## Rules
 
-If you want to stop or replace ONE agent, send `STOP agent-N` to the server — never kill the server.
+1. **Never kill the orchestrator** — use `STOP` to halt all agents cleanly.
+2. **Never kill the banner pane** — it's the structural anchor of the tmux layout.
+   If you accidentally kill it, restart with `./agent.sh`.
+3. **Never kill yourself** — `STOP boss`, `KILL boss`, and `SPAWN boss` are
+   blocked by the orchestrator. Do NOT `kill` your own pi process from bash.
+4. **Stop agents via intercom** — send `STOP worker-2` to the orchestrator.
+   Do NOT `kill <pid>` directly — the orchestrator needs to know the agent was
+   stopped so it can re-queue the task and clean up.
+5. **Workers return to IDLE** — they don't exit after finishing a ticket.
+   They stay alive and wait for the next TASK.
 
-If you need to stop everything, kill the server — but know that ALL work stops.
+### Blocked commands (orchestrator enforces these)
 
-## How to stop a specific worker
+| Command | Response |
+|---------|----------|
+| `STOP boss` | ⛔ Cannot stop "boss" — it is a protected system component |
+| `STOP orchestrator` | ⛔ Cannot stop "orchestrator" — it is a protected system component |
+| `STOP banner` | ⛔ Cannot stop "banner" — it is a protected system component |
+| `KILL boss` | ⛔ Cannot KILL "boss" — the boss is a protected system component |
+| `SPAWN boss` | ⛔ Cannot SPAWN boss — there can only be one boss |
 
-Send to the server via intercom:
+## How to stop a specific agent
+
+Send to the orchestrator via intercom:
+
 ```
-STOP agent-2
+STOP worker-2
 ```
 
-Or find the PID and `kill <pid>` — but prefer the server command so the orchestrator knows the agent was stopped and can re-queue the ticket.
+The orchestrator sends `STOP <uuid>` to the agent, waits for graceful shutdown,
+runs `post.sh`, and releases its port.
+
+## How to stop everything
+
+```
+STOP
+```
+
+Halt all agents. The orchestrator keeps running.
+
+## Spawning additional agent types
+
+```
+SPAWN reviewer      — Start a reviewer agent
+SPAWN pr_manager    — Start a PR manager agent
+KILL reviewer       — Stop all reviewer agents
+```
+
+## Adjusting system behavior
+
+```
+SET_INTERVAL pr_scan 30       — Scan PRs every 30 seconds
+SET_INTERVAL queue_process 10 — Process queue every 10 seconds
+GET_CONFIG                    — Show current configuration
+```
+
+Available intervals: `status_sync`, `pr_scan`, `dashboard_refresh`,
+`agent_health`, `queue_process`, `scheduled_agents`
+
+## If you fix an Atlas bug
+
+Commit and push DIRECTLY to master:
+
+```
+git add <files> && git commit -m "fix(atlas): <description>" && git push origin master
+```
+
+Do NOT create a PR for Atlas fixes — deploy immediately. The next spawned
+agent picks up prompt changes automatically.

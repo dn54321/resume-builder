@@ -339,16 +339,28 @@ async function handleBossCommand(text: string): Promise<void> {
     log('Boss: stopping all agents');
     await pool.stopAll();
     writeDashboard();
-    await tellBoss('All agents stopped.');
+    await tellBoss('All agents stopped. Orchestrator still running.');
 
   } else if (trimmed.startsWith('STOP ')) {
     const agentName = trimmed.split(/\s+/)[1]?.trim();
-    if (agentName) {
-      const agent = [...pool['agents'].values()].find((a) => a.name === agentName);
-      if (agent) {
-        await pool.stop(agent);
-        await tellBoss(`Stopped ${agentName}.`);
-      }
+    if (!agentName) {
+      await tellBoss('Usage: STOP <agent-name>');
+      return;
+    }
+
+    // ═══ GUARDRAIL: never stop the boss or orchestrator ═══
+    const BLOCKED_NAMES = ['boss', 'orchestrator', 'banner'];
+    if (BLOCKED_NAMES.includes(agentName.toLowerCase())) {
+      await tellBoss(`⛔ Cannot stop "${agentName}" — it is a protected system component. Use STOP without a name to halt all worker agents, or STOP <worker-name> to stop a specific worker.`);
+      return;
+    }
+
+    const agent = [...pool['agents'].values()].find((a) => a.name === agentName);
+    if (agent) {
+      await pool.stop(agent);
+      await tellBoss(`Stopped ${agentName}.`);
+    } else {
+      await tellBoss(`No agent named "${agentName}" found. Active agents: ${[...pool['agents'].values()].map(a => a.name).join(', ') || 'none'}`);
     }
 
   } else if (trimmed.startsWith('CLOSE ') || trimmed.startsWith('close ')) {
@@ -387,6 +399,11 @@ async function handleBossCommand(text: string): Promise<void> {
 
   } else if (trimmed.startsWith('SPAWN ') || trimmed.startsWith('spawn ')) {
     const agentType = trimmed.split(/\s+/)[1]?.trim() as any;
+    // ═══ GUARDRAIL: cannot spawn another boss ═══
+    if (agentType === 'boss') {
+      await tellBoss('⛔ Cannot SPAWN boss — there can only be one boss. The boss is created by atlas.sh.');
+      return;
+    }
     if (agentType && ['worker', 'reviewer', 'pr_manager'].includes(agentType)) {
       const agent = await pool.spawn(agentType);
       await tellBoss(agent ? `Spawned ${agent.name}.` : `Failed to spawn ${agentType}.`);
@@ -396,9 +413,23 @@ async function handleBossCommand(text: string): Promise<void> {
 
   } else if (trimmed.startsWith('KILL ') || trimmed.startsWith('kill ')) {
     const agentType = trimmed.split(/\s+/)[1]?.trim() as any;
-    if (agentType) {
+    if (!agentType) {
+      await tellBoss('Usage: KILL <worker|reviewer|pr_manager>');
+      return;
+    }
+
+    // ═══ GUARDRAIL: never kill the boss type ═══
+    const BLOCKED_TYPES = ['boss'];
+    if (BLOCKED_TYPES.includes(agentType.toLowerCase())) {
+      await tellBoss(`⛔ Cannot KILL "${agentType}" — the boss is a protected system component. Use KILL worker, KILL reviewer, or KILL pr_manager to stop specific agent types.`);
+      return;
+    }
+
+    if (['worker', 'reviewer', 'pr_manager'].includes(agentType)) {
       await pool.stopAll(agentType);
       await tellBoss(`Killed all ${agentType} agents.`);
+    } else {
+      await tellBoss(`Unknown agent type: "${agentType}". Valid types: worker, reviewer, pr_manager`);
     }
 
   } else if (trimmed.startsWith('SET_INTERVAL ') || trimmed.startsWith('set-interval ')) {
