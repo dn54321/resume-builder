@@ -26,6 +26,7 @@ describe('AuthGuard', () => {
 
   /**
    * Create a mock ExecutionContext with a cookies object.
+   * @param cookieValue
    */
   function createMockContext(cookieValue?: string): ExecutionContext {
     const request = {

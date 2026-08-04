@@ -19,6 +19,7 @@ const body = (r: request.Response): ResBody => r.body as ResBody;
 
 /**
  * Extract the session_token value from a Set-Cookie header array.
+ * @param cookies
  */
 function getCookieValue(cookies: string[]): string | null {
   const sessionCookie = cookies.find((c) => c.startsWith(`${COOKIE_NAME}=`));

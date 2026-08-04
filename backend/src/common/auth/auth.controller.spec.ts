@@ -18,6 +18,9 @@ describe('AuthController', () => {
     deleteAccount: jest.Mock;
   };
 
+  /**
+   *
+   */
   function mockResponse(): Partial<Response> {
     return {
       cookie: jest.fn(),
@@ -25,7 +28,13 @@ describe('AuthController', () => {
     };
   }
 
-  function mockRequest(cookieValue?: string): { cookies: Record<string, string | undefined> } {
+  /**
+   *
+   * @param cookieValue
+   */
+  function mockRequest(cookieValue?: string): {
+    cookies: Record<string, string | undefined>;
+  } {
     return {
       cookies: { session_token: cookieValue },
     };
@@ -63,7 +72,9 @@ describe('AuthController', () => {
         res,
       );
 
-      expect(result).toEqual({ user: { id: 'user-1', email: 'test@example.com' } });
+      expect(result).toEqual({
+        user: { id: 'user-1', email: 'test@example.com' },
+      });
       expect(result).not.toHaveProperty('sessionToken');
       expect(mockAuthService.signup).toHaveBeenCalledWith(
         'test@example.com',
@@ -96,7 +107,9 @@ describe('AuthController', () => {
         res,
       );
 
-      expect(result).toEqual({ user: { id: 'user-1', email: 'test@example.com' } });
+      expect(result).toEqual({
+        user: { id: 'user-1', email: 'test@example.com' },
+      });
       expect(result).not.toHaveProperty('sessionToken');
     });
   });
@@ -109,7 +122,9 @@ describe('AuthController', () => {
       await authController.logout(req as any, res);
 
       expect(mockAuthService.logout).toHaveBeenCalledWith('token-abc');
-      expect(res.clearCookie).toHaveBeenCalledWith('session_token', { path: '/' });
+      expect(res.clearCookie).toHaveBeenCalledWith('session_token', {
+        path: '/',
+      });
     });
 
     it('does not call logout when no cookie present', async () => {
@@ -119,7 +134,9 @@ describe('AuthController', () => {
       await authController.logout(req as any, res);
 
       expect(mockAuthService.logout).not.toHaveBeenCalled();
-      expect(res.clearCookie).toHaveBeenCalledWith('session_token', { path: '/' });
+      expect(res.clearCookie).toHaveBeenCalledWith('session_token', {
+        path: '/',
+      });
     });
   });
 

@@ -125,7 +125,8 @@ export class AuthController {
   }
 
   private extractSessionToken(req: Request): string | null {
-    const token = req.cookies?.[COOKIE_NAME];
+    const token: string | undefined = req.cookies?.[COOKIE_NAME] as
+      string | undefined;
     if (typeof token === 'string' && token.length > 0) {
       return token;
     }
