@@ -1,11 +1,16 @@
 <template>
   <div class="live-preview flex flex-col h-full bg-gray-200 dark:bg-gray-900">
     <!-- Header bar -->
-    <div class="live-preview__header h-8 px-3 border-b border-gray-300 dark:border-gray-700 flex items-center justify-between shrink-0">
-      <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Preview</span>
-      <Button variant="ghost" size="icon-sm" aria-label="Full screen" @click="isFullscreenOpen = true">
-        <Maximize2 class="h-4 w-4" />
-      </Button>
+    <div class="live-preview__header h-10 px-4 border-b border-gray-300 bg-white flex items-center justify-between shrink-0">
+      <span class="text-sm font-medium text-gray-600">Preview</span>
+      <button
+        class="live-preview__expand-btn inline-flex items-center justify-center size-8 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+        aria-label="Open full screen preview"
+        title="Full screen preview"
+        @click="isFullscreenOpen = true"
+      >
+        <Maximize2 class="size-4" />
+      </button>
     </div>
 
     <!-- Paper area -->
@@ -34,7 +39,6 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { Maximize2 } from '@lucide/vue'
-import { Button } from '@/components/ui/button'
 import { useResumeStore } from '@/features/builder/stores/resume'
 import StandardLayout from './preview/StandardLayout.vue'
 import TwoColumnLayout from './preview/TwoColumnLayout.vue'
