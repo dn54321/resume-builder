@@ -209,7 +209,10 @@ export class AgentPool {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: (() => {
         const env = { ...process.env };
-        delete env.PI_INTERCOM_SESSION_ID;  // prevent clash with boss session
+        // Prevent intercom/session clash with boss
+        delete env.PI_INTERCOM_SESSION_ID;
+        delete env.PI_SESSION_ID;
+        delete env.PI_SESSION_FILE;
         env.ATLAS_AGENT_NAME = name;
         env.ATLAS_AGENT_TYPE = type;
         env.ATLAS_AGENT_PORT = String(port ?? '');
