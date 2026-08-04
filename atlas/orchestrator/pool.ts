@@ -80,13 +80,30 @@ const PI_BIN = findPiBinary();
 // ─── Spawn rate limiter ────────────────────────────────────────────
 // Prevent crash-loops: if agents repeatedly fail to spawn or exit
 // immediately, back off to avoid thousands of processes.
+// Two independent limits:
+//  1. Consecutive failure cooldown (soft, resets on success)
+//  2. Lifetime spawn cap per agent type (hard, never resets)
 
 const SPAWN_COOLDOWNS = new Map<string, number>(); // agentType → cooldownUntil timestamp
 const SPAWN_FAILURES = new Map<string, number>();   // agentType → consecutive failure count
+const SPAWN_LIFETIME_COUNT = new Map<string, number>(); // agentType → total spawns this session
 const MAX_CONSECUTIVE_FAILURES = 5;
 const BASE_COOLDOWN_MS = 1000;  // 1 second base, doubles each failure
+const MAX_LIFETIME_SPAWNS: Record<string, number> = {
+  worker: 10,       // Hard cap: will not spawn more than 10 workers total
+  reviewer: 5,
+  pr_manager: 5,
+};
 
 function canSpawnNow(type: string): boolean {
+  // Hard cap: lifetime spawn limit
+  const lifetimeMax = MAX_LIFETIME_SPAWNS[type] ?? 10;
+  const lifetimeCount = SPAWN_LIFETIME_COUNT.get(type) ?? 0;
+  if (lifetimeCount >= lifetimeMax) {
+    console.error(`[Pool] ${type} lifetime spawn cap (${lifetimeMax}) reached — refusing to spawn more`);
+    return false;
+  }
+  // Soft cap: cooldown from repeated failures
   const cooldown = SPAWN_COOLDOWNS.get(type);
   if (cooldown && Date.now() < cooldown) return false;
   return true;
@@ -221,6 +238,8 @@ export class AgentPool {
     });
 
     this.agents.set(instance.id, instance);
+    // Increment lifetime counter (hard cap, never resets)
+    SPAWN_LIFETIME_COUNT.set(type, (SPAWN_LIFETIME_COUNT.get(type) ?? 0) + 1);
     // Do NOT call recordSpawnSuccess here — the close handler decides success/failure.
     // Calling it here resets the failure counter on every spawn, defeating cooldowns.
 
