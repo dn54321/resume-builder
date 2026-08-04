@@ -272,6 +272,14 @@ export async function buildGraph(
         };
       }
     }
+    // Validate existing state from state.json: if marked done but the
+    // worktree no longer exists (pruned or manually deleted), the state
+    // is stale — reset to pending so the ticket is reworked.
+    if (existing && existing.status === 'done') {
+      if (!existing.worktreePath || !fs.existsSync(existing.worktreePath)) {
+        existing = undefined;
+      }
+    }
     const state: TicketState = existing ?? {
       identifier: ticket.identifier,
       status: 'pending',
