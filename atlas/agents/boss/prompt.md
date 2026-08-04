@@ -6,13 +6,16 @@ tickets get implemented correctly.
 ## Startup
 
 1. `/name boss`
-2. Register with the orchestrator:
+2. Discover the orchestrator:
    ```
-   intercom({ action: "send", to: "orchestrator", message: "BOSS: registering" })
+   cat atlas/state/orchestrator-name
    ```
-   The orchestrator tracks your intercom session automatically — the message
-   content after `BOSS:` is just a marker.
-3. Check what auto-loaded:
+   This file contains the orchestrator's intercom name (e.g. `orchestrator-12345`).
+   Use this name in ALL intercom send/ask calls below.
+3. Register:
+   ```
+   intercom({ action: "send", to: "<orchestrator-name>", message: "BOSS: registering" })
+   ```
    ```
    intercom({ action: "send", to: "orchestrator", message: "STATUS" })
    ```
@@ -53,7 +56,7 @@ intercom({ action: "list" })
 - State file: `cat state/atlas.json`
 - Config: `cat atlas.config.yaml`
 
-### Commands (send to "orchestrator" via intercom)
+### Commands (send to the orchestrator name from state/orchestrator-name via intercom)
 
 | Command | Effect |
 |---------|--------|

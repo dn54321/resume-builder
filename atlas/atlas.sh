@@ -86,7 +86,12 @@ log "TSX_BIN=$TSX_BIN"
 SESSION_NAME="atlas"
 
 log "Cleaning up previous session..."
-pkill -f "atlas.*orchestrator" 2>/dev/null && log "  Killed old orchestrator" || log "  No old orchestrator"
+# Kill any running orchestrator (matches tsx/node running orchestrator/index)
+pkill -f "orchestrator/index" 2>/dev/null && log "  Killed old orchestrator" || log "  No old orchestrator"
+# Also kill anything bound to the agent ports (stale webhook servers, etc.)
+for port in $(seq 9000 9010); do
+  fuser -k "$port/tcp" 2>/dev/null || true
+done
 tmux kill-session -t "$SESSION_NAME" 2>/dev/null && log "  Killed old tmux session" || log "  No old tmux session"
 sleep 1
 unset TMUX

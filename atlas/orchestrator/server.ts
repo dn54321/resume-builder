@@ -693,10 +693,13 @@ export async function startOrchestrator(): Promise<void> {
   // atlas.sh waits for this file (with timeout) before creating tmux panes.
   fs.writeFileSync(path.join(stateDir, 'ready'), new Date().toISOString(), 'utf-8');
 
-  // Intercom (async — takes time to connect to broker)
-  intercom = new IntercomClient('orchestrator');
+  // Intercom — use a unique name to avoid collisions with stale sessions.
+  // The boss reads this name from state/orchestrator-name and sends to it.
+  const orchName = `orchestrator-${process.pid}`;
+  fs.writeFileSync(path.join(stateDir, 'orchestrator-name'), orchName, 'utf-8');
+  intercom = new IntercomClient(orchName);
   await intercom.connect();
-  log('Intercom connected');
+  log(`Intercom connected as "${orchName}"`);
 
   // Scheduler
   scheduler = new Scheduler();

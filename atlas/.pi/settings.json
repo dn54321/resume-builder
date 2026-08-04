@@ -1,7 +1,0 @@
-{
-  "packages": [
-    "npm:pi-intercom",
-    "npm:pi-web-access",
-    "npm:pi-thinking-steps"
-  ]
-}
