@@ -208,18 +208,77 @@ export class PaneManager {
    * banner.
    */
   private compactWorkerPanes(targetHeight: number = WORKER_PANE_HEIGHT): void {
-    for (const [name, pane] of this.workerPanes) {
-      if (!this.paneAlive(pane.paneId, false)) continue;
+    // Collect the panes to compact: all tracked worker panes PLUS any
+    // untracked worker panes that survived an orchestrator restart. On a
+    // fresh restart the workerPanes map is empty (the pool only re-adopts
+    // workers whose agentId/paneId survived in state), so old panes like a
+    // 33-line %10 from a previous session would never be compacted and the
+    // column stays too full for new splits. Scan the session for every pane
+    // that is not the banner and not a control pane (dashboard/boss), and
+    // compact those too — best-effort, dead panes are skipped.
+    const targets = new Set<string>();
+    for (const [, pane] of this.workerPanes) targets.add(pane.paneId);
+    try {
+      if (this.sessionExists()) {
+        const all = cp.execSync(
+          `tmux list-panes -t "${this.sessionName}" -F '#{pane_id}'`,
+          { timeout: 3000, encoding: 'utf-8' },
+        ).trim().split('\n').filter(Boolean);
+        for (const paneId of all) {
+          if (paneId === this.bannerPaneId) continue;
+          if (!this.isWorkerPane(paneId)) continue;
+          targets.add(paneId);
+        }
+      }
+    } catch { /* session gone — nothing to compact */ }
+
+    for (const paneId of targets) {
+      if (!this.paneAlive(paneId, false)) continue;
       try {
         cp.execSync(
-          `tmux resize-pane -t "${pane.paneId}" -y ${targetHeight}`,
+          `tmux resize-pane -t "${paneId}" -y ${targetHeight}`,
           { timeout: 3000 },
         );
       } catch (err: any) {
-        console.error(`[PaneManager] Failed to compact pane for ${name}: ${err.message}`);
+        console.error(`[PaneManager] Failed to compact pane ${paneId}: ${err.message}`);
       }
     }
   }
+
+  /**
+   * True if the pane is a worker pane (runs pi or a bash shell in the
+   * banner column) — i.e. not the banner itself and not the left-column
+   * dashboard/boss panes. Worker panes are detected by their start command:
+   * the pool launches them with `bash` and then types the pi command into
+   * them, so they show up as `bash` (or `pi` once running) while the
+   * dashboard/boss run `fish` via dashboard-watch.sh / the boss prompt.
+   */
+  private isWorkerPane(paneId: string): boolean {
+    try {
+      const startCmd = cp.execSync(
+        `tmux display-message -t "${paneId}" -p '#{pane_start_command}'`,
+        { timeout: 2000, encoding: 'utf-8' },
+      ).trim();
+      // Banner, dashboard, and boss panes are fish/script shells — never
+      // touch them. Worker panes are created by the pool as plain `bash`
+      // (pool.ts send-keys then types the pi command into the shell).
+      if (startCmd.includes('banner.sh')) return false;
+      if (startCmd.includes('dashboard-watch')) return false;
+      if (startCmd.includes('pi --append-system-prompt')) return false;
+      if (startCmd === 'fish') return false;
+      if (startCmd === 'bash') return true;
+      // A pane that now runs pi is a live worker regardless of start cmd
+      // (covers panes from older sessions whose shell launched pi directly).
+      const nowCmd = cp.execSync(
+        `tmux display-message -t "${paneId}" -p '#{pane_current_command}'`,
+        { timeout: 2000, encoding: 'utf-8' },
+      ).trim();
+      return nowCmd === 'pi';
+    } catch {
+      return false;
+    }
+  }
+
 
 
   /**

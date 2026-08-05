@@ -29,10 +29,14 @@ describe('PaneManager', () => {
       if (c.includes('has-session')) return sessionAlive ? 'yes\n' : 'no\n';
       if (c.includes('split-window')) return splitResult + '\n';
       if (c.includes('display-message')) {
+        if (c.includes('pane_start_command')) {
+          // Worker panes start as plain bash; the banner runs banner.sh.
+          return 'bash\n';
+        }
         // pane_dead: '0' alive, '1' process exited; a gone pane prints empty
         return displayOk ? '0\n' : '1\n';
       }
-      if (c.includes('list-panes')) return '%1\n';
+      if (c.includes('list-panes')) return '%1\n%3\n';
       if (c.includes('mkfifo')) return '';
       if (c.includes('kill-pane')) return '';
       return '';
@@ -185,9 +189,9 @@ describe('PaneManager', () => {
         .mock.calls.map((c) => String(c[0]))
         .filter((c) => c.includes('resize-pane'));
       // The surviving worker-2 pane (%4) is compacted back to 8 lines
-      expect(resizeCalls.length).toBe(1);
-      expect(resizeCalls[0]).toContain('-t "%4"');
-      expect(resizeCalls[0]).toContain('-y 8');
+      expect(resizeCalls.length).toBeGreaterThanOrEqual(1);
+      expect(resizeCalls.some((c) => c.includes('-t "%4"'))).toBe(true);
+      expect(resizeCalls.some((c) => c.includes('-y 8'))).toBe(true);
     });
 
     it('skips compaction for dead panes', () => {
@@ -200,13 +204,14 @@ describe('PaneManager', () => {
       vi.mocked(cp.execSync).mockImplementation(((cmd: unknown) => {
         const c = String(cmd);
         if (c.includes('display-message')) {
+          if (c.includes('pane_start_command')) return 'bash\n';
           // %3 alive, %4 dead
           call += 1;
           return c.includes('-t "%4"') ? '1\n' : '0\n';
         }
         if (c.includes('has-session')) return 'yes\n';
         if (c.includes('split-window')) return splitResult + '\n';
-        if (c.includes('list-panes')) return '%1\n';
+        if (c.includes('list-panes')) return '%1\n%3\n%4\n';
         if (c.includes('kill-pane')) return '';
         if (c.includes('mkfifo')) return '';
         return '';
@@ -219,8 +224,9 @@ describe('PaneManager', () => {
         .mocked(cp.execSync)
         .mock.calls.map((c) => String(c[0]))
         .filter((c) => c.includes('resize-pane'));
-      // %4 is dead — no resize attempted for it
-      expect(resizeCalls.length).toBe(0);
+      // %4 is dead — no resize attempted for IT (the scan may compact the
+      // still-alive %3, which is fine)
+      expect(resizeCalls.some((c) => c.includes('-t "%4"'))).toBe(false);
     });
   });
 
@@ -239,18 +245,49 @@ describe('PaneManager', () => {
         .mocked(cp.execSync)
         .mock.calls.map((c) => String(c[0]))
         .filter((c) => c.includes('resize-pane'));
-      expect(resizeCalls.length).toBe(1);
-      expect(resizeCalls[0]).toContain('-t "%3"');
-      expect(resizeCalls[0]).toContain('-y 8');
+      expect(resizeCalls.some((c) => c.includes('-t "%3"'))).toBe(true);
+      expect(resizeCalls.some((c) => c.includes('-y 8'))).toBe(true);
 
       // The split happens AFTER the compaction
       const callOrder = vi
         .mocked(cp.execSync)
         .mock.calls.map((c) => String(c[0]));
-      const compactIdx = callOrder.indexOf(resizeCalls[0] ?? '');
+      const compactIdx = callOrder.findIndex((c) => c.includes('resize-pane'));
       const splitIdx = callOrder.findIndex((c) => c.includes('split-window'));
       expect(compactIdx).toBeGreaterThanOrEqual(0);
       expect(splitIdx).toBeGreaterThan(compactIdx);
+    });
+
+    it('compacts untracked worker panes from a previous session', () => {
+      // Fresh orchestrator after a restart: workerPanes map is empty, but an
+      // old worker pane (%7, started as bash) lingers inflated in tmux. The
+      // list-panes scan must find and compact it so new splits fit.
+      vi.mocked(cp.execSync).mockImplementation(((cmd: unknown) => {
+        const c = String(cmd);
+        if (c.includes('has-session')) return 'yes\n';
+        if (c.includes('list-panes')) return '%1\n%7\n';
+        if (c.includes('display-message')) {
+          if (c.includes('pane_start_command')) {
+            // %7 started as bash (worker), %1 is the banner
+            return c.includes('-t "%7"') ? 'bash\n' : 'banner.sh\n';
+          }
+          return '0\n'; // both alive
+        }
+        if (c.includes('split-window')) return '%8\n';
+        if (c.includes('mkfifo')) return '';
+        return '';
+      }) as any);
+      vi.mocked(cp.execSync).mockClear();
+
+      const paneId = pm.createWorkerPane('worker-1', 'RES-99');
+      expect(paneId).toBe('%8');
+
+      const resizeCalls = vi
+        .mocked(cp.execSync)
+        .mock.calls.map((c) => String(c[0]))
+        .filter((c) => c.includes('resize-pane'));
+      // The untracked %7 from the old session is compacted before splitting
+      expect(resizeCalls.some((c) => c.includes('-t "%7"'))).toBe(true);
     });
   });
 
@@ -276,8 +313,10 @@ describe('PaneManager', () => {
         .mocked(cp.execSync)
         .mock.calls.map((c) => String(c[0]))
         .filter((c) => c.includes('resize-pane'));
-      expect(resizeCalls.length).toBe(1);
-      expect(resizeCalls[0]).toContain('-t "%7"');
+      // The adopted %7 is compacted (list-panes scan also yields %3, which
+      // is fine — the key assertion is the adopted pane participates)
+      expect(resizeCalls.some((c) => c.includes('-t "%7"'))).toBe(true);
+      expect(resizeCalls.some((c) => c.includes('-y 8'))).toBe(true);
 
       // And it can be killed via killWorkerPane
       vi.mocked(cp.execSync).mockClear();
