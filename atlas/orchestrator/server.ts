@@ -525,6 +525,28 @@ async function scanPRs(): Promise<void> {
 
 async function checkAgentHealth(): Promise<void> {
   await pool.healthCheck();
+
+  // Re-queue orphaned tickets: a ticket stuck in_progress whose worker is
+  // no longer in the pool (pane died, restart, kill) would never be picked
+  // up again — readyTickets() only returns pending/blocked. Reset it so a
+  // fresh worker spawns.
+  const liveWorkers = new Set(pool.getLiveWorkerNames());
+  for (const [, epic] of epicGraphs) {
+    for (const [, node] of epic.nodes) {
+      if (
+        node.state.status === 'in_progress' &&
+        node.state.workerName &&
+        !liveWorkers.has(node.state.workerName)
+      ) {
+        log(`Re-queuing ${node.ticket.identifier} (worker ${node.state.workerName} gone)`);
+        node.state.status = 'pending';
+        node.state.workerName = null;
+        node.state.pid = null;
+        node.state.startedAt = null;
+      }
+    }
+  }
+
   // Freeing a dead-pane slot may unblock waiting tickets — spawn
   // replacements promptly instead of waiting for the next queue_process tick.
   await launchReady();

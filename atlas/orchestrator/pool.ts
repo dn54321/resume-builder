@@ -473,6 +473,17 @@ export class AgentPool {
     return [...this.agents.values()].filter((a) => a.status === 'active');
   }
 
+  /**
+   * Names of all live agents, for orphan-ticket detection. A ticket
+   * whose workerName is not in this set has no live worker (its pane
+   * died) and must be re-queued.
+   */
+  getLiveWorkerNames(): string[] {
+    return [...this.agents.values()]
+      .filter((a) => a.type === 'worker')
+      .map((a) => a.name);
+  }
+
   getAgent(id: string): AgentInstance | undefined {
     return this.agents.get(id);
   }
