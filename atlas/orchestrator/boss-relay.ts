@@ -237,4 +237,16 @@ export class BossRelay {
       void this.flush();
     }
   }
+
+  /**
+   * Called when the boss sends ANY message to the orchestrator — the
+   * strongest possible liveness signal (the boss can only send if its
+   * session is alive and connected). Receipts are best-effort and can be
+   * missed (e.g. broker races), which previously caused false "Boss dead"
+   * states that swallowed failure notifications. This makes dead-state
+   * recovery robust: any inbound boss message revives and flushes.
+   */
+  onBossActivity(): void {
+    this.revive();
+  }
 }
