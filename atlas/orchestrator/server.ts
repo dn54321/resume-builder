@@ -480,6 +480,20 @@ function pruneWorktree(node: GraphNode): void {
 // ─── Boss Command Handling ──────────────────────────────────────────
 
 async function handleBossCommand(text: string): Promise<void> {
+  try {
+    await handleBossCommandInner(text);
+  } catch (err: any) {
+    // ⚠️ NEVER let a boss command crash the orchestrator. Any throw here
+    // (Linear API errors, git faults, unexpected input) previously killed
+    // the whole process — observed: CLOSE RES-99 → fetchWorkflowStates
+    // GraphQL validation error → orchestrator died, board dead until
+    // manual restart. Log + notify the boss instead.
+    log(`boss command failed: ${text.slice(0, 60)} → ${err?.message ?? err}`);
+    try { await tellBoss(`❌ command failed: ${err?.message ?? err}`); } catch { /* best effort */ }
+  }
+}
+
+async function handleBossCommandInner(text: string): Promise<void> {
   const trimmed = text.trim();
 
   if (trimmed.startsWith('EPIC ') || trimmed.startsWith('epic ')) {
