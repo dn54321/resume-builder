@@ -44,6 +44,36 @@ export interface BossRelayOptions {
   maxQueueSize?: number;
   /** Logging callback (defaults to console.log). */
   log?: (msg: string) => void;
+  /**
+   * Process liveness probe for the boss. Given the boss's pid + start time,
+   * returns true if the process is alive and matches. Used by checkLiveness()
+   * as an OS-level authority: a PID+startTime match is proof the boss process
+   * exists, regardless of whether it acked a receipt within the window
+   * (receipts time out while the boss is busy, which previously caused false
+   * 'Boss dead' states that queued failure notifications). Defaults to the
+   * /proc-based probe below.
+   */
+  isProcessAlive?: (pid: number, startTime?: number) => boolean;
+}
+
+/**
+ * POSIX /proc probe: true when the process exists AND its start time matches
+ * (field 22 of /proc/<pid>/stat). The startTime guards against PID recycling —
+ * a recycled PID (new process reusing the number) has a different start time.
+ */
+export function defaultIsProcessAlive(pid: number, startTime?: number): boolean {
+  try {
+    const stat = require('node:fs').readFileSync(`/proc/${pid}/stat`, 'utf-8');
+    if (!startTime) return true; // process exists; no baseline to compare
+    // Field 22 = starttime (tokens: comm can contain spaces, so split from the
+    // right after stripping the trailing ) — 52 fields, index 21 zero-based.
+    const close = stat.lastIndexOf(')');
+    const fields = stat.slice(close + 2).trim().split(/\s+/);
+    const start = Number(fields[19]); // field 22 is the 20th after comm
+    return start === Number(startTime);
+  } catch {
+    return false;
+  }
 }
 
 /** Receipt statuses that prove the boss actually received the message. */
@@ -63,12 +93,17 @@ export class BossRelay {
   private readonly receiptTimeoutMs: number;
   private readonly maxQueueSize: number;
   private readonly log: (msg: string) => void;
+  private readonly isProcessAliveFn: (pid: number, startTime?: number) => boolean;
+  /** OS identity of the boss process (from its intercom session metadata). */
+  private bossPid: number | null = null;
+  private bossStartedAt: number | null = null;
 
   constructor(options: BossRelayOptions) {
     this.sendFn = options.send;
     this.receiptTimeoutMs = options.receiptTimeoutMs ?? 8000;
     this.maxQueueSize = options.maxQueueSize ?? 500;
     this.log = options.log ?? ((msg) => console.log(`[BossRelay] ${msg}`));
+    this.isProcessAliveFn = options.isProcessAlive ?? defaultIsProcessAlive;
   }
 
   // ─── State ─────────────────────────────────────────────────────────
@@ -99,9 +134,14 @@ export class BossRelay {
    * deliver again are re-queued, so nothing is lost or duplicated.
    * Returns the number of queued messages that were flushed.
    */
-  async registerBoss(sessionId: string): Promise<number> {
+  async registerBoss(
+    sessionId: string,
+    session?: { pid?: number; startedAt?: number },
+  ): Promise<number> {
     const previous = this.sessionId;
     this.sessionId = sessionId;
+    if (session?.pid) this.bossPid = session.pid;
+    if (session?.startedAt) this.bossStartedAt = session.startedAt;
     this.alive = true;
     if (previous && previous !== sessionId) {
       this.log(`Boss re-registered as ${sessionId} (was ${previous})`);
@@ -248,5 +288,27 @@ export class BossRelay {
    */
   onBossActivity(): void {
     this.revive();
+  }
+
+  /**
+   * OS-level liveness probe: check the boss's process (pid + startTime) is
+   * still alive. This is the authoritative "is the boss process running"
+   * signal — receipts can time out while the boss is merely busy (its
+   * intercom loop is blocked on a long tool call), which previously caused
+   * false 'Boss dead' states that queued failure notifications until a
+   * re-registration.
+   *
+   * A live process is NOT proof the boss will respond promptly, but it IS
+   * proof the session can eventually drain its queue — so we only mark dead
+   * when the process is actually gone AND no send is currently awaiting a
+   * receipt (a pending receipt means a send is in flight and the boss may
+   * just be slow).
+   */
+  checkLiveness(): void {
+    if (!this.sessionId || this.pending.size > 0) return;
+    if (this.bossPid == null) return; // no OS identity to probe
+    if (!this.isProcessAliveFn(this.bossPid, this.bossStartedAt ?? undefined)) {
+      this.markDead(`boss process ${this.bossPid} is no longer alive (PID check)`);
+    }
   }
 }

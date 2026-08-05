@@ -562,6 +562,13 @@ async function scanPRs(): Promise<void> {
 async function checkAgentHealth(): Promise<void> {
   await pool.healthCheck();
 
+  // OS-level boss liveness: probe the boss process (pid + startTime) so a
+  // busy-but-alive boss is NOT marked dead (receipts time out while the
+  // boss's intercom loop is blocked on a long tool call, which previously
+  // queued failure notifications until a re-registration). Only marks dead
+  // when the process is actually gone and no send is awaiting a receipt.
+  bossRelay?.checkLiveness();
+
   // Re-queue orphaned tickets: a ticket stuck in_progress whose worker is
   // no longer in the pool (pane died, restart, kill) would never be picked
   // up again — readyTickets() only returns pending/blocked. Reset it so a
@@ -882,7 +889,10 @@ export async function startOrchestrator(): Promise<void> {
 
     // Boss registration
     if (text.startsWith('BOSS:')) {
-      const flushed = await bossRelay!.registerBoss(from.id);
+      const flushed = await bossRelay!.registerBoss(from.id, {
+        pid: from.pid,
+        startedAt: from.startedAt,
+      });
       log(`Boss registered: ${from.name} (${from.id.slice(0, 8)})${flushed > 0 ? ` — flushed ${flushed} queued message(s)` : ''}`);
       try {
         await intercom.send(from.id, 'BOSS registered. Atlas is ready.');

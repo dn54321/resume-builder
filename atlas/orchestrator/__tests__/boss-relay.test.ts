@@ -2,7 +2,7 @@
  * Tests for the BossRelay offline-queue mechanism.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { BossRelay, type RelaySendResult } from '../boss-relay';
+import { BossRelay, defaultIsProcessAlive, type RelaySendResult } from '../boss-relay';
 
 const DELIVERED: RelaySendResult = { id: 'm1', delivered: true };
 
@@ -289,5 +289,89 @@ describe('BossRelay — flush on registration', () => {
     expect(await flushP).toBe(2);
     expect(sent).toEqual(['queued-1', 'queued-2']);
     expect(relay.registeredSessionId).toBe('boss-2');
+  });
+});
+
+describe('BossRelay — OS-level liveness (PID check)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('marks the boss dead when the process is gone and no receipt is pending', async () => {
+    const { send } = makeSend();
+    const relay = new BossRelay({
+      send,
+      log: vi.fn(),
+      isProcessAlive: vi.fn(() => false),
+    });
+    await relay.registerBoss('boss-1', { pid: 4242, startedAt: 1000 });
+
+    expect(relay.isAlive).toBe(true);
+    relay.checkLiveness();
+    expect(relay.isAlive).toBe(false);
+    expect(relay.getState()).toBe('dead');
+  });
+
+  it('keeps the boss alive when the process exists (busy, not dead)', async () => {
+    const { send } = makeSend();
+    const relay = new BossRelay({
+      send,
+      log: vi.fn(),
+      isProcessAlive: vi.fn(() => true),
+    });
+    await relay.registerBoss('boss-1', { pid: 4242, startedAt: 1000 });
+
+    relay.checkLiveness();
+    expect(relay.isAlive).toBe(true);
+  });
+
+  it('does not mark dead while a send is awaiting a receipt (boss busy, not dead)', async () => {
+    const { send } = makeSend();
+    const relay = new BossRelay({
+      send,
+      log: vi.fn(),
+      isProcessAlive: vi.fn(() => false),
+    });
+    await relay.registerBoss('boss-1', { pid: 4242, startedAt: 1000 });
+
+    vi.useFakeTimers();
+    const tellP = relay.tell('STATUS busy');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(relay.isAlive).toBe(true);
+
+    relay.checkLiveness();
+    expect(relay.isAlive).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(9000);
+    await tellP;
+    expect(relay.isAlive).toBe(false);
+    vi.useRealTimers();
+  });
+
+  it('does nothing when no OS identity was captured', async () => {
+    const { send } = makeSend();
+    const relay = new BossRelay({
+      send,
+      log: vi.fn(),
+      isProcessAlive: vi.fn(() => false),
+    });
+    await relay.registerBoss('boss-1'); // no pid metadata
+
+    relay.checkLiveness();
+    expect(relay.isAlive).toBe(true);
+  });
+
+  it('uses defaultIsProcessAlive against /proc when no probe is injected', async () => {
+    const { send } = makeSend();
+    const relay = new BossRelay({ send, log: vi.fn() });
+    await relay.registerBoss('boss-1', { pid: process.pid, startedAt: 0 });
+
+    relay.checkLiveness();
+    expect(relay.isAlive).toBe(true);
+  });
+
+  it('defaultIsProcessAlive returns false for a non-existent pid', () => {
+    expect(defaultIsProcessAlive(99999999)).toBe(false);
   });
 });
