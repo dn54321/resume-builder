@@ -293,7 +293,9 @@ async function onWorkerComplete(
 
         // Transition Linear ticket
         await transitionTicket(node.ticket.id, config.linear.transitions.on_done);
-        await tellBoss(`✅ ${identifier}: ${result.prUrl || 'merged to ' + config.strategy.branches.direct_push}`);
+        await tellBoss(result.alreadyMerged
+          ? `✅ ${identifier}: already merged (no-op completion)`
+          : `✅ ${identifier}: ${result.prUrl || 'merged to ' + config.strategy.branches.direct_push}`);
 
         // Prune worktree if branch is merged
         pruneWorktree(node);

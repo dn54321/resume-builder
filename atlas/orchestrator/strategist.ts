@@ -12,6 +12,7 @@ import {
   pushBranch,
   mergeToBranch,
   getDefaultBranch,
+  isBranchMergedTo,
 } from '../git/operations';
 import { createPR } from '../integrations/github/client';
 import { transitionTicket, addComment } from '../integrations/linear/client';
@@ -109,6 +110,19 @@ async function executeDirect(
 ): Promise<StrategyResult> {
   const wt = node.state.worktreePath;
   if (!wt) return { success: false, error: 'No worktree path' };
+
+  // If the worktree branch is ALREADY an ancestor of the target (the work
+  // was merged in a previous pass — common after a re-queue when the ticket
+  // was verified and merged before the state was marked done), there is
+  // nothing to push: commitAll would create an empty commit and the
+  // merge+push would re-run the full pre-push test suite for zero diff,
+  // flaking under load and looping the ticket forever (observed: RES-81/85/
+  // 88/89 'strategy retry 2/2' with no changes on the branch). Mark done.
+  if (isBranchMergedTo(wt, node.state.branch, targetBranch)) {
+    const config = getConfig();
+    await transitionTicket(node.ticket.id, config.linear.transitions.on_done);
+    return { success: true, alreadyMerged: true };
+  }
 
   // Commit any remaining changes
   const commitMsg = `${node.ticket.title}\n\nCloses ${node.ticket.identifier}`;

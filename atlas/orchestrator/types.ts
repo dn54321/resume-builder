@@ -133,6 +133,8 @@ export interface StrategyResult {
   success: boolean;
   prUrl?: string;
   error?: string;
+  /** True when the work was already merged into the target branch (no-op completion). */
+  alreadyMerged?: boolean;
 }
 
 // ─── Scheduler Types ────────────────────────────────────────────────
