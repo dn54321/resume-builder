@@ -332,6 +332,22 @@ describe('AgentPool — tmux pane wiring', () => {
         expect.stringContaining('STOP'),
       );
     });
+
+    it('removeAgent frees the slot immediately without the 5s STOP wait', async () => {
+      const agent = await pool.spawn('worker');
+      expect(agent).not.toBeNull();
+      expect(pool.count()).toBe(1);
+
+      await pool.removeAgent((agent as AgentInstance).id);
+
+      // Slot freed synchronously — no fake-timer advance needed (unlike stop)
+      expect(pool.count()).toBe(0);
+      expect(pool.getAgent((agent as AgentInstance).id)).toBeUndefined();
+      expect(paneManager.killWorkerPane).toHaveBeenCalledWith('worker-1');
+      // removeAgent must NOT send a STOP intercom message (one-shot workers
+      // are already done — no graceful-shutdown wait needed)
+      expect(intercom.send).not.toHaveBeenCalled();
+    });
   });
 
   describe('healthCheck', () => {

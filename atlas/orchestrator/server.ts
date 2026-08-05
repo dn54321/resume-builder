@@ -525,6 +525,9 @@ async function scanPRs(): Promise<void> {
 
 async function checkAgentHealth(): Promise<void> {
   await pool.healthCheck();
+  // Freeing a dead-pane slot may unblock waiting tickets — spawn
+  // replacements promptly instead of waiting for the next queue_process tick.
+  await launchReady();
 }
 
 async function processQueue(): Promise<void> {
@@ -738,6 +741,13 @@ export async function startOrchestrator(): Promise<void> {
   intercom.onMessage(async (from, message) => {
     const text = message.content?.text ?? '';
 
+    // ANY message from the boss proves the boss session is alive. Receipts
+    // are best-effort (broker races can drop them); a false "Boss dead"
+    // previously swallowed failure notifications. Revive on activity.
+    if (bossRelay && from.id === bossRelay.registeredSessionId) {
+      bossRelay.onBossActivity();
+    }
+
     // Boss registration
     if (text.startsWith('BOSS:')) {
       const flushed = await bossRelay!.registerBoss(from.id);
@@ -773,16 +783,20 @@ export async function startOrchestrator(): Promise<void> {
       const uuid = text.split(/\s+/)[1];
       for (const [, agent] of (pool as any).agents) {
         if (agent.id === uuid) {
-          agent.status = 'idle';
-          agent.lastHeartbeat = Date.now();
+          // One-shot workers: IDLE is the completion signal. The pane dies
+          // with the process, but we free the pool slot NOW so launchReady
+          // can spawn the next worker immediately — otherwise the slot stays
+          // occupied until healthCheck (15s) notices the dead pane, wasting
+          // a full worker slot per completed ticket.
+          const completedTask = agent.currentTask;
+          await pool.removeAgent(agent.id);
 
           // If agent was working on a ticket, handle completion
-          if (agent.currentTask) {
-            const found = findNode(agent.currentTask);
+          if (completedTask) {
+            const found = findNode(completedTask);
             if (found) {
               await onWorkerComplete(found.node, 0);
             }
-            agent.currentTask = null;
           }
           break;
         }

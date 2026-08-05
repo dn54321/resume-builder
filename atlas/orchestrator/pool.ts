@@ -477,6 +477,37 @@ export class AgentPool {
     return this.agents.get(id);
   }
 
+  /**
+   * Remove an agent from the pool immediately (e.g. a one-shot worker that
+   * reported IDLE). Frees its max_instances slot so launchReady can spawn a
+   * replacement without waiting for healthCheck to notice the dead pane.
+   */
+  async removeAgent(id: string): Promise<void> {
+    const agent = this.agents.get(id);
+    if (!agent) return;
+
+    const config = getConfig();
+    const agentDef = config.agents[agent.type];
+    if (agentDef) {
+      this.runLifecycleScript(
+        agentDef.post_script,
+        agent.name,
+        agent.type,
+        agent.port,
+        agent.currentTask
+          ? path.join(getStateDir(), 'worktrees', agent.currentTask)
+          : getRepoRoot(),
+      );
+    }
+
+    // The pane will die on its own (pi exits after the task); killing it
+    // early is also fine since the work is done.
+    if (agent.paneId) {
+      this.paneManager.killWorkerPane(agent.name);
+    }
+    this.agents.delete(id);
+  }
+
   count(): number {
     return this.agents.size;
   }
