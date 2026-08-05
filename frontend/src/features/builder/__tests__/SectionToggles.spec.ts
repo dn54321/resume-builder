@@ -99,7 +99,7 @@ describe('SectionToggles', () => {
     expect(items).toHaveLength(10)
   })
 
-  it('shows checkboxes checked for enabled sections', () => {
+  it('shows an eye icon and a lock icon for every section row', () => {
     const wrapper = mount(SectionToggles, {
       props: {
         layout: 'standard',
@@ -108,14 +108,29 @@ describe('SectionToggles', () => {
       },
     })
 
-    const checkboxes = wrapper.findAll<HTMLInputElement>('input[type="checkbox"]')
-    expect(checkboxes).toHaveLength(10)
-    for (const cb of checkboxes) {
-      expect(cb.element.checked).toBe(true)
+    const items = wrapper.findAll('li')
+    expect(items).toHaveLength(10)
+    for (const item of items) {
+      expect(item.find('[data-testid="section-eye-toggle"]').exists()).toBe(true)
+      expect(item.find('[data-testid="section-lock-toggle"]').exists()).toBe(true)
     }
   })
 
-  it('shows checkboxes unchecked for disabled sections', () => {
+  it('shows Eye icon for enabled sections', () => {
+    const wrapper = mount(SectionToggles, {
+      props: {
+        layout: 'standard',
+        enabledSections: allEnabled,
+        columnAssignments: noAssignments,
+      },
+    })
+
+    expect(wrapper.findAll('svg.lucide-eye')).toHaveLength(10)
+    // No EyeOff icons when all sections are enabled
+    expect(wrapper.findAll('svg.lucide-eye-off')).toHaveLength(0)
+  })
+
+  it('shows EyeOff icon for disabled sections', () => {
     const enabled: SectionType[] = ['name_contact', 'summary']
     const wrapper = mount(SectionToggles, {
       props: {
@@ -125,17 +140,38 @@ describe('SectionToggles', () => {
       },
     })
 
-    const checkboxes = wrapper.findAll<HTMLInputElement>('input[type="checkbox"]')
-    // experience should be unchecked (not in enabled list)
-    const experienceCheckbox = checkboxes.find((_cb, idx) => {
-      const items = wrapper.findAll('li')
-      const item = items[idx]
-      return item?.text().includes('Experience')
-    })
-    expect(experienceCheckbox?.element.checked).toBe(false)
+    // 2 enabled sections → 2 Eye icons; 8 disabled → 8 EyeOff icons
+    expect(wrapper.findAll('svg.lucide-eye')).toHaveLength(2)
+    expect(wrapper.findAll('svg.lucide-eye-off')).toHaveLength(8)
+
+    // Disabled section shows the slashed EyeOff icon
+    const items = wrapper.findAll('li')
+    const experienceItem = items.find((item) =>
+      item.text().includes('Experience'),
+    )!
+    expect(experienceItem.find('svg.lucide-eye-off').exists()).toBe(true)
   })
 
-  it('emits toggle when a checkbox is changed', async () => {
+  it('renders the eye button semi-transparent when the section is disabled', () => {
+    const enabled: SectionType[] = ['name_contact']
+    const wrapper = mount(SectionToggles, {
+      props: {
+        layout: 'standard',
+        enabledSections: enabled,
+        columnAssignments: noAssignments,
+      },
+    })
+
+    const items = wrapper.findAll('li')
+    // name_contact is enabled → full opacity
+    const contactEye = items[0]!.find('[data-testid="section-eye-toggle"]')
+    expect(contactEye.classes()).not.toContain('text-muted-foreground/50')
+    // summary is disabled → semi-transparent
+    const summaryEye = items[1]!.find('[data-testid="section-eye-toggle"]')
+    expect(summaryEye.classes()).toContain('text-muted-foreground/50')
+  })
+
+  it('emits toggle when the eye icon is clicked', async () => {
     const wrapper = mount(SectionToggles, {
       props: {
         layout: 'standard',
@@ -147,12 +183,87 @@ describe('SectionToggles', () => {
     const items = wrapper.findAll('li')
     const contactItem = items.find((item) =>
       item.text().includes('Contact'),
-    )
-    const checkbox = contactItem!.find<HTMLInputElement>('input[type="checkbox"]')
-    await checkbox.setValue(false)
+    )!
+    const eyeButton = contactItem.find('[data-testid="section-eye-toggle"]')
+    await eyeButton.trigger('click')
 
     expect(wrapper.emitted('toggle')).toBeTruthy()
     expect(wrapper.emitted('toggle')![0]).toEqual(['name_contact' as SectionType])
+  })
+
+  // ── Lock toggle (RES-91) ────────────────────────────────────────
+
+  it('shows LockOpen icon for unlocked sections and Lock icon for locked ones', () => {
+    const locked: SectionType[] = ['summary']
+    const wrapper = mount(SectionToggles, {
+      props: {
+        layout: 'standard',
+        enabledSections: allEnabled,
+        lockedSections: locked,
+        columnAssignments: noAssignments,
+      },
+    })
+
+    // 1 locked → 1 Lock (closed); 9 unlocked → 9 LockOpen
+    expect(wrapper.findAll('svg.lucide-lock')).toHaveLength(1)
+    expect(wrapper.findAll('svg.lucide-lock-open')).toHaveLength(9)
+
+    const items = wrapper.findAll('li')
+    const summaryItem = items.find((item) =>
+      item.text().includes('Summary'),
+    )!
+    expect(summaryItem.find('svg.lucide-lock').exists()).toBe(true)
+
+    const contactItem = items.find((item) =>
+      item.text().includes('Contact'),
+    )!
+    expect(contactItem.find('svg.lucide-lock-open').exists()).toBe(true)
+  })
+
+  it('renders the lock button semi-transparent when the section is locked', () => {
+    const locked: SectionType[] = ['summary']
+    const wrapper = mount(SectionToggles, {
+      props: {
+        layout: 'standard',
+        enabledSections: allEnabled,
+        lockedSections: locked,
+        columnAssignments: noAssignments,
+      },
+    })
+
+    const items = wrapper.findAll('li')
+    const summaryItem = items.find((item) =>
+      item.text().includes('Summary'),
+    )!
+    const lockButton = summaryItem.find('[data-testid="section-lock-toggle"]')
+    expect(lockButton.classes()).toContain('text-muted-foreground/50')
+
+    // Unlocked sections keep the full-opacity lock button
+    const contactItem = items.find((item) =>
+      item.text().includes('Contact'),
+    )!
+    const contactLock = contactItem.find('[data-testid="section-lock-toggle"]')
+    expect(contactLock.classes()).not.toContain('text-muted-foreground/50')
+  })
+
+  it('emits toggleLock when the lock icon is clicked', async () => {
+    const wrapper = mount(SectionToggles, {
+      props: {
+        layout: 'standard',
+        enabledSections: allEnabled,
+        columnAssignments: noAssignments,
+      },
+    })
+
+    const items = wrapper.findAll('li')
+    const contactItem = items.find((item) =>
+      item.text().includes('Contact'),
+    )!
+    const lockButton = contactItem.find('[data-testid="section-lock-toggle"]')
+    await lockButton.trigger('click')
+
+    expect(wrapper.emitted('toggleLock')).toBeTruthy()
+    expect(wrapper.emitted('toggleLock')![0]).toEqual(['name_contact' as SectionType])
   })
 
   it('shows column select only for 2:1 layout with enabled sections (showTwoColumn=true)', () => {

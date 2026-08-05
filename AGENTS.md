@@ -192,3 +192,20 @@ again by someone else, wastes cycles, and damages trust in the system.
  */
 ```
 
+
+## ⚠️ WARNING — never leave staged work in the main repo during worker merges
+
+Workers merge into the MAIN repo working tree (`git checkout master && git
+merge ticket/X`). This is the SAME tree the boss stages atlas fixes in. If a
+worker merge conflicts while the boss has staged/uncommitted changes, a
+`git merge --abort` wipes them — observed twice (boss-relay.ts, server.ts
+changes lost). 
+
+**Correct approach:**
+1. Commit + push each atlas fix immediately (never sit on staged work).
+2. `mergeToBranch` now has a dirty-tree guard (waits 45s, defers cleanly) —
+   but it only protects merges that START after the guard ships.
+3. Before EVER running `git merge --abort` in the main repo, preserve staged
+   work first: `git diff --cached > /tmp/boss-staged.patch`, then
+   `git apply /tmp/boss-staged.patch --include='atlas/**'` after the abort
+   to restore only your files.

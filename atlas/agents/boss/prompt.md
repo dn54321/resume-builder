@@ -162,6 +162,34 @@ If you find a bug in Atlas itself (orchestrator, integrations, agents):
 If you find a bug in an agent's prompt or skills, update the files in
 `agents/<type>/` — the next spawned agent picks up the changes.
 
+### ⚠️ Work in YOUR OWN WORKTREE — never stage changes in the main repo
+
+Workers merge into the MAIN repo working tree (`git checkout master && git
+merge ticket/X`). Staging your atlas fixes there creates a clobbering hazard:
+a worker merge conflict + `git merge --abort` wipes your staged work
+(observed multiple times — boss-relay.ts, server.ts changes lost).
+
+**If the fix is NOT urgent, work on your own worktree** so you never block
+or get blocked by worker merges:
+
+```bash
+# Create your boss worktree once:
+git worktree add ../atlas-boss-fix -b boss/fix-<desc>
+# Edit + test there, then land it fast:
+cd ../atlas-boss-fix/atlas && npm run test
+cd ../atlas-boss-fix && git add <files> && git commit -m "fix(atlas): <desc>"
+# Merge into master via a locked, clean-tree operation:
+cd /home/dn54321/projects/resume-v3 && git merge --no-ff boss/fix-<desc> && git push origin master
+# Clean up:
+git worktree remove ../atlas-boss-fix && git branch -D boss/fix-<desc>
+```
+
+If you MUST work in the main repo (urgent hotfix), then:
+- Commit + push immediately after each change (never sit on staged work)
+- Before ANY `git merge --abort`, preserve staged work first:
+  `git diff --cached > /tmp/boss-staged.patch`
+  then `git apply /tmp/boss-staged.patch --include='atlas/**'` after aborting
+
 ## Notes — Persist Context Across Restarts
 
 You have a persistent notes file at `state/boss-notes.md`. Use it to carry your

@@ -52,6 +52,11 @@ export const useResumeStore = defineStore('resume', () => {
     sections.value.filter((s) => s.enabled).map((s) => s.sectionType),
   )
 
+  // Derived: locked section types (protected from Tailor edits)
+  const lockedSections = computed(() =>
+    sections.value.filter((s) => s.locked).map((s) => s.sectionType),
+  )
+
   // Derived: sections assigned to left column (only meaningful for 2:1 layout)
   const leftColumnSections = computed(() =>
     sections.value.filter((s) => s.column === 'left'),
@@ -104,6 +109,17 @@ export const useResumeStore = defineStore('resume', () => {
     const existing = sections.value.find((s) => s.sectionType === sectionType)
     if (existing) {
       existing.enabled = !existing.enabled
+    }
+  }
+
+  /**
+   * Toggle the `locked` flag — protects the section from Tailor edits.
+   * @param sectionType
+   */
+  function toggleLock(sectionType: SectionType) {
+    const existing = sections.value.find((s) => s.sectionType === sectionType)
+    if (existing) {
+      existing.locked = !existing.locked
     }
   }
 
@@ -377,6 +393,7 @@ export const useResumeStore = defineStore('resume', () => {
     layout,
     sections,
     enabledSections,
+    lockedSections,
     orderedSectionTypes,
     leftColumnSections,
     rightColumnSections,
@@ -390,6 +407,7 @@ export const useResumeStore = defineStore('resume', () => {
     initializeDefaults,
     setLayout,
     toggleSection,
+    toggleLock,
     setSectionColumn,
     reorderSections,
     isSectionEnabled,
