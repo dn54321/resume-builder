@@ -26,7 +26,7 @@ vi.mock('../../git/operations', () => ({
 }));
 
 vi.mock('../../integrations/linear/client', () => ({
-  transitionTicket: vi.fn(),
+  transitionTicket: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../../integrations/intercom/client', () => ({
@@ -183,14 +183,15 @@ describe('AgentPool — tmux pane wiring', () => {
       expect(agent!.status).toBe('spawning');
     });
 
-    it('launches pi via tmux send-keys with registration commands', async () => {
+    it('launches pi -p via tmux send-keys with env setup', async () => {
       await pool.spawn('worker');
 
       const sent = vi
         .mocked(cp.execSync)
         .mock.calls.map((c) => String(c[0]))
         .filter((c) => c.includes('tmux send-keys'));
-      expect(sent.length).toBeGreaterThanOrEqual(7);
+      // 5 send-keys: unset PI_*, cd, export env, export PATH, pi -p; exit
+      expect(sent.length).toBeGreaterThanOrEqual(5);
 
       const joined = sent.join('\n');
       // Keys are shell-quoted for the orchestrator's bash (single quotes
@@ -209,11 +210,12 @@ describe('AgentPool — tmux pane wiring', () => {
       // pi with webidl.util.markAsUncloneable).
       expect(joined).toContain('export PATH=');
       expect(joined).toContain(path.dirname(process.execPath));
-      expect(joined).toContain('--system-prompt "@');
-      expect(joined).toContain('/name worker-1');
-      expect(joined).toContain('REGISTER');
-      expect(joined).toContain('IDLE');
-      expect(joined).toContain('orchestrator-');
+      // Non-interactive one-shot: -p + --system-prompt, then exit
+      expect(joined).toContain('pi -p --system-prompt "@');
+      expect(joined).toContain('exit');
+      // No interactive registration commands typed into the pane
+      expect(joined).not.toContain('/name worker-1');
+      expect(joined).not.toContain('REGISTER');
     });
 
     it('records a spawn failure and returns null when the pane cannot be created', async () => {
@@ -251,6 +253,47 @@ describe('AgentPool — tmux pane wiring', () => {
       const logPath = path.join(tmpDir, 'logs', 'worker-1.log');
       expect(fs.existsSync(logPath)).toBe(true);
       expect(fs.readFileSync(logPath, 'utf-8')).toContain('worker-1 launched in pane %3');
+    });
+
+    it('one-shot worker: embeds the task in the prompt and marks the ticket in_progress', async () => {
+      const node = {
+        ticket: { id: 't1', identifier: 'RES-99', title: 'Test ticket', parentId: null, dependencies: [] },
+        state: {
+          status: 'pending',
+          branch: 'ticket/res-99',
+          worktreePath: '',
+          workerName: null,
+          assignedPort: null,
+          startedAt: null,
+          finishedAt: null,
+          pid: null,
+          prUrl: null,
+          error: null,
+          retryCount: 0,
+        },
+        dependencies: [],
+      } as never;
+
+      const agent = await pool.spawn('worker', node as never);
+      expect(agent).not.toBeNull();
+      expect(agent!.currentTask).toBe('RES-99');
+      expect(agent!.status).toBe('active');
+      expect((node as any).state.status).toBe('in_progress');
+      expect((node as any).state.workerName).toBe('worker-1');
+
+      // Prompt file must contain the TASK block
+      const promptPath = path.join(tmpDir, 'prompts', 'worker-1-prompt.md');
+      const prompt = fs.readFileSync(promptPath, 'utf-8');
+      expect(prompt).toContain('TASK ');
+      expect(prompt).toContain('RES-99');
+      expect(prompt).toContain('spawned non-interactively');
+
+      // spawn must launch pi in -p (non-interactive) mode
+      const sent = vi
+        .mocked(cp.execSync)
+        .mock.calls.map((c) => String(c[0]))
+        .filter((c) => c.includes('tmux send-keys'));
+      expect(sent.join('\n')).toContain('pi -p --system-prompt');
     });
   });
 

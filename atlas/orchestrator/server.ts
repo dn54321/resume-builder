@@ -215,34 +215,29 @@ async function launchReady(): Promise<void> {
     }
   }
 
+  // One-shot workers: every ready ticket gets a fresh worker spawned
+  // directly with the task embedded in its prompt (pi -p, non-interactive).
+  // Workers exit when done; the pane dies with them and healthCheck frees
+  // the slot. No idle-worker pool or intercom TASK handoff needed.
+  const config = getConfig();
+  const maxWorkers = config.agents.worker.max_instances;
   for (const node of allReady) {
-    // Find an idle worker
-    const idleWorkers = pool.getIdle('worker');
-    if (idleWorkers.length === 0) {
-      // Try spawning a new worker
-      const config = getConfig();
-      if (pool.getByType('worker').length < config.agents.worker.max_instances) {
-        const newAgent = await pool.spawn('worker');
-        if (newAgent) {
-          // Workers take ~10s to fully start (pi startup + AI init + intercom)
-          await new Promise((r) => setTimeout(r, 10000));
-          await assignToIdleWorker(node);
-        }
-      }
-    } else {
-      await assignToIdleWorker(node);
-    }
+    if (pool.getByType('worker').length >= maxWorkers) return;
+    const agent = await pool.spawn('worker', node);
+    if (!agent) continue;
+    log(`Spawned one-shot worker for ${node.ticket.identifier}`);
+    writeDashboard();
   }
 }
 
 async function assignToIdleWorker(node: GraphNode): Promise<void> {
-  // Also consider agents that are still spawning (not yet registered)
+  // LEGACY — kept for reviewer/pr_manager agents that may still use the
+  // interactive TASK handoff. One-shot workers bypass this entirely.
   const idleWorkers = pool.getIdle('worker');
-  const spawningWorkers = pool.getByType('worker').filter(a => a.status === 'spawning' && a.currentTask === null);
-  const agent = idleWorkers[0] || spawningWorkers[0];
+  const agent = idleWorkers[0];
   if (!agent) return;
 
-  await pool.assignTask(agent, node);
+  await pool.assignTask?.(agent, node);
   log(`Assigned ${node.ticket.identifier} to ${agent.name}`);
   writeDashboard();
 }

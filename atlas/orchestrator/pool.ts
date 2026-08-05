@@ -132,7 +132,14 @@ export class AgentPool {
 
   // ─── Spawn ────────────────────────────────────────────────────────
 
-  async spawn(type: AgentType): Promise<AgentInstance | null> {
+  /**
+   * Spawn an agent. When `node` is given (one-shot worker), the task is
+   * embedded into the prompt and pi runs in non-interactive `-p` mode:
+   * it processes the task, reports completion via intercom (IDLE message),
+   * and exits. The pane dies with it (`; exit`), so healthCheck cleans the
+   * agent up and the next ready ticket gets a fresh worker.
+   */
+  async spawn(type: AgentType, node?: GraphNode): Promise<AgentInstance | null> {
     // Rate limit: if spawns are failing, back off
     if (!canSpawnNow(type)) {
       console.log(`[Pool] Spawn cooldown active for ${type} — skipping`);
@@ -172,24 +179,46 @@ export class AgentPool {
     }
 
     // Run pre.sh
-    const worktreePath = path.join(getStateDir(), 'worktrees', name);
+    let worktreePath = path.join(getStateDir(), 'worktrees', name);
+
+    // One-shot worker: use the ticket's worktree (not the agent's own dir)
+    // and mark the ticket in_progress immediately — there is no separate
+    // assignTask handoff.
+    let currentTask: string | null = null;
+    if (node && type === 'worker') {
+      const baseBranch = config.strategy.branches.worktree_base;
+      const worktreesDir = path.join(getStateDir(), 'worktrees');
+      const ensured = ensureWorktree(
+        getRepoRoot(),
+        node.ticket.identifier,
+        baseBranch,
+        worktreesDir,
+      );
+      worktreePath = ensured.worktreePath;
+      currentTask = node.ticket.identifier;
+      node.state.worktreePath = worktreePath;
+      node.state.workerName = name;
+      node.state.assignedPort = port ?? 0;
+      node.state.status = 'in_progress';
+      node.state.startedAt = new Date().toISOString();
+    }
+
     this.runLifecycleScript(agentDef.pre_script, name, type, port ?? 0, worktreePath);
 
-    // Build prompt
-    const promptContent = this.buildPrompt(type, name, port ?? 0, worktreePath);
+    // Build prompt (includes the TASK block when node is given)
+    const promptContent = this.buildPrompt(type, name, port ?? 0, worktreePath, node);
 
     // Launch pi inside a tmux worker pane (created by the pane manager by
-    // splitting the banner). The pane gives pi a real TTY — no `script`
-    // wrapper or stdin-pipe hacks needed. Commands are typed into the pane
-    // with `tmux send-keys`; keys sent before pi has booted sit in the pty
-    // input buffer and are processed in order, mirroring the old
-    // (cat init | pi) startup semantics.
+    // splitting the banner). The pane gives the worker a real TTY and lets
+    // the operator read its output. With a task node, pi runs in
+    // non-interactive `-p` mode: it processes the embedded TASK, reports
+    // completion via intercom, and exits. `; exit` makes the pane die with
+    // pi so healthCheck removes the agent and frees the slot.
     const uuid = this.generateUUID();
-    const orchNameForReg = `orchestrator-${process.pid}`;
 
-    // Workers are spawned before ticket assignment, so there is no ticket
-    // yet — the pane is created unassigned (banner shows no ticket).
-    const paneId = this.paneManager.createWorkerPane(name, '');
+    // The pane is created unassigned if no ticket yet; otherwise it shows
+    // the ticket it was spawned for.
+    const paneId = this.paneManager.createWorkerPane(name, currentTask ?? '');
     if (!paneId) {
       console.error(`[Pool] ${name} failed to create tmux pane — spawn aborted`);
       recordSpawnFailure(type);
@@ -238,14 +267,10 @@ export class AgentPool {
     // so pi boots; without this it crashes with
     // `webidl.util.markAsUncloneable is not a function`.
     sendKeys(`export PATH='${path.dirname(process.execPath)}':$PATH`);
-    sendKeys(`${PI_BIN} --system-prompt "@${promptContent}"`);
-    sendKeys(`/name ${name}`);
-    sendKeys(
-      `intercom({ action: "send", to: "${orchNameForReg}", message: "REGISTER ${uuid} worker ${name}" })`,
-    );
-    sendKeys(
-      `intercom({ action: "send", to: "${orchNameForReg}", message: "IDLE ${uuid}" })`,
-    );
+    // Non-interactive one-shot: -p processes the prompt (which embeds the
+    // TASK) and exits when done. `; exit` kills the pane's bash with pi so
+    // the pane goes dead and the pool slot frees up.
+    sendKeys(`${PI_BIN} -p --system-prompt "@${promptContent}"; exit`);
 
     // Worker output is now visible live in the tmux pane (capture with
     // `tmux capture-pane`). Keep a log file for API compatibility.
@@ -264,8 +289,8 @@ export class AgentPool {
       // pi runs inside the tmux pane — there is no direct child process.
       processPid: null,
       process: null,
-      status: 'spawning',
-      currentTask: null,
+      status: node ? 'active' : 'spawning',
+      currentTask,
       port: port ?? 0,
       paneId,
       logPath,
@@ -281,17 +306,26 @@ export class AgentPool {
     // tmux error) are caught above via recordSpawnFailure.
     recordSpawnSuccess(type);
 
+    // Transition Linear ticket to in_progress for one-shot workers
+    if (node && type === 'worker') {
+      transitionTicket(node.ticket.id, config.linear.transitions.on_start).catch(() => {});
+    }
+
     return instance;
   }
 
-  // ─── Task Assignment ──────────────────────────────────────────────
+  // ─── Task Assignment (legacy — non-worker agents) ──────────────────
 
+  /**
+   * LEGACY interactive TASK handoff, kept for reviewer/pr_manager agents
+   * that still use the interactive TASK protocol. One-shot workers bypass
+   * this — the task is embedded in the prompt at spawn time.
+   */
   async assignTask(agent: AgentInstance, node: GraphNode): Promise<void> {
     const config = getConfig();
     const baseBranch = config.strategy.branches.worktree_base;
     const worktreesDir = path.join(getStateDir(), 'worktrees');
 
-    // Ensure worktree
     const { worktreePath } = ensureWorktree(
       getRepoRoot(),
       node.ticket.identifier,
@@ -304,8 +338,6 @@ export class AgentPool {
     node.state.assignedPort = agent.port;
 
     const strategy = resolveStrategy(node.state.branch);
-
-    // Build task assignment
     const task = {
       uuid: agent.id,
       ticket: node.ticket,
@@ -313,7 +345,6 @@ export class AgentPool {
       strategy,
     };
 
-    // Send TASK via intercom
     try {
       await this.intercom.send(agent.name, `TASK ${agent.id} ${JSON.stringify(task)}`);
       agent.status = 'active';
@@ -323,7 +354,6 @@ export class AgentPool {
       node.state.status = 'in_progress';
       node.state.startedAt = new Date().toISOString();
 
-      // Transition Linear ticket
       transitionTicket(node.ticket.id, config.linear.transitions.on_start).catch(() => {});
     } catch (err) {
       console.error(`[Pool] Failed to send TASK to ${agent.name}:`, err);
@@ -467,6 +497,7 @@ export class AgentPool {
     name: string,
     port: number,
     worktreePath: string,
+    node?: GraphNode,
   ): string {
     const config = getConfig();
     const agentDef = config.agents[type];
@@ -490,6 +521,21 @@ export class AgentPool {
       .replace(/\{\{STRATEGY\}\}/g, strategy.default)
       .replace(/\{\{PR_TARGET\}\}/g, strategy.branches.pr_target)
       .replace(/\{\{ORCHESTRATOR_NAME\}\}/g, `orchestrator-${process.pid}`);
+
+    // One-shot worker: append the task so pi -p has everything it needs
+    // without an interactive intercom TASK handoff.
+    if (node && type === 'worker') {
+      const task = {
+        uuid: this.generateUUID(),
+        ticket: node.ticket,
+        worktreePath,
+        strategy,
+      };
+      content += `\n\n## Your Task\n\n` +
+        `TASK ${task.uuid} ${JSON.stringify(task)}\n\n` +
+        `You are spawned non-interactively for this ONE task. Implement it fully,\n` +
+        `then report completion (IDLE <uuid> to {{ORCHESTRATOR_NAME}}) and exit.\n`;
+    }
 
     // Write to a temp file that pi can read
     const tmpPromptPath = path.join(getStateDir(), 'prompts', `${name}-prompt.md`);
