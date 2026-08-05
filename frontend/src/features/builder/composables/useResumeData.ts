@@ -164,8 +164,9 @@ export function useResumeData() {
         Array.isArray((pending as Record<string, unknown>).sections) &&
         ((pending as Record<string, unknown>).sections as unknown[]).length > 0
       ) {
-        const payload = pending as { layout?: string; sections: unknown[] }
+        const payload = pending as { name?: string | null; layout?: string; sections: unknown[] }
         store.loadFromPayload({
+          name: payload.name ?? null,
           layout: (payload.layout as 'standard' | 'column2-1') ?? 'standard',
           sections: payload.sections as ResumePayload['sections'],
         })
@@ -182,12 +183,18 @@ export function useResumeData() {
         const list = await api.get<Array<{ id: string }>>('/api/v1/resumes')
         if (list.length > 0) {
           const firstId = list[0]!.id
-          const data = await api.get<{ id: string; layout: string; sections: unknown[] }>(
-            `/api/v1/resumes/${firstId}`,
-          )
+          const data = await api.get<{
+            id: string
+            name: string | null
+            layout: string
+            sections: unknown[]
+          }>(`/api/v1/resumes/${firstId}`)
           store.id = firstId
           if (data.sections?.length > 0 || data.layout) {
+            // Include the resume name — without it the name input resets to
+            // '' on every reload (RES-95).
             store.loadFromPayload({
+              name: data.name,
               layout: data.layout as 'standard' | 'column2-1',
               sections: data.sections as ResumePayload['sections'],
             })
@@ -208,9 +215,10 @@ export function useResumeData() {
     // Anonymous or authenticated user with no resume: try localStorage
     const local = readFromLocalStorage()
     if (local && typeof local === 'object' && local !== null) {
-      const payload = local as { layout?: string; sections?: unknown[] }
+      const payload = local as { name?: string | null; layout?: string; sections?: unknown[] }
       if (payload.sections && Array.isArray(payload.sections) && payload.sections.length > 0) {
         store.loadFromPayload({
+          name: payload.name ?? null,
           layout: (payload.layout as 'standard' | 'column2-1') ?? 'standard',
           sections: payload.sections as ResumePayload['sections'],
         })
