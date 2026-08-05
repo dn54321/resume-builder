@@ -82,15 +82,36 @@ const SPAWN_FAILURES = new Map<string, number>();   // agentType → consecutive
 const SPAWN_LIFETIME_COUNT = new Map<string, number>(); // agentType → total spawns this session
 const MAX_CONSECUTIVE_FAILURES = 5;
 const BASE_COOLDOWN_MS = 1000;  // 1 second base, doubles each failure
-const MAX_LIFETIME_SPAWNS: Record<string, number> = {
-  worker: 5,        // Hard cap: will not spawn more than 5 workers total per session
-  reviewer: 5,
-  pr_manager: 5,
-};
 
-function canSpawnNow(type: string): boolean {
+/**
+ * Lifetime spawn cap per agent type (crash-loop guard).
+ *
+ * This is a HARD cap on total spawns per orchestrator session. It exists to
+ * stop death/re-queue loops (spawn → worker dies instantly → re-queue →
+ * spawn) from burning thousands of processes.
+ *
+ * IMPORTANT: the cap counts ALL spawns but is RESET on successful
+ * completion (recordCompletedWork → onWorkerComplete success path). A
+ * healthy pipeline where workers finish tickets therefore never trips it —
+ * only a loop with NO completions does. With one-shot workers (1 spawn = 1
+ * ticket), a never-resetting cap would hard-limit the session to N tickets
+ * (the old hardcoded 5 stranded the board after 5 tickets).
+ *
+ * Value is configurable per agent type via `max_lifetime_spawns` in
+ * atlas.config.yaml (default 20).
+ */
+function getLifetimeCap(type: AgentType): number {
+  try {
+    const def = getConfig().agents[type];
+    return def?.max_lifetime_spawns ?? 20;
+  } catch {
+    return 20;
+  }
+}
+
+function canSpawnNow(type: AgentType): boolean {
   // Hard cap: lifetime spawn limit
-  const lifetimeMax = MAX_LIFETIME_SPAWNS[type] ?? 10;
+  const lifetimeMax = getLifetimeCap(type);
   const lifetimeCount = SPAWN_LIFETIME_COUNT.get(type) ?? 0;
   if (lifetimeCount >= lifetimeMax) {
     console.error(`[Pool] ${type} lifetime spawn cap (${lifetimeMax}) reached — refusing to spawn more`);
@@ -115,6 +136,20 @@ function recordSpawnFailure(type: string): void {
 function recordSpawnSuccess(type: string): void {
   SPAWN_FAILURES.delete(type);
   SPAWN_COOLDOWNS.delete(type);
+}
+
+/**
+ * Reset the lifetime spawn counter after a SUCCESSFUL ticket completion.
+ *
+ * The lifetime cap exists to stop death/re-queue loops, which by definition
+ * have no completions. A completed ticket proves the pipeline is healthy, so
+ * the cap resets and the session can keep working. Without this, one-shot
+ * workers (1 spawn = 1 ticket) would hard-limit the whole orchestrator
+ * session to `max_lifetime_spawns` tickets — stranding the board until a
+ * manual restart.
+ */
+export function recordCompletedWork(type: string): void {
+  SPAWN_LIFETIME_COUNT.delete(type);
 }
 
 /**

@@ -10,7 +10,7 @@ import * as path from 'node:path';
 import { IntercomClient } from '../integrations/intercom/client';
 import { BossRelay } from './boss-relay';
 import { Scheduler } from './scheduler';
-import { AgentPool } from './pool';
+import { AgentPool, recordCompletedWork } from './pool';
 import { PaneManager } from '../tui/pane-manager';
 import { buildGraph, readyTickets } from './graph';
 import { executeStrategy } from './strategist';
@@ -262,6 +262,12 @@ async function onWorkerComplete(
         node.state.finishedAt = new Date().toISOString();
         node.state.pid = null;
         if (result.prUrl) node.state.prUrl = result.prUrl;
+
+        // A completed ticket proves the worker pipeline is healthy — reset
+        // the lifetime spawn cap so one-shot workers (1 spawn = 1 ticket)
+        // don't strand the board after N tickets. The cap only trips on
+        // death/re-queue loops, which have no completions.
+        recordCompletedWork('worker');
 
         // Transition Linear ticket
         await transitionTicket(node.ticket.id, config.linear.transitions.on_done);

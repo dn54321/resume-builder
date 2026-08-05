@@ -8,7 +8,7 @@ import * as cp from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { AgentPool, __resetSpawnStateForTests } from '../pool';
+import { AgentPool, recordCompletedWork, __resetSpawnStateForTests } from '../pool';
 import { setStateDir } from '../state';
 import type { AgentInstance, AtlasConfig } from '../types';
 import type { PaneManager } from '../../tui/pane-manager';
@@ -254,6 +254,33 @@ describe('AgentPool — tmux pane wiring', () => {
       expect(first).not.toBeNull();
       const second = await pool.spawn('worker');
       expect(second).toBeNull();
+    });
+
+    it('hard caps total spawns at max_lifetime_spawns (crash-loop guard)', async () => {
+      const config = testConfig();
+      config.agents.worker.max_lifetime_spawns = 2;
+      vi.mocked(getConfig).mockReturnValue(config);
+
+      expect(await pool.spawn('worker')).not.toBeNull();
+      expect(await pool.spawn('worker')).not.toBeNull();
+      // Third spawn trips the lifetime cap (not max_instances, which is 3)
+      expect(await pool.spawn('worker')).toBeNull();
+      expect(config.agents.worker.max_instances).toBe(3);
+    });
+
+    it('recordCompletedWork resets the lifetime cap so healthy workers keep going', async () => {
+      const config = testConfig();
+      config.agents.worker.max_lifetime_spawns = 2;
+      vi.mocked(getConfig).mockReturnValue(config);
+
+      expect(await pool.spawn('worker')).not.toBeNull();
+      expect(await pool.spawn('worker')).not.toBeNull();
+      expect(await pool.spawn('worker')).toBeNull(); // capped
+
+      // A successful ticket completion proves the pipeline is healthy — the
+      // cap must reset so the session is NOT stranded after N tickets.
+      recordCompletedWork('worker');
+      expect(await pool.spawn('worker')).not.toBeNull();
     });
 
     it('keeps a log file for the agent', async () => {

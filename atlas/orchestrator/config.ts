@@ -112,6 +112,7 @@ const DEFAULTS: AtlasConfig = {
       post_script: 'agents/worker/post.sh',
       spawn: 'on_demand',
       max_instances: 5,
+      max_lifetime_spawns: 20,
       retry_limit: 2,
       task_timeout_minutes: 30,
     },

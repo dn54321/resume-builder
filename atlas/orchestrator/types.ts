@@ -19,6 +19,13 @@ export interface AgentDefinition {
   max_instances: number;
   retry_limit?: number;
   task_timeout_minutes?: number;
+  /**
+   * Hard cap on total spawns per orchestrator session (crash-loop guard).
+   * Counts ALL spawns; reset on successful completion (see pool.ts), so a
+   * healthy pipeline that completes tickets never trips it — only a
+   * death/re-queue loop with no completions does. Default 20.
+   */
+  max_lifetime_spawns?: number;
   review_checklist?: string[];
   auto_merge_threshold_hours?: number;
   cleanup_stale_branches_days?: number;

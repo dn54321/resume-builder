@@ -63,6 +63,7 @@ agents:
     post_script: agents/worker/post.sh
     spawn: on_demand               # Auto-spawned when pending tickets exist
     max_instances: 5               # Up to 5 workers running concurrently
+    max_lifetime_spawns: 20        # Crash-loop guard: reset on successful ticket completion
     retry_limit: 2                 # Max retries per ticket before marking failed
     task_timeout_minutes: 30       # Kill worker if task takes longer than this
 
