@@ -275,20 +275,13 @@ export class AgentPool {
     // immediately (verified empirically). `; exit` kills the pane's bash
     // with pi so the pane goes dead and the pool slot frees up.
     //
-    // --stream=all + -e stream-output: the worker's worktree carries a
-    // committed .pi (with only the linear extension), so project-local
-    // auto-discovery would MISS the stream-output extension — it must be
-    // loaded explicitly from the main repo. Streamed output (thinking/text/
-    // tools) goes to stderr, visible live in the worker's tmux pane.
-    const streamExt = path.join(
-      getRepoRoot(),
-      '.pi',
-      'extensions',
-      'stream-output',
-      'index.ts',
-    );
+    // --stream=all: the stream-output extension is auto-discovered from the
+    // worktree's .pi/extensions (pre.sh symlinks the main repo .pi in). Do
+    // NOT also pass `-e <path>` — that loads the extension twice and pi
+    // exits with 'Flag "--stream" conflicts' (the worker dies and the
+    // ticket re-queues in a loop).
     sendKeys(
-      `${PI_BIN} -p -e "${streamExt}" --stream=all --system-prompt "@${promptContent}" "Begin work on your assigned TASK now. Implement it fully, then report completion and exit."; exit`,
+      `${PI_BIN} -p --stream=all --system-prompt "@${promptContent}" "Begin work on your assigned TASK now. Implement it fully, then report completion and exit."; exit`,
     );
 
     // Worker output is now visible live in the tmux pane (capture with
