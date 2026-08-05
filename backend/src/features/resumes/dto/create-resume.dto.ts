@@ -11,16 +11,41 @@ import { Type } from 'class-transformer';
 
 export class SectionFieldDto {
   @IsString()
+  @IsOptional()
+  id?: string;
+
+  @IsString()
   key!: string;
 
   @IsString()
   value!: string;
+
+  @IsString()
+  @IsOptional()
+  iv?: string;
+
+  @IsString()
+  @IsOptional()
+  authTag?: string;
+
+  @IsInt()
+  @IsOptional()
+  @Min(0)
+  order?: number;
 }
 
 export class SectionEntryDto {
+  @IsString()
+  @IsOptional()
+  id?: string;
+
   @IsInt()
   @Min(0)
   order!: number;
+
+  @IsString()
+  @IsOptional()
+  parentId?: string;
 
   @IsArray()
   @ValidateNested({ each: true })
@@ -28,9 +53,10 @@ export class SectionEntryDto {
   fields!: SectionFieldDto[];
 
   @IsArray()
+  @IsOptional()
   @ValidateNested({ each: true })
   @Type(() => SectionEntryDto)
-  children!: SectionEntryDto[];
+  children?: SectionEntryDto[];
 }
 
 export class ResumeSectionDto {
@@ -48,6 +74,11 @@ export class ResumeSectionDto {
   @IsBoolean()
   @IsOptional()
   locked?: boolean;
+
+  /** Whether the section is visible in the rendered resume (soft-toggle). */
+  @IsBoolean()
+  @IsOptional()
+  enabled?: boolean;
 
   @IsArray()
   @ValidateNested({ each: true })

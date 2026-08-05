@@ -558,6 +558,7 @@ describe('ResumesService', () => {
           column: 'right',
           order: 0,
           locked: false,
+          enabled: true,
         },
       });
     });
@@ -682,6 +683,7 @@ describe('ResumesService', () => {
           column: 'right',
           order: 0,
           locked: false,
+          enabled: true,
         },
       });
       expect(mockCrypto.encryptField).toHaveBeenCalledWith('Software Engineer');
@@ -761,6 +763,7 @@ describe('ResumesService', () => {
           column: 'left',
           order: 0,
           locked: true,
+          enabled: true,
         },
       });
     });
@@ -876,6 +879,7 @@ describe('ResumesService', () => {
           column: 'right',
           order: 0,
           locked: false,
+          enabled: true,
         },
       });
       // the decrypted original value is re-encrypted for the copy
@@ -1659,6 +1663,7 @@ describe('ResumesService', () => {
           column: 'right',
           order: 0,
           locked: true,
+          enabled: true,
         },
       });
     });

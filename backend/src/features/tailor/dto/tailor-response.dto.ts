@@ -1,11 +1,19 @@
-import { IsString, IsInt, IsArray, ValidateNested, Min } from 'class-validator';
+import { IsString, IsInt, IsArray, IsOptional, ValidateNested, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { SectionFieldDto } from '../../resumes/dto/create-resume.dto';
 
 export class TailorResponseEntryDto {
+  @IsString()
+  @IsOptional()
+  id?: string;
+
   @IsInt()
   @Min(0)
   order!: number;
+
+  @IsString()
+  @IsOptional()
+  parentId?: string;
 
   @IsArray()
   @ValidateNested({ each: true })
@@ -13,9 +21,10 @@ export class TailorResponseEntryDto {
   fields!: SectionFieldDto[];
 
   @IsArray()
+  @IsOptional()
   @ValidateNested({ each: true })
   @Type(() => TailorResponseEntryDto)
-  children!: TailorResponseEntryDto[];
+  children?: TailorResponseEntryDto[];
 }
 
 export class TailorResponseSectionDto {
