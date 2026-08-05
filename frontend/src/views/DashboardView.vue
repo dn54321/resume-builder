@@ -1,10 +1,18 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/features/auth/composables/useAuth'
 import { useApi, ApiRequestError } from '@/shared/composables/useApi'
 import ConfirmModal from '@/shared/components/ConfirmModal.vue'
-import { Ellipsis, Pencil, Copy, Trash2 } from '@lucide/vue'
+import { Ellipsis, Pencil, Copy, Trash2, FileText } from '@lucide/vue'
+import StandardLayout from '@/features/builder/components/preview/StandardLayout.vue'
+import TwoColumnLayout from '@/features/builder/components/preview/TwoColumnLayout.vue'
+import {
+  toPreviewSections,
+  type ResumeSummary,
+  type ResumeFull,
+} from '@/views/models/dashboard.model'
+import type { ResumeSectionState } from '@/features/builder/types/resume'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -13,13 +21,13 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 
-interface ResumeSummary {
-  id: string
-  name: string | null
-  layout: string
-  createdAt: string
-  updatedAt: string
-}
+// US Letter paper size at 96 DPI — the preview components are authored
+// against this fixed pixel size and scaled down to fit the pane.
+const PAPER_WIDTH_PX = 816
+// Breathing room between the pane edge and the scaled paper.
+const PADDING = 24
+const MIN_SCALE = 0.2
+const MAX_SCALE = 1.2
 
 const router = useRouter()
 const auth = useAuth()
@@ -30,6 +38,67 @@ const isLoading = ref(true)
 const error = ref('')
 const showConfirmModal = ref(false)
 const resumeToDelete = ref<ResumeSummary | null>(null)
+
+// ── Preview state (RES-87 two-pane layout) ────────────────────────
+
+const selectedResumeId = ref<string | null>(null)
+const previewResume = ref<ResumeFull | null>(null)
+const isPreviewLoading = ref(false)
+const previewError = ref('')
+
+/**
+ * Monotonic token guarding against stale preview responses — if the user
+ * clicks two cards in quick succession, only the latest fetch wins.
+ */
+let previewRequestSeq = 0
+
+/**
+ * Sections of the selected resume mapped to the shape the production
+ * preview components (StandardLayout / TwoColumnLayout) consume.
+ */
+const previewSections = computed<ResumeSectionState[]>(() =>
+  previewResume.value ? toPreviewSections(previewResume.value.sections) : [],
+)
+
+// ── Preview scaling ────────────────────────────────────────────────
+
+const previewPaneRef = ref<HTMLElement | null>(null)
+const containerWidth = ref(0)
+
+/**
+ * Scale the 816px-wide paper so it fits the preview pane with padding.
+ * Falls back to 0.3 before the pane width has been measured (jsdom, SSR).
+ */
+const previewScale = computed(() => {
+  if (containerWidth.value <= 0) return 0.3
+  const availableWidth = containerWidth.value - PADDING
+  const s = availableWidth / PAPER_WIDTH_PX
+  return Math.min(MAX_SCALE, Math.max(MIN_SCALE, s))
+})
+
+let resizeObserver: ResizeObserver | null = null
+
+onMounted(() => {
+  const el = previewPaneRef.value
+  if (el && 'ResizeObserver' in window) {
+    // Read initial width, then keep tracking on pane resize (RES-87).
+    containerWidth.value = el.clientWidth
+    resizeObserver = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (entry) {
+        containerWidth.value = entry.contentRect.width
+      }
+    })
+    resizeObserver.observe(el)
+  }
+})
+
+onUnmounted(() => {
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
+})
 
 // ── Inline rename state ─────────────────────
 
@@ -85,6 +154,36 @@ async function handleCreateResume(): Promise<void> {
       error.value = err.message
     } else {
       error.value = 'Something went wrong'
+    }
+  }
+}
+
+/**
+ * Select a resume card: fetch the full resume and render its preview in
+ * the right pane. Replaces the old navigate-to-builder card click (RES-87).
+ * @param {ResumeSummary} resume - The clicked resume
+ */
+async function selectResume(resume: ResumeSummary): Promise<void> {
+  const seq = ++previewRequestSeq
+  selectedResumeId.value = resume.id
+  previewError.value = ''
+  isPreviewLoading.value = true
+
+  try {
+    const full = await api.get<ResumeFull>(`/api/v1/resumes/${resume.id}`)
+    if (seq !== previewRequestSeq) return // stale — a newer selection won
+    previewResume.value = full
+  } catch (err) {
+    if (seq !== previewRequestSeq) return
+    previewResume.value = null
+    if (err instanceof ApiRequestError) {
+      previewError.value = err.message
+    } else {
+      previewError.value = 'Something went wrong'
+    }
+  } finally {
+    if (seq === previewRequestSeq) {
+      isPreviewLoading.value = false
     }
   }
 }
@@ -215,9 +314,18 @@ async function handleConfirmDelete(): Promise<void> {
 
   try {
     await api.del(`/api/v1/resumes/${resumeToDelete.value.id}`)
-    resumes.value = resumes.value.filter(
-      (r) => r.id !== resumeToDelete.value!.id,
-    )
+    const deletedId = resumeToDelete.value.id
+    resumes.value = resumes.value.filter((r) => r.id !== deletedId)
+
+    // If the deleted resume was being previewed, reset the preview pane
+    // back to its placeholder state.
+    if (selectedResumeId.value === deletedId) {
+      previewRequestSeq++ // invalidate any in-flight fetch for it
+      selectedResumeId.value = null
+      previewResume.value = null
+      isPreviewLoading.value = false
+      previewError.value = ''
+    }
   } catch (err) {
     if (err instanceof ApiRequestError) {
       error.value = err.message
@@ -232,135 +340,203 @@ async function handleConfirmDelete(): Promise<void> {
 
 <template>
   <div class="dashboard-view">
-    <!-- Page Header -->
-    <header class="dashboard-header">
-      <h1>My Resumes</h1>
-      <button
-        class="btn-primary"
-        :disabled="isLoading"
-        @click="handleCreateResume"
-      >
-        Create New Resume
-      </button>
-    </header>
+    <div class="dashboard-body">
+      <!-- ── Left pane: resume list (~35%) ─────────────────── -->
+      <aside class="dashboard-list-pane" data-testid="dashboard-list-pane">
+        <!-- Pane header -->
+        <header class="dashboard-header">
+          <h1>My Resumes</h1>
+          <button
+            class="btn-primary"
+            :disabled="isLoading"
+            @click="handleCreateResume"
+          >
+            Create New Resume
+          </button>
+        </header>
 
-    <!-- Error State -->
-    <div
-      v-if="error"
-      class="mb-6 rounded-md border px-4 py-3 text-sm bg-red-50 border-red-200 text-red-800 dark:bg-red-950 dark:border-red-800 dark:text-red-200"
-      role="alert"
-    >
-      {{ error }}
-    </div>
-
-    <!-- Loading State -->
-    <div v-if="isLoading" class="resume-grid">
-      <div
-        v-for="n in 3"
-        :key="n"
-        class="resume-card resume-card--skeleton"
-      >
-        <div class="skeleton-line skeleton-line--title" />
-        <div class="skeleton-line skeleton-line--date" />
-      </div>
-    </div>
-
-    <!-- Empty State -->
-    <div v-else-if="resumes.length === 0" class="empty-state">
-      <div class="empty-state-card">
-        <div class="empty-state-icon">📄</div>
-        <h2>No resumes yet</h2>
-        <p>Create your first resume to get started</p>
-        <button class="btn-primary" @click="handleCreateResume">
-          Create New Resume
-        </button>
-      </div>
-    </div>
-
-    <!-- Resume List -->
-    <div v-else class="resume-grid">
-      <div
-        v-for="resume in resumes"
-        :key="resume.id"
-        class="resume-card bg-card border border-border text-card-foreground rounded-lg hover:border-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-foreground focus-visible:outline-offset-2"
-        role="button"
-        tabindex="0"
-        @click="router.push(`/builder/${resume.id}`)"
-        @keydown.enter="router.push(`/builder/${resume.id}`)"
-        @keydown.space.prevent="router.push(`/builder/${resume.id}`)"
-      >
-        <div class="resume-card__header">
-          <!-- Display name (rename via the ⋮ dropdown) -->
-          <h3 v-if="editingId !== resume.id" class="resume-card__name">
-            {{ resume.name || 'Untitled' }}
-          </h3>
-
-          <!-- Inline rename input -->
-          <div v-else class="resume-card__name-edit" @click.stop @keydown.stop>
-            <input
-              v-model="editValue"
-              :data-id="resume.id"
-              class="resume-card__name-input"
-              :disabled="renameLoading"
-              maxlength="200"
-              @keydown.enter="commitRename()"
-              @keydown.escape="cancelRename()"
-              @blur="commitRename()"
-            />
-            <span v-if="renameLoading" class="rename-spinner" />
-          </div>
-
-          <!-- Card actions: Rename / Duplicate / Delete -->
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              class="resume-card__menu-btn"
-              data-testid="resume-menu-trigger"
-              :aria-label="`Options for ${resume.name || 'Untitled'}`"
-              @click.stop
-              @keydown.stop
-            >
-              <Ellipsis class="size-4" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" class="w-44">
-              <DropdownMenuItem
-                data-testid="menu-rename"
-                @select="startEditing(resume)"
-              >
-                <Pencil class="size-4" />
-                Rename
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                data-testid="menu-duplicate"
-                :disabled="duplicatingId === resume.id"
-                @select="handleDuplicate(resume)"
-              >
-                <Copy class="size-4" />
-                {{ duplicatingId === resume.id ? 'Duplicating…' : 'Duplicate' }}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                data-testid="menu-delete"
-                variant="destructive"
-                @select="handleDeleteClick(resume)"
-              >
-                <Trash2 class="size-4" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+        <!-- Error State -->
+        <div
+          v-if="error"
+          class="mb-6 rounded-md border px-4 py-3 text-sm bg-red-50 border-red-200 text-red-800 dark:bg-red-950 dark:border-red-800 dark:text-red-200"
+          role="alert"
+        >
+          {{ error }}
         </div>
 
-        <!-- Rename error -->
-        <p
-          v-if="editingId === resume.id && renameError"
-          class="rename-error"
+        <!-- Loading State -->
+        <div v-if="isLoading" class="dashboard-list">
+          <div
+            v-for="n in 3"
+            :key="n"
+            class="resume-card resume-card--skeleton"
+          >
+            <div class="skeleton-line skeleton-line--title" />
+            <div class="skeleton-line skeleton-line--date" />
+          </div>
+        </div>
+
+        <!-- Empty State -->
+        <div v-else-if="resumes.length === 0" class="empty-state">
+          <div class="empty-state-card">
+            <div class="empty-state-icon">📄</div>
+            <h2>No resumes yet</h2>
+            <p>Create your first resume to get started</p>
+            <button class="btn-primary" @click="handleCreateResume">
+              Create New Resume
+            </button>
+          </div>
+        </div>
+
+        <!-- Resume List -->
+        <div v-else class="dashboard-list" data-testid="dashboard-list">
+          <div
+            v-for="resume in resumes"
+            :key="resume.id"
+            class="resume-card bg-card border border-border text-card-foreground rounded-lg hover:border-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-foreground focus-visible:outline-offset-2"
+            :class="{ 'resume-card--selected': selectedResumeId === resume.id }"
+            role="button"
+            tabindex="0"
+            :aria-pressed="selectedResumeId === resume.id"
+            @click="selectResume(resume)"
+            @keydown.enter="selectResume(resume)"
+            @keydown.space.prevent="selectResume(resume)"
+          >
+            <div class="resume-card__header">
+              <!-- Display name (rename via the ⋮ dropdown) -->
+              <h3 v-if="editingId !== resume.id" class="resume-card__name">
+                {{ resume.name || 'Untitled' }}
+              </h3>
+
+              <!-- Inline rename input -->
+              <div v-else class="resume-card__name-edit" @click.stop @keydown.stop>
+                <input
+                  v-model="editValue"
+                  :data-id="resume.id"
+                  class="resume-card__name-input"
+                  :disabled="renameLoading"
+                  maxlength="200"
+                  @keydown.enter="commitRename()"
+                  @keydown.escape="cancelRename()"
+                  @blur="commitRename()"
+                />
+                <span v-if="renameLoading" class="rename-spinner" />
+              </div>
+
+              <!-- Card actions: Rename / Duplicate / Delete -->
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  class="resume-card__menu-btn"
+                  data-testid="resume-menu-trigger"
+                  :aria-label="`Options for ${resume.name || 'Untitled'}`"
+                  @click.stop
+                  @keydown.stop
+                >
+                  <Ellipsis class="size-4" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" class="w-44">
+                  <DropdownMenuItem
+                    data-testid="menu-rename"
+                    @select="startEditing(resume)"
+                  >
+                    <Pencil class="size-4" />
+                    Rename
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    data-testid="menu-duplicate"
+                    :disabled="duplicatingId === resume.id"
+                    @select="handleDuplicate(resume)"
+                  >
+                    <Copy class="size-4" />
+                    {{ duplicatingId === resume.id ? 'Duplicating…' : 'Duplicate' }}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    data-testid="menu-delete"
+                    variant="destructive"
+                    @select="handleDeleteClick(resume)"
+                  >
+                    <Trash2 class="size-4" />
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+
+            <!-- Rename error -->
+            <p
+              v-if="editingId === resume.id && renameError"
+              class="rename-error"
+            >
+              {{ renameError }}
+            </p>
+            <p class="resume-card__date">
+              Updated {{ formatDate(resume.updatedAt) }}
+            </p>
+          </div>
+        </div>
+      </aside>
+
+      <!-- ── Right pane: live preview (~65%) ───────────────── -->
+      <section
+        ref="previewPaneRef"
+        class="dashboard-preview-pane"
+        data-testid="dashboard-preview-pane"
+      >
+        <!-- Placeholder: nothing selected yet -->
+        <div
+          v-if="!selectedResumeId"
+          class="dashboard-preview-placeholder"
+          data-testid="preview-placeholder"
         >
-          {{ renameError }}
-        </p>
-        <p class="resume-card__date">
-          Updated {{ formatDate(resume.updatedAt) }}
-        </p>
-      </div>
+          <FileText class="dashboard-preview-placeholder__icon" />
+          <p>Select a resume to preview</p>
+        </div>
+
+        <!-- Loading: fetching the full resume -->
+        <div
+          v-else-if="isPreviewLoading"
+          class="dashboard-preview-loading"
+          data-testid="preview-loading"
+          role="status"
+          aria-live="polite"
+        >
+          <span class="preview-spinner" aria-hidden="true" />
+          <span>Loading preview…</span>
+        </div>
+
+        <!-- Error: full-resume fetch failed -->
+        <div
+          v-else-if="previewError"
+          class="dashboard-preview-error"
+          role="alert"
+          data-testid="preview-error"
+        >
+          {{ previewError }}
+        </div>
+
+        <!-- Scaled paper -->
+        <div
+          v-else-if="previewResume"
+          class="dashboard-preview-body"
+          data-testid="preview-body"
+        >
+          <div
+            class="dashboard-preview__paper"
+            :style="{ transform: `scale(${previewScale})` }"
+            data-testid="preview-paper"
+          >
+            <StandardLayout
+              v-if="previewResume.layout === 'standard'"
+              :sections="previewSections"
+            />
+            <TwoColumnLayout
+              v-else
+              :sections="previewSections"
+            />
+          </div>
+        </div>
+      </section>
     </div>
 
     <!-- Confirm Delete Modal -->
@@ -379,23 +555,58 @@ async function handleConfirmDelete(): Promise<void> {
 
 <style scoped>
 .dashboard-view {
-  max-width: 800px;
-  margin: 2rem auto;
-  padding: 0 1rem;
+  height: calc(100vh - 4rem); /* below the sticky app header (h-16) */
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
 }
 
-/* ── Header ─────────────────────────────── */
+/* ── Two-pane body ───────────────────────── */
+
+.dashboard-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 1rem;
+}
+
+/* ── Left pane ───────────────────────────── */
+
+.dashboard-list-pane {
+  flex: 0 0 35%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-card);
+  padding: 1rem;
+  overflow: hidden;
+}
+
+.dashboard-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-right: 0.25rem;
+}
+
+/* ── Pane header ─────────────────────────── */
 
 .dashboard-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
+  flex-shrink: 0;
 }
 
 .dashboard-header h1 {
   margin: 0;
-  font-size: 1.75rem;
+  font-size: 1.5rem;
 }
 
 /* ── Buttons ────────────────────────────── */
@@ -420,14 +631,6 @@ async function handleConfirmDelete(): Promise<void> {
   cursor: not-allowed;
 }
 
-/* ── Grid ───────────────────────────────── */
-
-.resume-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 1rem;
-}
-
 /* ── Resume Card ────────────────────────── */
 
 .resume-card {
@@ -435,6 +638,12 @@ async function handleConfirmDelete(): Promise<void> {
   border-radius: 8px;
   cursor: pointer;
   transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+/* Selected card — highlighted to show which resume is being previewed */
+.resume-card--selected {
+  border-color: var(--color-foreground);
+  box-shadow: 0 0 0 1px var(--color-foreground);
 }
 
 .resume-card__header {
@@ -555,19 +764,22 @@ async function handleConfirmDelete(): Promise<void> {
 /* ── Empty State ────────────────────────── */
 
 .empty-state {
+  flex: 1;
   display: flex;
   justify-content: center;
-  padding: 3rem 0;
+  padding: 2rem 0;
+  overflow-y: auto;
 }
 
 .empty-state-card {
   text-align: center;
-  padding: 3rem 2rem;
+  padding: 2.5rem 1.5rem;
   border: 1px solid var(--color-border);
   border-radius: 12px;
-  max-width: 360px;
+  max-width: 340px;
   width: 100%;
   background: var(--color-card);
+  align-self: flex-start;
 }
 
 .empty-state-icon {
@@ -584,5 +796,128 @@ async function handleConfirmDelete(): Promise<void> {
   margin: 0 0 1.5rem;
   color: var(--muted-foreground);
   font-size: 0.9375rem;
+}
+
+/* ── Right pane: live preview ───────────── */
+
+.dashboard-preview-pane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--muted);
+  overflow: hidden;
+}
+
+.dashboard-preview-placeholder {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  color: var(--muted-foreground);
+  text-align: center;
+  padding: 1rem;
+}
+
+.dashboard-preview-placeholder__icon {
+  width: 3rem;
+  height: 3rem;
+  opacity: 0.5;
+}
+
+.dashboard-preview-placeholder p {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.dashboard-preview-loading {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  color: var(--muted-foreground);
+  font-size: 0.9375rem;
+}
+
+.preview-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-foreground);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+.dashboard-preview-error {
+  margin: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  border: 1px solid #fca5a5;
+  background: #fee2e2;
+  color: #991b1b;
+  font-size: 0.875rem;
+}
+
+html.dark .dashboard-preview-error {
+  border-color: #7f1d1d;
+  background: #450a0a;
+  color: #fecaca;
+}
+
+/* ── Scaled paper ───────────────────────── */
+
+.dashboard-preview-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.dashboard-preview__paper {
+  width: 816px;
+  height: 1056px;
+  background: #fff;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.15),
+    0 1px 3px rgba(0, 0, 0, 0.1);
+  transform-origin: top center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+/* ── Responsive: stack vertically < 768px ── */
+
+@media (max-width: 767px) {
+  .dashboard-view {
+    height: auto;
+    min-height: 0;
+    padding: 0.5rem;
+  }
+
+  .dashboard-body {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  /* List on top, preview below */
+  .dashboard-list-pane {
+    flex: none;
+    width: 100%;
+    max-height: 45vh;
+  }
+
+  .dashboard-preview-pane {
+    flex: 1;
+    width: 100%;
+    min-height: 55vh;
+  }
 }
 </style>

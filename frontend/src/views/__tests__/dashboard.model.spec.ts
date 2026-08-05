@@ -1,0 +1,98 @@
+import { describe, it, expect } from 'vitest'
+import {
+  toPreviewSections,
+  type ResumeFullSection,
+} from '@/views/models/dashboard.model'
+
+describe('toPreviewSections', () => {
+  it('maps full-resume sections to the preview component shape', () => {
+    const sections: ResumeFullSection[] = [
+      {
+        id: 'section-1',
+        sectionId: 'name_contact',
+        column: 'right',
+        order: 0,
+        enabled: true,
+        locked: false,
+        entries: [
+          {
+            id: 'entry-1',
+            order: 0,
+            parentId: null,
+            fields: [{ key: 'fullName', value: 'John Doe', order: 0 }],
+          },
+        ],
+      },
+    ]
+
+    const result = toPreviewSections(sections)
+
+    expect(result).toHaveLength(1)
+    expect(result[0]).toMatchObject({
+      sectionId: 'name_contact',
+      sectionType: 'name_contact',
+      column: 'right',
+      order: 0,
+      enabled: true,
+      locked: false,
+    })
+    expect(result[0]!.entries[0]).toEqual({
+      id: 'entry-1',
+      order: 0,
+      parentId: null,
+      fields: [{ key: 'fullName', value: 'John Doe', order: 0 }],
+    })
+  })
+
+  it('normalizes left column and fills missing optional flags', () => {
+    const sections: ResumeFullSection[] = [
+      {
+        id: 'section-2',
+        sectionId: 'experience',
+        column: 'left',
+        order: 3,
+        // enabled / locked omitted — must default to true / false
+        entries: [
+          {
+            id: 'entry-2',
+            order: 1,
+            parentId: 'parent-1',
+            // field order omitted — must default to 0
+            fields: [{ key: 'company', value: 'Acme' }],
+          },
+        ],
+      },
+    ]
+
+    const result = toPreviewSections(sections)
+
+    expect(result[0]).toMatchObject({
+      column: 'left',
+      order: 3,
+      enabled: true,
+      locked: false,
+    })
+    expect(result[0]!.entries[0]).toEqual({
+      id: 'entry-2',
+      order: 1,
+      parentId: 'parent-1',
+      fields: [{ key: 'company', value: 'Acme', order: 0 }],
+    })
+  })
+
+  it('maps any non-left column to right', () => {
+    const sections: ResumeFullSection[] = [
+      {
+        id: 'section-3',
+        sectionId: 'hobbies',
+        column: 'right',
+        order: 5,
+        entries: [],
+      },
+    ]
+
+    const result = toPreviewSections(sections)
+    expect(result[0]!.column).toBe('right')
+    expect(result[0]!.entries).toEqual([])
+  })
+})
