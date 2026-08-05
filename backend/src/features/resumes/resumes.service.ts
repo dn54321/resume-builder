@@ -158,6 +158,47 @@ export class ResumesService {
     });
   }
 
+  async duplicate(id: string, userId: string): Promise<ResumeTree> {
+    const original = await this.findOne(id, userId);
+
+    const dto: CreateResumeDto = {
+      name: original.name ? `Copy of ${original.name}` : 'Copy of',
+      layout: original.layout,
+      sections: original.sections.map((section) => ({
+        sectionId: section.sectionId,
+        column: section.column,
+        order: section.order,
+        locked: section.locked,
+        // Prisma's back-relation returns every entry for a section, children
+        // included — child entries show up in the flat `entries` array (with
+        // parentId set) AND nested in their parent's `children`. Map only the
+        // top-level entries to DTO entries; their children are copied from the
+        // nested `children` arrays, otherwise each child would be duplicated
+        // once as a nested child and once as a phantom top-level entry.
+        entries: section.entries
+          .filter((entry) => !entry.parentId)
+          .map((entry) => this.entryToDto(entry)),
+      })),
+    };
+
+    return this.create(userId, dto);
+  }
+
+  private entryToDto(
+    entry: SectionEntry,
+  ): CreateResumeDto['sections'][number]['entries'][number] {
+    return {
+      order: entry.order,
+      fields: entry.fields.map((field) => ({
+        key: field.key,
+        value: field.value,
+      })),
+      children: entry.children
+        ? entry.children.map((child) => this.entryToDto(child))
+        : [],
+    };
+  }
+
   async update(
     id: string,
     userId: string,

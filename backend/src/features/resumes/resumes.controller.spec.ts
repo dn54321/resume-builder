@@ -329,14 +329,14 @@ describe('ResumesController', () => {
   });
 
   describe('POST /api/v1/resumes/:id/duplicate', () => {
-    it('returns a copy of the resume with name "Copy of <original>"', async () => {
+    it('duplicates a resume and returns the copy', async () => {
       const copy: ResumeBody = {
         id: 'resume-copy',
         name: 'Copy of My Resume',
         layout: 'standard',
         sections: [],
       };
-      mockResumesService.duplicate = jest.fn().mockResolvedValue(copy);
+      mockResumesService.duplicate.mockResolvedValue(copy);
 
       const response = await request(app.getHttpServer())
         .post('/api/v1/resumes/r1/duplicate')
@@ -348,10 +348,10 @@ describe('ResumesController', () => {
       expect(mockResumesService.duplicate).toHaveBeenCalledWith('r1', 'user-1');
     });
 
-    it('returns 404 when the source resume does not exist', async () => {
-      mockResumesService.duplicate = jest
-        .fn()
-        .mockRejectedValue(new NotFoundException('Resume not found'));
+    it('returns 404 when the resume does not exist', async () => {
+      mockResumesService.duplicate.mockRejectedValue(
+        new NotFoundException('Resume not found'),
+      );
 
       await request(app.getHttpServer())
         .post('/api/v1/resumes/nonexistent/duplicate')
@@ -359,9 +359,9 @@ describe('ResumesController', () => {
     });
 
     it('returns 404 when the resume belongs to another user', async () => {
-      mockResumesService.duplicate = jest
-        .fn()
-        .mockRejectedValue(new NotFoundException('Resume not found'));
+      mockResumesService.duplicate.mockRejectedValue(
+        new NotFoundException('Resume not found'),
+      );
 
       await request(app.getHttpServer())
         .post('/api/v1/resumes/other-user-resume/duplicate')
