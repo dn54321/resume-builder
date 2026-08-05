@@ -65,6 +65,26 @@ Do NOT wait for another task.
 ## Strategy: {{STRATEGY}}
 The current strategy is **{{STRATEGY}}** targeting branch **{{PR_TARGET}}**.
 
+## Database & Prisma (read this first)
+
+- **Engine is SQLite for EVERYONE.** The main app may use another engine in
+  production, but agents always get `file:./dev.db` (SQLite) — see
+  `backend/.env` in your worktree. Your worktree has its OWN `dev.db` and
+  its own `test-e2e.db` — fully isolated, never shared with other workers.
+  Any "database is locked" error means ANOTHER PROCESS is using YOUR
+  worktree's DB (e.g. a duplicate worker in the same worktree) — report it,
+  don't fight it.
+- **The generated Prisma client is pre-copied** into
+  `backend/src/generated/prisma/` (it's gitignored, so pre.sh copies it).
+  Do NOT run bare `npx prisma generate` — Prisma 7 emits ESM
+  (`import.meta.url`) that crashes NestJS at runtime. If you must
+  regenerate, use `pnpm prisma:generate` (runs the patch script).
+- **The migration chain is currently broken on fresh DBs** (duplicate
+  `User` table, RES-94) — `prisma migrate deploy` may fail. Work with the
+  pre-copied client and pre-seeded `dev.db`; if DB-backed tests fail with
+  missing tables, report it via ASK rather than inventing a workaround.
+- Never run `prisma migrate dev` or `prisma db push` (see Important below).
+
 ## Important
 - Never run `prisma migrate dev`, `prisma db push`, or `pnpm format`
 - Write `agent-status.txt` with current phase (one line per step)
