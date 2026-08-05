@@ -1,5 +1,13 @@
 # AGENTS.md — Project conventions for coding agents
 
+## ⚠️ Read first: agent.md
+
+All coding agents (pi sessions, Atlas workers, the boss) MUST read
+[`agent.md`](./agent.md) before operating. It contains safety rules that
+prevent real damage — in particular: **NEVER use `tmux send-keys` to type
+into tmux panes** (it froze the entire live Atlas session by triggering
+tmux's own prompt mode). Use `tmux capture-pane` (read-only) instead.
+
 ## Testing
 
 ### Coverage minimum: 90%

@@ -104,6 +104,7 @@ STATUS, and go IDLE between tickets. They never exit on their own.
 
 ### Critical Rules
 
+0. **Never use `tmux send-keys` to type into panes** — read-only `tmux capture-pane` only. Typing into panes can trigger tmux's own prompt mode ("jump to forward/backwards") and freeze the entire tmux session. See `agent.md` at the repo root.
 1. **Never kill the orchestrator** — use `STOP` to halt agents cleanly.
 2. **Never kill the banner pane** — it is the structural anchor of the tmux layout.
 3. **Never kill yourself** — `STOP boss` is blocked. Don't `kill` your own pi process.
