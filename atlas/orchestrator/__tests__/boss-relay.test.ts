@@ -365,7 +365,15 @@ describe('BossRelay — OS-level liveness (PID check)', () => {
   it('uses defaultIsProcessAlive against /proc when no probe is injected', async () => {
     const { send } = makeSend();
     const relay = new BossRelay({ send, log: vi.fn() });
-    await relay.registerBoss('boss-1', { pid: process.pid, startedAt: 0 });
+    // Compute the test process's startEpochMs (the /proc starttime is jiffies
+    // since boot, not epoch-ms — the fix converts so the comparison works).
+    const fs = require('node:fs') as typeof import('node:fs');
+    const stat = fs.readFileSync(`/proc/${process.pid}/stat`, 'utf-8');
+    const fields = stat.slice(stat.lastIndexOf(')') + 2).trim().split(/\s+/);
+    const startJiffies = Number(fields[19]);
+    const uptimeS = Number(fs.readFileSync('/proc/uptime', 'utf-8').split(/\s+/)[0]);
+    const startEpochMs = (Date.now() - uptimeS * 1000) + (startJiffies / 100) * 1000;
+    await relay.registerBoss('boss-1', { pid: process.pid, startedAt: startEpochMs });
 
     relay.checkLiveness();
     expect(relay.isAlive).toBe(true);
@@ -373,5 +381,21 @@ describe('BossRelay — OS-level liveness (PID check)', () => {
 
   it('defaultIsProcessAlive returns false for a non-existent pid', () => {
     expect(defaultIsProcessAlive(99999999)).toBe(false);
+  });
+
+  it('defaultIsProcessAlive correctly converts jiffies→epoch (live pid)', () => {
+    // Regression: the naive `startJiffies === startTime` comparison ALWAYS
+    // failed (jiffies vs epoch-ms units), marking a live boss dead on every
+    // check. With the conversion fix, a live pid + correct startEpochMs must
+    // be alive, and a wrong startTime must be dead.
+    const fs = require('node:fs') as typeof import('node:fs');
+    const stat = fs.readFileSync(`/proc/${process.pid}/stat`, 'utf-8');
+    const fields = stat.slice(stat.lastIndexOf(')') + 2).trim().split(/\s+/);
+    const startJiffies = Number(fields[19]);
+    const uptimeS = Number(fs.readFileSync('/proc/uptime', 'utf-8').split(/\s+/)[0]);
+    const startEpochMs = (Date.now() - uptimeS * 1000) + (startJiffies / 100) * 1000;
+
+    expect(defaultIsProcessAlive(process.pid, startEpochMs)).toBe(true);
+    expect(defaultIsProcessAlive(process.pid, startEpochMs + 60_000)).toBe(false); // wrong start
   });
 });

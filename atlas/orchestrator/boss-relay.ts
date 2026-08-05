@@ -63,14 +63,27 @@ export interface BossRelayOptions {
  */
 export function defaultIsProcessAlive(pid: number, startTime?: number): boolean {
   try {
-    const stat = require('node:fs').readFileSync(`/proc/${pid}/stat`, 'utf-8');
+    const fs = require('node:fs');
+    const stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf-8');
     if (!startTime) return true; // process exists; no baseline to compare
-    // Field 22 = starttime (tokens: comm can contain spaces, so split from the
-    // right after stripping the trailing ) — 52 fields, index 21 zero-based.
+    // Field 22 = starttime in JIFFIES SINCE BOOT (tokens: comm can contain
+    // spaces, so split from the right after stripping the trailing )).
     const close = stat.lastIndexOf(')');
     const fields = stat.slice(close + 2).trim().split(/\s+/);
-    const start = Number(fields[19]); // field 22 is the 20th after comm
-    return start === Number(startTime);
+    const startJiffies = Number(fields[19]);
+
+    // Convert to epoch-ms to compare with the intercom session's startedAt
+    // (which is Date.now() — epoch ms, NOT jiffies). Unit mismatch made the
+    // naive `start === startTime` comparison ALWAYS false, marking a live
+    // boss dead on every check (observed: 'boss process 446820 is no longer
+    // alive' for a process that was alive the whole time).
+    const CLK_TCK = 100; // POSIX default (getconf CLK_TCK)
+    const uptimeS = Number(fs.readFileSync('/proc/uptime', 'utf-8').split(/\s+/)[0]);
+    const bootEpochMs = Date.now() - uptimeS * 1000;
+    const startEpochMs = bootEpochMs + (startJiffies / CLK_TCK) * 1000;
+
+    // Allow 5s skew (clock/rounding between the two sources).
+    return Math.abs(startEpochMs - Number(startTime)) < 5000;
   } catch {
     return false;
   }
