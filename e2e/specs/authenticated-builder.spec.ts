@@ -43,7 +43,7 @@ test.describe('Authenticated resume builder', () => {
     await expect(page.locator('h1').first()).toContainText('My Resumes')
 
     // 2. Create a new resume
-    await page.getByRole('button', { name: 'Create New Resume' }).first().click()
+    await page.getByRole('button', { name: 'Create New Resume' }).click()
 
     // 3. Verify redirected to builder with an ID
     await page.waitForURL('**/builder/**', { timeout: 15_000 })
@@ -91,7 +91,7 @@ test.describe('Authenticated resume builder', () => {
     await loginAndGoToDashboard(page)
 
     // Create a resume first
-    await page.getByRole('button', { name: 'Create New Resume' }).first().click()
+    await page.getByRole('button', { name: 'Create New Resume' }).click()
     await page.waitForURL('**/builder/**', { timeout: 15_000 })
 
     const nameInput = page.locator('input[aria-label="Resume name"]')
@@ -107,12 +107,8 @@ test.describe('Authenticated resume builder', () => {
     await page.waitForURL('**/dashboard')
     await expect(page.locator('h1').first()).toContainText('My Resumes')
 
-    // Should see the created resume in the grid.
-    // The resume name appears in a card — match the card created by THIS
-    // test rather than asserting a global count, because the previous test
-    // in the file persists its own resume (shared user, beforeAll reset).
-    await expect(
-      page.locator('.resume-card').filter({ hasText: 'Dashboard Test Resume' }),
-    ).toHaveCount(1)
+    // Should see the created resume in the grid
+    // The resume name appears in a card
+    await expect(page.locator('.resume-card')).toHaveCount(1)
   })
 })

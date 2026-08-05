@@ -46,30 +46,17 @@ export interface ResumePayload {
     column: 'left' | 'right'
     order: number
     enabled?: boolean
-    /** Protects the section from Tailor edits (RES-91). */
     locked?: boolean
-    /**
-     * Entries are serialized as a NESTED tree (children arrays) to match
-     * the backend API contract (SectionEntryDto.children is required).
-     * Legacy flat payloads (pre-RES-93) may still carry `parentId`
-     * instead of `children` — loadFromPayload normalizes both shapes.
-     */
-    entries: ResumePayloadEntry[]
+    entries: {
+      order: number
+      parentId: string | null
+      fields: {
+        key: string
+        value: string
+        order: number
+      }[]
+    }[]
   }[]
-}
-
-export interface ResumePayloadEntry {
-  /** Backend/API entry id; present in API responses (GET /resumes/:id). */
-  id?: string
-  order: number
-  /** Legacy flat-payload reference; nested payloads use `children` instead. */
-  parentId?: string | null
-  fields: {
-    key: string
-    value: string
-    order?: number
-  }[]
-  children?: ResumePayloadEntry[]
 }
 
 // Section IDs from the backend Section table

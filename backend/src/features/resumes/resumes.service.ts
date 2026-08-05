@@ -143,7 +143,6 @@ export class ResumesService {
             column: sectionDto.column ?? 'right',
             order: sectionDto.order,
             locked: sectionDto.locked ?? false,
-            enabled: sectionDto.enabled ?? true,
           },
         });
 
@@ -206,7 +205,6 @@ export class ResumesService {
               column: sectionDto.column ?? 'right',
               order: sectionDto.order,
               locked: sectionDto.locked ?? false,
-              enabled: sectionDto.enabled ?? true,
             },
           });
 
@@ -249,7 +247,7 @@ export class ResumesService {
             value: encrypted,
             iv,
             authTag,
-            order: fieldDto.order ?? 0,
+            order: 0,
           },
         });
       }

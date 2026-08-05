@@ -23,54 +23,6 @@ function createFetchResponse(data: unknown, status = 200): Response {
   } as unknown as Response
 }
 
-/**
- * Mock a GET /api/v1/resumes (list) response. The endpoint returns
- * ResumeSummary[] ordered by createdAt desc (RES-93 contract).
- * @param id
- * @param layout
- */
-function mockResumeList(id = 'resume-1', layout = 'column2-1'): Response {
-  return createFetchResponse([
-    {
-      id,
-      name: null,
-      layout,
-      createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: '2026-01-01T00:00:00.000Z',
-    },
-  ])
-}
-
-/**
- * Mock a GET /api/v1/resumes/:id (full decrypted tree) response.
- * @param layout
- * @param sections
- */
-function mockResumeTree(layout = 'column2-1', sections: unknown[] = []): Response {
-  return createFetchResponse({
-    id: 'resume-1',
-    userId: 'user-1',
-    name: null,
-    layout,
-    sections,
-  })
-}
-
-/**
- * Authenticated session helper: mock the login call and return the auth store.
- * @param mockFetch
- */
-async function loginAs(mockFetch: ReturnType<typeof vi.fn>): Promise<void> {
-  mockFetch.mockResolvedValueOnce(
-    createFetchResponse({
-      user: { id: 'user-1', email: 'test@test.com' },
-      sessionToken: 'fake-token',
-    }),
-  )
-  const auth = useAuthStore()
-  await auth.login('test@test.com', 'password')
-}
-
 describe('useResumeData', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -88,7 +40,6 @@ describe('useResumeData', () => {
       auth.logout()
 
       const localPayload = {
-        name: 'My Local Name',
         layout: 'column2-1',
         sections: [
           {
@@ -115,9 +66,6 @@ describe('useResumeData', () => {
       await loadResume()
 
       expect(store.layout).toBe('column2-1')
-      // The stored name survives the reload (RES-93: the localStorage path
-      // used to drop `name`, wiping it on every reload that took it)
-      expect(store.name).toBe('My Local Name')
       // loadFromPayload fills missing sections to 10 — saved one is enabled
       expect(store.sections).toHaveLength(10)
       const nc = store.sections.find((s) => s.sectionType === 'name_contact')
@@ -272,23 +220,26 @@ describe('useResumeData', () => {
 
   describe('loadResume (authenticated)', () => {
     it('loads from API and calls loadFromPayload', async () => {
-      await loginAs(mockFetch)
-
-      // GET /api/v1/resumes returns a LIST of summaries (RES-93 contract)
-      mockFetch.mockResolvedValueOnce(mockResumeList())
-      // GET /api/v1/resumes/resume-1 returns the full tree
+      const auth = useAuthStore()
+      // Simulate authenticated user via login
       mockFetch.mockResolvedValueOnce(
-        mockResumeTree('column2-1', [
-          {
-            id: 'rs-1',
-            sectionId: 'name_contact',
-            column: 'left',
-            order: 0,
-            locked: false,
-            enabled: true,
-            entries: [],
-          },
-        ]),
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
+      )
+      await auth.login('test@test.com', 'password')
+
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({
+          id: 'resume-1',
+          layout: 'column2-1',
+          sections: [
+            {
+              sectionId: 'name_contact',
+              column: 'left',
+              order: 0,
+              entries: [],
+            },
+          ],
+        }),
       )
 
       const store = useResumeStore()
@@ -299,82 +250,19 @@ describe('useResumeData', () => {
       await loadResume()
 
       expect(store.layout).toBe('column2-1')
-      // The backend resume id is remembered so saves PUT /resumes/:id
-      expect(store.id).toBe('resume-1')
       // loadFromPayload fills missing sections — the saved one is enabled, rest are disabled
       expect(store.sections).toHaveLength(10)
       const nc = store.sections.find((s) => s.sectionType === 'name_contact')
       expect(nc!.enabled).toBe(true)
     })
 
-    it('loads nested bullet children from the full tree into flat store entries', async () => {
-      await loginAs(mockFetch)
-
-      mockFetch.mockResolvedValueOnce(mockResumeList())
-      // Mirrors the REAL backend response: Prisma's nested include returns
-      // the child BOTH inside the parent's children array AND as a flat
-      // row in entries (with parentId set). loadFromPayload must dedupe.
-      mockFetch.mockResolvedValueOnce(
-        mockResumeTree('standard', [
-          {
-            id: 'rs-1',
-            sectionId: 'experience',
-            column: 'right',
-            order: 0,
-            locked: false,
-            enabled: true,
-            entries: [
-              {
-                id: 'entry-1',
-                order: 0,
-                parentId: null,
-                fields: [{ id: 'f-1', key: 'company', value: 'Acme', order: 0 }],
-                children: [
-                  {
-                    id: 'bullet-1',
-                    order: 0,
-                    parentId: 'entry-1',
-                    fields: [{ id: 'f-2', key: 'detail', value: 'Built things', order: 0 }],
-                    children: [],
-                  },
-                ],
-              },
-              {
-                id: 'bullet-1',
-                order: 0,
-                parentId: 'entry-1',
-                fields: [{ id: 'f-2', key: 'detail', value: 'Built things', order: 0 }],
-                children: [],
-              },
-            ],
-          },
-        ]),
-      )
-
-      const store = useResumeStore()
-      store.initializeDefaults()
-      SECTION_TYPES.forEach((t) => store.toggleSection(t))
-
-      const { loadResume } = useResumeData()
-      await loadResume()
-
-      const exp = store.sections.find((s) => s.sectionType === 'experience')
-      expect(exp).toBeDefined()
-      // Parent + bullet child (the duplicated flat row is deduped)
-      expect(exp!.entries).toHaveLength(2)
-      // The nested child was flattened into a store entry referencing its parent
-      const parent = exp!.entries.find((e) => e.fields[0]?.key === 'company')
-      const bullet = exp!.entries.find((e) => e.fields[0]?.key === 'detail')
-      expect(parent).toBeDefined()
-      expect(bullet).toBeDefined()
-      expect(bullet!.parentId).toBe(parent!.id)
-      expect(bullet!.fields[0]!.value).toBe('Built things')
-    })
-
     it('falls back to defaults on 404', async () => {
-      await loginAs(mockFetch)
+      const auth = useAuthStore()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
+      )
+      await auth.login('test@test.com', 'password')
 
-      // GET list 404 → no saved resume → defaults
       mockFetch.mockResolvedValueOnce(
         createFetchResponse({ message: 'Not Found' }, 404),
       )
@@ -390,68 +278,24 @@ describe('useResumeData', () => {
       expect(store.sections).toHaveLength(10)
       expect(store.layout).toBe('standard')
     })
-
-    it('keeps the backend id when the resume exists but has no sections', async () => {
-      await loginAs(mockFetch)
-
-      mockFetch.mockResolvedValueOnce(mockResumeList())
-      mockFetch.mockResolvedValueOnce(mockResumeTree('standard', []))
-
-      const store = useResumeStore()
-      store.initializeDefaults()
-      SECTION_TYPES.forEach((t) => store.toggleSection(t))
-
-      const { loadResume } = useResumeData()
-      await loadResume()
-
-      // Defaults are initialized but the backend id is preserved so the
-      // first save PUTs instead of creating a duplicate resume.
-      expect(store.layout).toBe('standard')
-      expect(store.sections).toHaveLength(10)
-      expect(store.id).toBe('resume-1')
-    })
   })
 
   describe('saveResume (authenticated)', () => {
-    it('PUTs to /resumes/:id for an authenticated user with a known id', async () => {
-      await loginAs(mockFetch)
+    it('PUTs to API for authenticated user', async () => {
+      const auth = useAuthStore()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
+      )
+      await auth.login('test@test.com', 'password')
 
-      // loadResume: list + full tree so store.id becomes 'resume-1'
-      mockFetch.mockResolvedValueOnce(mockResumeList())
-      mockFetch.mockResolvedValueOnce(mockResumeTree('standard'))
-
-      const store = useResumeStore()
-      store.initializeDefaults()
-
-      const { loadResume, saveResume } = useResumeData()
-      await loadResume()
-      expect(store.id).toBe('resume-1')
-
-      // Reset mock to ignore load calls; PUT succeeds
+      // Reset mock to ignore login API calls
       mockFetch.mockClear()
       mockFetch.mockResolvedValueOnce(
         createFetchResponse({ id: 'resume-1', layout: 'standard', sections: [] }),
       )
 
-      await saveResume()
-
-      expect(mockFetch).toHaveBeenCalledTimes(1)
-      const call = mockFetch.mock.calls[0]!
-      expect(call[0]).toContain('/api/v1/resumes/resume-1')
-      expect(call[1]!.method).toBe('PUT')
-    })
-
-    it('POSTs to create the resume when no backend id exists yet (first save)', async () => {
-      await loginAs(mockFetch)
-
-      // Fresh store with no resume id — first save must POST
       const store = useResumeStore()
-      expect(store.id).toBeNull()
-
-      mockFetch.mockClear()
-      mockFetch.mockResolvedValueOnce(
-        createFetchResponse({ id: 'resume-new', layout: 'standard', sections: [] }),
-      )
+      store.initializeDefaults()
 
       const { saveResume } = useResumeData()
       await saveResume()
@@ -459,49 +303,50 @@ describe('useResumeData', () => {
       expect(mockFetch).toHaveBeenCalledTimes(1)
       const call = mockFetch.mock.calls[0]!
       expect(call[0]).toContain('/api/v1/resumes')
-      expect(call[1]!.method).toBe('POST')
-      // The created id is remembered so the next save PUTs
-      expect(store.id).toBe('resume-new')
+      expect(call[1]!.method).toBe('PUT')
     })
 
-    it('recreates via POST when PUT 404s (resume deleted server-side)', async () => {
-      await loginAs(mockFetch)
+    it('POSTs on 404 (resume not yet created)', async () => {
+      const auth = useAuthStore()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
+      )
+      await auth.login('test@test.com', 'password')
 
-      mockFetch.mockResolvedValueOnce(mockResumeList())
-      mockFetch.mockResolvedValueOnce(mockResumeTree('standard'))
+      // Reset mock to ignore login API calls
+      mockFetch.mockClear()
+      // First call (PUT) fails with 404
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ message: 'Not Found' }, 404),
+      )
+      // Second call (POST) succeeds
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ id: 'resume-1', layout: 'standard', sections: [] }),
+      )
 
       const store = useResumeStore()
       store.initializeDefaults()
 
-      const { loadResume, saveResume } = useResumeData()
-      await loadResume()
-      expect(store.id).toBe('resume-1')
-
-      // Reset mock: PUT 404 → POST fallback succeeds
-      mockFetch.mockClear()
-      mockFetch.mockResolvedValueOnce(
-        createFetchResponse({ message: 'Not Found' }, 404),
-      )
-      mockFetch.mockResolvedValueOnce(
-        createFetchResponse({ id: 'resume-2', layout: 'standard', sections: [] }),
-      )
-
+      const { saveResume } = useResumeData()
       await saveResume()
 
       expect(mockFetch).toHaveBeenCalledTimes(2)
-      const putCall = mockFetch.mock.calls[0]!
-      expect(putCall[0]).toContain('/api/v1/resumes/resume-1')
-      expect(putCall[1]!.method).toBe('PUT')
+      // Second call is a POST
       const postCall = mockFetch.mock.calls[1]!
       expect(postCall[1]!.method).toBe('POST')
-      expect(store.id).toBe('resume-2')
     })
 
     it('clears sessionStorage after successful API save', async () => {
-      await loginAs(mockFetch)
+      const auth = useAuthStore()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
+      )
+      await auth.login('test@test.com', 'password')
 
-      mockFetch.mockResolvedValueOnce(mockResumeList())
-      mockFetch.mockResolvedValueOnce(mockResumeTree('standard'))
+      mockFetch.mockClear()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ id: 'resume-1', layout: 'standard', sections: [] }),
+      )
 
       // Pre-populate sessionStorage with pending changes
       sessionStorage.setItem('resume_pending_changes', JSON.stringify({ layout: 'column2-1', sections: [] }))
@@ -509,13 +354,7 @@ describe('useResumeData', () => {
       const store = useResumeStore()
       store.initializeDefaults()
 
-      mockFetch.mockClear()
-      mockFetch.mockResolvedValueOnce(
-        createFetchResponse({ id: 'resume-1', layout: 'standard', sections: [] }),
-      )
-
-      const { loadResume, saveResume } = useResumeData()
-      await loadResume()
+      const { saveResume } = useResumeData()
       await saveResume()
 
       // After successful save, sessionStorage should be cleared
@@ -523,10 +362,17 @@ describe('useResumeData', () => {
     })
 
     it('clears dirty flag after successful authenticated save', async () => {
-      await loginAs(mockFetch)
+      const auth = useAuthStore()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
+      )
+      await auth.login('test@test.com', 'password')
 
-      mockFetch.mockResolvedValueOnce(mockResumeList())
-      mockFetch.mockResolvedValueOnce(mockResumeTree('standard'))
+      mockFetch.mockClear()
+      // Mock: loadResume GET returns empty sections (falls back to defaults)
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ id: 'resume-1', layout: 'standard', sections: [] }),
+      )
 
       const store = useResumeStore()
       store.initializeDefaults()
@@ -552,10 +398,17 @@ describe('useResumeData', () => {
     })
 
     it('clears dirty flag after 404 → POST fallback save', async () => {
-      await loginAs(mockFetch)
+      const auth = useAuthStore()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
+      )
+      await auth.login('test@test.com', 'password')
 
-      mockFetch.mockResolvedValueOnce(mockResumeList())
-      mockFetch.mockResolvedValueOnce(mockResumeTree('standard'))
+      mockFetch.mockClear()
+      // Mock: loadResume GET returns empty sections (falls back to defaults)
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ id: 'resume-1', layout: 'standard', sections: [] }),
+      )
 
       const store = useResumeStore()
       store.initializeDefaults()
@@ -583,10 +436,17 @@ describe('useResumeData', () => {
     })
 
     it('keeps dirty true when save fails with non-404 error', async () => {
-      await loginAs(mockFetch)
+      const auth = useAuthStore()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
+      )
+      await auth.login('test@test.com', 'password')
 
-      mockFetch.mockResolvedValueOnce(mockResumeList())
-      mockFetch.mockResolvedValueOnce(mockResumeTree('standard'))
+      mockFetch.mockClear()
+      // Mock: loadResume GET returns empty sections (falls back to defaults)
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ id: 'resume-1', layout: 'standard', sections: [] }),
+      )
 
       const store = useResumeStore()
       store.initializeDefaults()
@@ -611,10 +471,17 @@ describe('useResumeData', () => {
     })
 
     it('allows dirty watcher to fire again after failed save (isSaving guard resets)', async () => {
-      await loginAs(mockFetch)
+      const auth = useAuthStore()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
+      )
+      await auth.login('test@test.com', 'password')
 
-      mockFetch.mockResolvedValueOnce(mockResumeList())
-      mockFetch.mockResolvedValueOnce(mockResumeTree('standard'))
+      mockFetch.mockClear()
+      // Mock: loadResume GET returns empty sections (falls back to defaults)
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ id: 'resume-1', layout: 'standard', sections: [] }),
+      )
 
       const store = useResumeStore()
       store.initializeDefaults()
@@ -652,16 +519,21 @@ describe('useResumeData', () => {
   describe('sessionStorage persistence (authenticated)', () => {
     it('writes to sessionStorage on auto-save watch when authenticated', async () => {
       vi.useFakeTimers()
-      await loginAs(mockFetch)
-
-      mockFetch.mockClear()
-      // Load resume first (GET list 404 → falls to defaults)
+      const auth = useAuthStore()
       mockFetch.mockResolvedValueOnce(
-        createFetchResponse({ message: 'Not Found' }, 404),
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
       )
-      // Auto-save PUT succeeds
+      await auth.login('test@test.com', 'password')
+
+      // Mock API response for auto-save
+      mockFetch.mockClear()
       mockFetch.mockResolvedValueOnce(
         createFetchResponse({ id: 'resume-1', layout: 'standard', sections: [] }),
+      )
+
+      // Load resume first (should hit 404 and fall to defaults)
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ message: 'Not Found' }, 404),
       )
 
       const store = useResumeStore()
@@ -710,13 +582,16 @@ describe('useResumeData', () => {
     })
 
     it('loads pending changes from sessionStorage on reload when authenticated', async () => {
-      await loginAs(mockFetch)
+      const auth = useAuthStore()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
+      )
+      await auth.login('test@test.com', 'password')
 
       // Pre-populate sessionStorage with pending changes (simulating a refresh before auto-save)
       sessionStorage.setItem(
         'resume_pending_changes',
         JSON.stringify({
-          name: 'My Pending Name',
           layout: 'column2-1',
           sections: [
             {
@@ -729,9 +604,6 @@ describe('useResumeData', () => {
         }),
       )
 
-      // loadResume still resolves the backend resume id first (GET list)
-      mockFetch.mockResolvedValueOnce(mockResumeList())
-
       const store = useResumeStore()
       store.initializeDefaults()
       SECTION_TYPES.forEach((t) => store.toggleSection(t))
@@ -741,11 +613,6 @@ describe('useResumeData', () => {
 
       // Should load from sessionStorage, not from API defaults
       expect(store.layout).toBe('column2-1')
-      // The pending name survives the reload (RES-93: the sessionStorage
-      // path used to drop `name`, wiping it on every reload that took it)
-      expect(store.name).toBe('My Pending Name')
-      // The backend resume id is kept so the next save PUTs to it
-      expect(store.id).toBe('resume-1')
       // loadFromPayload fills missing sections to 10 — saved one is enabled
       expect(store.sections).toHaveLength(10)
       const summ = store.sections.find((s) => s.sectionType === 'summary')
@@ -755,25 +622,28 @@ describe('useResumeData', () => {
     })
 
     it('falls back to API when sessionStorage is empty for authenticated user', async () => {
-      await loginAs(mockFetch)
+      const auth = useAuthStore()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
+      )
+      await auth.login('test@test.com', 'password')
 
       // No sessionStorage data — should load from API
       sessionStorage.clear()
 
-      // GET list → most recent summary, then GET full tree by id
-      mockFetch.mockResolvedValueOnce(mockResumeList())
       mockFetch.mockResolvedValueOnce(
-        mockResumeTree('standard', [
-          {
-            id: 'rs-1',
-            sectionId: 'experience',
-            column: 'right',
-            order: 0,
-            locked: false,
-            enabled: true,
-            entries: [],
-          },
-        ]),
+        createFetchResponse({
+          id: 'resume-1',
+          layout: 'standard',
+          sections: [
+            {
+              sectionId: 'experience',
+              column: 'right',
+              order: 0,
+              entries: [],
+            },
+          ],
+        }),
       )
 
       const store = useResumeStore()
@@ -792,24 +662,28 @@ describe('useResumeData', () => {
     })
 
     it('handles corrupted sessionStorage gracefully for authenticated user', async () => {
-      await loginAs(mockFetch)
+      const auth = useAuthStore()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
+      )
+      await auth.login('test@test.com', 'password')
 
       // Corrupted sessionStorage — should fall back to API
       sessionStorage.setItem('resume_pending_changes', 'not-valid-json{{')
 
-      mockFetch.mockResolvedValueOnce(mockResumeList())
       mockFetch.mockResolvedValueOnce(
-        mockResumeTree('standard', [
-          {
-            id: 'rs-1',
-            sectionId: 'name_contact',
-            column: 'left',
-            order: 0,
-            locked: false,
-            enabled: true,
-            entries: [],
-          },
-        ]),
+        createFetchResponse({
+          id: 'resume-1',
+          layout: 'standard',
+          sections: [
+            {
+              sectionId: 'name_contact',
+              column: 'left',
+              order: 0,
+              entries: [],
+            },
+          ],
+        }),
       )
 
       const store = useResumeStore()

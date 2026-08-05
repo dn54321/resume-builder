@@ -80,7 +80,6 @@ async function run(): Promise<void> {
         "column" TEXT NOT NULL DEFAULT 'right',
         "order" INTEGER NOT NULL DEFAULT 0,
         "locked" BOOLEAN NOT NULL DEFAULT false,
-        "enabled" BOOLEAN NOT NULL DEFAULT true,
         CONSTRAINT "ResumeSection_resumeId_fkey" FOREIGN KEY ("resumeId") REFERENCES "Resume" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
         CONSTRAINT "ResumeSection_sectionId_fkey" FOREIGN KEY ("sectionId") REFERENCES "Section" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
       )
@@ -191,7 +190,6 @@ async function run(): Promise<void> {
     assert(rs.column === 'right', 'ResumeSection.column defaults to "right"');
     assert(rs.order === 0, 'ResumeSection.order defaults to 0');
     assert(rs.locked === false, 'ResumeSection.locked defaults to false');
-    assert(rs.enabled === true, 'ResumeSection.enabled defaults to true');
     assert(rs.resumeId === resume.id, 'ResumeSection FK to Resume works');
 
     const lockedRs = await prisma.resumeSection.update({
@@ -199,12 +197,6 @@ async function run(): Promise<void> {
       data: { locked: true },
     });
     assert(lockedRs.locked === true, 'ResumeSection.locked can be set to true');
-
-    const disabledRs = await prisma.resumeSection.update({
-      where: { id: rs.id },
-      data: { enabled: false },
-    });
-    assert(disabledRs.enabled === false, 'ResumeSection.enabled can be set to false');
 
     await assertRejects(
       () =>

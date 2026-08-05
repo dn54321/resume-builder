@@ -15,11 +15,6 @@ export class SectionFieldDto {
 
   @IsString()
   value!: string;
-
-  @IsInt()
-  @IsOptional()
-  @Min(0)
-  order?: number;
 }
 
 export class SectionEntryDto {
@@ -53,11 +48,6 @@ export class ResumeSectionDto {
   @IsBoolean()
   @IsOptional()
   locked?: boolean;
-
-  /** Whether the section is visible in the rendered resume (soft-toggle). */
-  @IsBoolean()
-  @IsOptional()
-  enabled?: boolean;
 
   @IsArray()
   @ValidateNested({ each: true })

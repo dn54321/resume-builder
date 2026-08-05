@@ -27,7 +27,6 @@ interface ResumeBody {
 interface SectionBody {
   id: string;
   locked?: boolean;
-  enabled?: boolean;
   entries: EntryBody[];
 }
 
@@ -184,23 +183,6 @@ describe('ResumesController', () => {
       expect(body.sections![0].locked).toBe(true);
     });
 
-    it('returns the enabled flag on sections', async () => {
-      const resume: ResumeBody = {
-        id: 'r1',
-        name: null,
-        layout: 'standard',
-        sections: [{ id: 'rs-1', enabled: false, entries: [] }],
-      };
-      mockResumesService.findOne.mockResolvedValue(resume);
-
-      const response = await request(app.getHttpServer())
-        .get('/api/v1/resumes/r1')
-        .expect(200);
-
-      const body = response.body as ResumeBody;
-      expect(body.sections![0].enabled).toBe(false);
-    });
-
     it('returns 404 for non-existent resume', async () => {
       mockResumesService.findOne.mockRejectedValue(
         new NotFoundException('Resume not found'),
@@ -319,127 +301,12 @@ describe('ResumesController', () => {
       expect(createCalls[0][1].sections[0].locked).toBe(true);
     });
 
-    it('accepts an enabled flag per section', async () => {
-      const created: ResumeBody = {
-        id: 'new-resume',
-        name: 'My Resume',
-        layout: 'standard',
-        sections: [
-          {
-            id: 'rs-1',
-            enabled: false,
-            entries: [],
-          },
-        ],
-      };
-      mockResumesService.create.mockResolvedValue(created);
-
-      const response = await request(app.getHttpServer())
-        .post('/api/v1/resumes')
-        .send({
-          ...validDto,
-          sections: [{ ...validDto.sections[0], enabled: false }],
-        })
-        .expect(201);
-
-      const body = response.body as ResumeBody;
-      expect(body.sections![0].enabled).toBe(false);
-
-      const createCalls = mockResumesService.create.mock
-        .calls as unknown as Array<
-        [string, { sections: Array<{ enabled?: boolean }> }]
-      >;
-      expect(createCalls[0][1].sections[0].enabled).toBe(false);
-    });
-
-    it('accepts the exact frontend payload shape (enabled + field order + nested children)', async () => {
-      const created: ResumeBody = {
-        id: 'new-resume',
-        name: null,
-        layout: 'column2-1',
-        sections: [{ id: 'rs-1', entries: [] }],
-      };
-      mockResumesService.create.mockResolvedValue(created);
-
-      // This is the shape frontend toPayload() emits (RES-93): sections
-      // carry enabled, entries are nested with children arrays, fields
-      // carry an order.
-      await request(app.getHttpServer())
-        .post('/api/v1/resumes')
-        .send({
-          name: 'My Resume',
-          layout: 'column2-1',
-          sections: [
-            {
-              sectionId: 'experience',
-              column: 'right',
-              order: 0,
-              enabled: true,
-              entries: [
-                {
-                  order: 0,
-                  fields: [{ key: 'company', value: 'Acme', order: 0 }],
-                  children: [
-                    {
-                      order: 0,
-                      fields: [
-                        { key: 'detail', value: 'Built things', order: 0 },
-                      ],
-                      children: [],
-                    },
-                  ],
-                },
-              ],
-            },
-            {
-              sectionId: 'hobbies',
-              column: 'right',
-              order: 1,
-              enabled: false,
-              entries: [],
-            },
-          ],
-        })
-        .expect(201);
-
-      const createCalls = mockResumesService.create.mock
-        .calls as unknown as Array<
-        [
-          string,
-          {
-            sections: Array<{
-              enabled?: boolean;
-              entries: Array<{
-                fields: Array<{ order?: number }>;
-                children: unknown[];
-              }>;
-            }>;
-          },
-        ]
-      >;
-      const sent = createCalls[0][1];
-      expect(sent.sections[0].enabled).toBe(true);
-      expect(sent.sections[1].enabled).toBe(false);
-      expect(sent.sections[0].entries[0].children).toHaveLength(1);
-      expect(sent.sections[0].entries[0].fields[0].order).toBe(0);
-    });
-
     it('rejects a non-boolean locked flag', async () => {
       await request(app.getHttpServer())
         .post('/api/v1/resumes')
         .send({
           ...validDto,
           sections: [{ ...validDto.sections[0], locked: 'yes' }],
-        })
-        .expect(400);
-    });
-
-    it('rejects a non-boolean enabled flag', async () => {
-      await request(app.getHttpServer())
-        .post('/api/v1/resumes')
-        .send({
-          ...validDto,
-          sections: [{ ...validDto.sections[0], enabled: 'yes' }],
         })
         .expect(400);
     });
@@ -584,40 +451,6 @@ describe('ResumesController', () => {
         [string, string, { sections: Array<{ locked?: boolean }> }]
       >;
       expect(updateCalls[0][2].sections[0].locked).toBe(true);
-    });
-
-    it('accepts an enabled flag per section when updating', async () => {
-      const updated: ResumeBody = {
-        id: 'r1',
-        name: null,
-        layout: 'compact',
-        sections: [{ id: 'rs-1', enabled: false, entries: [] }],
-      };
-      mockResumesService.update.mockResolvedValue(updated);
-
-      const response = await request(app.getHttpServer())
-        .put('/api/v1/resumes/r1')
-        .send({
-          sections: [
-            {
-              sectionId: 'summary',
-              column: 'right',
-              order: 0,
-              enabled: false,
-              entries: [],
-            },
-          ],
-        })
-        .expect(200);
-
-      const body = response.body as ResumeBody;
-      expect(body.sections![0].enabled).toBe(false);
-
-      const updateCalls = mockResumesService.update.mock
-        .calls as unknown as Array<
-        [string, string, { sections: Array<{ enabled?: boolean }> }]
-      >;
-      expect(updateCalls[0][2].sections[0].enabled).toBe(false);
     });
 
     it('returns 401 when not authenticated', async () => {
