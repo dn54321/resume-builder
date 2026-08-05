@@ -168,8 +168,12 @@ export async function fetchTeams(): Promise<Array<{ id: string; name: string; ke
 }
 
 export async function fetchWorkflowStates(teamId: string): Promise<Array<{ id: string; name: string; type: string }>> {
+  // ⚠️ Linear's schema types team.id as ID, NOT String — declaring
+  // `$teamId: String!` makes the GraphQL validation fail with
+  // 'Variable "$teamId" of type "String!" used in position expecting
+  // type "ID"' (observed via CLOSE RES-99 crashing the orchestrator).
   const data = await graphql(`
-    query($teamId: String!) {
+    query($teamId: ID!) {
       workflowStates(filter: { team: { id: { eq: $teamId } } }) {
         nodes { id name type }
       }

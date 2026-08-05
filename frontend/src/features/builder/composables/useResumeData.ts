@@ -164,9 +164,8 @@ export function useResumeData() {
         Array.isArray((pending as Record<string, unknown>).sections) &&
         ((pending as Record<string, unknown>).sections as unknown[]).length > 0
       ) {
-        const payload = pending as { name?: string | null; layout?: string; sections: unknown[] }
+        const payload = pending as { layout?: string; sections: unknown[] }
         store.loadFromPayload({
-          name: payload.name ?? null,
           layout: (payload.layout as 'standard' | 'column2-1') ?? 'standard',
           sections: payload.sections as ResumePayload['sections'],
         })
@@ -178,11 +177,16 @@ export function useResumeData() {
       }
 
       try {
-        // GET /api/v1/resumes returns a LIST of summaries. Load the
+        // GET /api/v1/resumes returns a LIST of summaries (RES-93). Load the
         // first resume's full tree via /resumes/:id so sections are included.
         const list = await api.get<Array<{ id: string }>>('/api/v1/resumes')
         if (list.length > 0) {
           const firstId = list[0]!.id
+          // The wire shape carries `name` — it MUST be forwarded to
+          // loadFromPayload, otherwise the resume name silently resets to
+          // empty on every authenticated reload (found via RES-83 e2e:
+          // "autosave → reload → name persisted" failed while the DB still
+          // had the name).
           const data = await api.get<{
             id: string
             name: string | null
@@ -191,10 +195,8 @@ export function useResumeData() {
           }>(`/api/v1/resumes/${firstId}`)
           store.id = firstId
           if (data.sections?.length > 0 || data.layout) {
-            // Include the resume name — without it the name input resets to
-            // '' on every reload (RES-95).
             store.loadFromPayload({
-              name: data.name,
+              name: data.name ?? '',
               layout: data.layout as 'standard' | 'column2-1',
               sections: data.sections as ResumePayload['sections'],
             })
@@ -215,10 +217,9 @@ export function useResumeData() {
     // Anonymous or authenticated user with no resume: try localStorage
     const local = readFromLocalStorage()
     if (local && typeof local === 'object' && local !== null) {
-      const payload = local as { name?: string | null; layout?: string; sections?: unknown[] }
+      const payload = local as { layout?: string; sections?: unknown[] }
       if (payload.sections && Array.isArray(payload.sections) && payload.sections.length > 0) {
         store.loadFromPayload({
-          name: payload.name ?? null,
           layout: (payload.layout as 'standard' | 'column2-1') ?? 'standard',
           sections: payload.sections as ResumePayload['sections'],
         })

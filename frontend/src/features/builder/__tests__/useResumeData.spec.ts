@@ -271,6 +271,50 @@ describe('useResumeData', () => {
       expect(nc!.enabled).toBe(true)
     })
 
+    it('forwards the resume name from the API to loadFromPayload (RES-83)', async () => {
+      const auth = useAuthStore()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({
+          user: { id: 'user-1', email: 'test@test.com' },
+          sessionToken: 'fake-token',
+        }),
+      )
+      await auth.login('test@test.com', 'password')
+
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse([{ id: 'resume-1', name: 'Saved Name', layout: 'standard' }]),
+      )
+      // Full tree INCLUDES the name — it must survive the reload
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({
+          id: 'resume-1',
+          name: 'Saved Name',
+          layout: 'standard',
+          sections: [
+            {
+              sectionId: 'summary',
+              column: 'right',
+              order: 0,
+              entries: [
+                {
+                  order: 0,
+                  parentId: null,
+                  fields: [{ key: 'text', value: 'Hello', order: 0 }],
+                },
+              ],
+            },
+          ],
+        }),
+      )
+
+      const store = useResumeStore()
+      const { loadResume } = useResumeData()
+      await loadResume()
+
+      // The saved name is restored instead of reset to ''
+      expect(store.name).toBe('Saved Name')
+    })
+
     it('falls back to defaults on 404', async () => {
       const auth = useAuthStore()
       mockFetch.mockResolvedValueOnce(

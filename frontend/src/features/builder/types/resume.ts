@@ -48,6 +48,8 @@ export interface ResumePayload {
     enabled?: boolean
     locked?: boolean
     entries: {
+      /** Optional — set by toPayload() and the backend wire shape; absent in hand-built payloads. */
+      id?: string
       order: number
       parentId: string | null
       fields: {
