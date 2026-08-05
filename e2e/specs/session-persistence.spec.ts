@@ -36,19 +36,20 @@ test.describe('Session persistence', () => {
     await page.reload()
     await page.waitForURL('**/dashboard')
 
-    // 3. Verify still authenticated (no redirect to /login)
+    // 3. Verify still authenticated (no redirect to /login) — scope to the
+    //    App navbar (role=banner); the dashboard also renders its own <header>.
     await expect(page.locator('h1').first()).toContainText('My Resumes')
-    await expect(page.locator('header button svg.lucide-user')).toBeVisible()
+    await expect(
+      page.getByRole('banner').locator('svg.lucide-user'),
+    ).toBeVisible()
 
-    // 4. Verify /api/v1/auth/me returns user
-    const token = await page.evaluate(() =>
-      localStorage.getItem('auth_token'),
-    )
-    expect(token).toBeTruthy()
+    // 4. Verify the session is cookie-based — /api/v1/auth/me returns the
+    //    user via the HttpOnly 'session_token' cookie (no localStorage token)
+    const cookies = await page.context().cookies()
+    const sessionCookie = cookies.find((c) => c.name === 'session_token')
+    expect(sessionCookie).toBeTruthy()
 
-    const meRes = await page.request.get(`${API_BASE}/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    const meRes = await page.request.get(`${API_BASE}/auth/me`)
     expect(meRes.status()).toBe(200)
     const body = await meRes.json()
     expect(body.user.email).toBe(email)
@@ -68,8 +69,13 @@ test.describe('Session persistence', () => {
     await page.reload()
     await page.waitForURL('**/dashboard')
 
-    // 3. Navigate to builder
-    await page.getByRole('button', { name: 'Create New Resume' }).click()
+    // 3. Navigate to builder — the dashboard renders TWO 'Create New Resume'
+    //    buttons (header + empty state), so use .first() to avoid a strict-
+    //    mode violation.
+    await page
+      .getByRole('button', { name: 'Create New Resume' })
+      .first()
+      .click()
     await page.waitForURL('**/builder/**', { timeout: 15_000 })
 
     // 4. Verify still authenticated on builder
@@ -77,9 +83,10 @@ test.describe('Session persistence', () => {
   })
 
   test('unauthenticated user cannot access dashboard', async ({ page }) => {
-    // Clear localStorage
+    // Session is cookie-based — clear the cookie (there is no localStorage
+    // auth_token anymore) and verify the dashboard requires auth.
     await page.goto('/')
-    await page.evaluate(() => localStorage.removeItem('auth_token'))
+    await page.context().clearCookies()
 
     // Try to visit dashboard
     await page.goto('/dashboard')
