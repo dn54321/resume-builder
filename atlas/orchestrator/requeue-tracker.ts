@@ -82,6 +82,25 @@ export class RequeueTracker {
   }
 
   /**
+   * Record a re-queue that is KNOWN to be benign — a defer (worker finished
+   * but the main repo was busy), a no-op completion, or post-completion
+   * pane-death churn. These look like re-queues but are NOT crash loops, so
+   * they must not trip the anomaly alarm (observed: RES-85/RES-88 flagged
+   * 5× after defers/completions when the worker was actually fine). The event
+   * still shows on the dashboard snapshot for visibility.
+   */
+  recordBenign(ticketId: string, reason?: string): number {
+    const now = Date.now();
+    if (reason) this.reasons.set(ticketId, reason);
+
+    const list = this.events.get(ticketId) ?? [];
+    list.push(now);
+    while (list.length > 0 && list[0]! < now - this.windowMs) list.shift();
+    this.events.set(ticketId, list);
+    return list.length;
+  }
+
+  /**
    * Snapshot of current re-queue activity — for the dashboard. Returns
    * tickets with counts ≥ 2 (a single re-queue is normal; 2+ in the window
    * is worth showing). Sorted by count descending. Prunes aged-out events

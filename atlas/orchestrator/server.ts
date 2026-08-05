@@ -340,7 +340,9 @@ async function onWorkerComplete(
           node.state.workerName = null;
           node.state.pid = null;
           node.state.error = `Deferred: main repo busy (${result.error})`;
-          requeueTracker?.record(identifier, 'deferred (main repo dirty)');
+          // A defer is NOT a crash loop — the worker finished successfully and
+          // is waiting for the main repo to clear. Don't trip the anomaly alarm.
+          requeueTracker?.recordBenign(identifier, 'deferred (main repo dirty)');
           await tellBoss(`🔄 ${identifier}: deferred (main repo had uncommitted work) — will retry without consuming a retry`);
         } else if (node.state.retryCount <= maxRetries) {
           node.state.status = 'pending';
