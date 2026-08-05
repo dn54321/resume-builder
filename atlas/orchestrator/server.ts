@@ -211,10 +211,14 @@ async function addEpic(ticketId: string): Promise<void> {
   epicGraphs.set(ticketId, { nodes, rootId: ticketId });
   log(`Added epic ${ticketId} — ${nodes.size} tickets. Total epics: ${epicGraphs.size}`);
 
-  // Persist epic roots
+  // Persist epic roots — ⚠️ MERGE with existing, never replace. Replacing
+  // with [...epicGraphs.keys()] after every addEpic meant a crash mid-load
+  // (observed: CLOSE RES-99 crashed at epic #7 of 24) persisted a PARTIAL
+  // list; the next restart resumed only those 7 epics and silently dropped
+  // the other 17 from management.
   const ex = loadState();
   if (ex) {
-    ex.epicRoots = [...epicGraphs.keys()];
+    ex.epicRoots = [...new Set([...(ex.epicRoots ?? []), ...epicGraphs.keys()])];
     saveState(ex);
   }
 
