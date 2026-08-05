@@ -1,5 +1,12 @@
 <template>
-  <div class="h-full overflow-y-auto">
+  <!-- Root intentionally has NO overflow-y-auto: the parent <main> in
+       ResumeBuilder.vue is the single scroll container (it carries the
+       custom thin scrollbar styling). An extra overflow-y-auto here
+       created a SECOND scrollbar nested inside main's — the double
+       scroll bar seen in the builder. min-h-full keeps the empty-state
+       centering (h-full child) while letting content grow naturally so
+       main scrolls the whole column once. -->
+  <div class="min-h-full" data-testid="section-editor">
     <div
       v-if="enabledSectionTypes.length === 0"
       class="flex items-center justify-center h-full text-sm text-muted-foreground/70 italic"
