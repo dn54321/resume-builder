@@ -389,6 +389,55 @@ describe('ResumesService', () => {
         NotFoundException,
       );
     });
+
+    it('returns the resume unchanged when it has no sections', async () => {
+      const noSectionsResume = {
+        id: resumeId,
+        userId,
+        name: 'My Resume',
+        layout: 'standard',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      mockPrisma.resume.findUnique.mockResolvedValue(noSectionsResume);
+
+      const result = await service.findOne(resumeId, userId);
+
+      // decryptResumeFields must tolerate a tree without a sections array.
+      expect(result.id).toBe(resumeId);
+      expect(result.sections).toBeUndefined();
+    });
+
+    it('keeps fields as an empty array when an entry has no fields', async () => {
+      const dbResume = makeResumeResponse({
+        sections: [
+          {
+            id: 'rs-1',
+            resumeId,
+            sectionId: 'summary',
+            column: 'right',
+            order: 0,
+            locked: false,
+            entries: [
+              {
+                id: 'entry-no-fields',
+                resumeSectionId: 'rs-1',
+                order: 0,
+                parentId: null,
+                children: [],
+              } as unknown as SectionEntryRow,
+            ],
+          },
+        ],
+      });
+      mockPrisma.resume.findUnique.mockResolvedValue(dbResume);
+
+      const result = await service.findOne(resumeId, userId);
+
+      // decryptEntry initialises fields to [] and must not crash when the
+      // stored entry has no fields array.
+      expect(result.sections[0].entries[0].fields).toEqual([]);
+    });
   });
 
   describe('delete', () => {
@@ -765,6 +814,125 @@ describe('ResumesService', () => {
           column: 'left',
           order: 0,
           locked: true,
+          enabled: true,
+        },
+      });
+    });
+
+    it('defaults layout to "standard" when not provided', async () => {
+      const createdResume = {
+        id: resumeId,
+        userId,
+        name: null,
+        layout: 'standard',
+      };
+      const resumeCreate = jest.fn().mockResolvedValue(createdResume);
+
+      mockPrisma.$transaction.mockImplementation(
+        async (cb: TransactionCallback<ResumeTreeRow>) => {
+          const tx = {
+            resume: {
+              create: resumeCreate,
+              findUnique: jest.fn().mockResolvedValue(makeResumeResponse()),
+            },
+            resumeSection: {
+              create: jest.fn().mockResolvedValue({}),
+            },
+            sectionEntry: {
+              create: jest.fn().mockResolvedValue({}),
+            },
+            sectionField: {
+              create: jest.fn().mockResolvedValue({}),
+            },
+          };
+          const result = cb(tx);
+          return result instanceof Promise ? result : Promise.resolve(result);
+        },
+      );
+
+      mockCrypto.decryptField.mockImplementation(
+        (encrypted: string, _iv: string, _authTag: string) =>
+          encrypted.replace('enc_', ''),
+      );
+
+      const dtoNoLayout: CreateResumeDto = {
+        sections: [],
+      };
+
+      await service.create(userId, dtoNoLayout);
+
+      expect(resumeCreate).toHaveBeenCalledWith({
+        data: {
+          userId,
+          name: null,
+          layout: 'standard',
+        },
+      });
+    });
+
+    it('defaults section column to "right" when not provided', async () => {
+      const createdResume = {
+        id: resumeId,
+        userId,
+        name: null,
+        layout: 'standard',
+      };
+      const createdSection = {
+        id: 'rs-1',
+        resumeId,
+        sectionId: 'summary',
+        column: 'right',
+        order: 0,
+      };
+      const sectionCreate = jest.fn().mockResolvedValue(createdSection);
+
+      mockPrisma.$transaction.mockImplementation(
+        async (cb: TransactionCallback<ResumeTreeRow>) => {
+          const tx = {
+            resume: {
+              create: jest.fn().mockResolvedValue(createdResume),
+              findUnique: jest.fn().mockResolvedValue(makeResumeResponse()),
+            },
+            resumeSection: {
+              create: sectionCreate,
+            },
+            sectionEntry: {
+              create: jest.fn().mockResolvedValue({}),
+            },
+            sectionField: {
+              create: jest.fn().mockResolvedValue({}),
+            },
+          };
+          const result = cb(tx);
+          return result instanceof Promise ? result : Promise.resolve(result);
+        },
+      );
+
+      mockCrypto.decryptField.mockImplementation(
+        (encrypted: string, _iv: string, _authTag: string) =>
+          encrypted.replace('enc_', ''),
+      );
+
+      const dtoNoColumn: CreateResumeDto = {
+        layout: 'standard',
+        sections: [
+          {
+            sectionId: 'summary',
+            order: 0,
+            entries: [],
+          },
+        ],
+      };
+
+      await service.create(userId, dtoNoColumn);
+
+      expect(sectionCreate).toHaveBeenCalledWith({
+        data: {
+          resumeId,
+          sectionId: 'summary',
+          column: 'right',
+          order: 0,
+          locked: false,
           enabled: true,
         },
       });

@@ -459,4 +459,67 @@ describe('KeywordEngine', () => {
     // Just verify construction doesn't throw
     expect(defaultEngine).toBeDefined();
   });
+
+  // ── Malformed / defensive-fallback paths ───────────────────
+
+  it('scores a bullet entry with a null field value as zero (?? fallback)', async () => {
+    // isBulletEntry() matches the key, but getBulletText() returns the null
+    // value, so the `?? ''` fallback kicks in and scoreText('') returns 0.
+    const jd = 'React developer';
+    const entries = [
+      {
+        order: 0,
+        fields: [{ key: 'bullet', value: null }],
+        children: [],
+      } as unknown as SectionEntryDto,
+    ];
+
+    const result = await engine.match(makeRequest(jd, entries));
+
+    // The entry is still kept (top N regardless of score), scored 0.
+    expect(result.sections[0].entries).toHaveLength(1);
+  });
+
+  it('scores a skill entry with a null field value as zero (?? fallback)', async () => {
+    const jd = 'React developer';
+    const entries = [
+      {
+        order: 0,
+        fields: [{ key: 'skill', value: null }],
+        children: [],
+      } as unknown as SectionEntryDto,
+    ];
+
+    const result = await engine.match(makeRequest(jd, entries));
+
+    expect(result.sections[0].entries).toHaveLength(1);
+  });
+
+  it('scores text with no word characters as zero', async () => {
+    const jd = 'React developer';
+    const entries = [bulletEntry(0, '!!!')];
+
+    const result = await engine.match(makeRequest(jd, entries));
+
+    // text '!!!' splits into zero words -> score 0, entry still kept.
+    expect(result.sections[0].entries).toHaveLength(1);
+  });
+
+  it('returns null from getBulletText when no bullet field exists', () => {
+    const engineInternals = engine as unknown as {
+      getBulletText(entry: SectionEntryDto): string | null;
+    };
+    expect(
+      engineInternals.getBulletText(passthroughEntry(0, 'title', 'Engineer')),
+    ).toBeNull();
+  });
+
+  it('returns null from getSkillText when no skill field exists', () => {
+    const engineInternals = engine as unknown as {
+      getSkillText(entry: SectionEntryDto): string | null;
+    };
+    expect(
+      engineInternals.getSkillText(passthroughEntry(0, 'title', 'Engineer')),
+    ).toBeNull();
+  });
 });

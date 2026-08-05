@@ -192,6 +192,31 @@ describe('TailorService', () => {
         5,
       );
     });
+
+    it('defaults LLM_MODEL to gpt-4o-mini when not configured', async () => {
+      const config = makeConfig({
+        MATCHING_ENGINE: 'llm',
+        LLM_API_KEY: 'sk-test',
+        LLM_MODEL: undefined,
+      });
+      const mockConfigService = { get: jest.fn((key: string) => config[key]) };
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          TailorService,
+          { provide: ConfigService, useValue: mockConfigService },
+        ],
+      }).compile();
+
+      const service = module.get<TailorService>(TailorService);
+      await service.tailor(makeRequest());
+
+      // `model ?? 'gpt-4o-mini'` fallback applies when LLM_MODEL is unset.
+      expect(LlmEngine).toHaveBeenCalledWith(
+        { apiKey: 'sk-test', model: 'gpt-4o-mini' },
+        5,
+      );
+    });
   });
 
   describe('MATCHING_ENGINE=hybrid', () => {
@@ -234,6 +259,31 @@ describe('TailorService', () => {
         }).compile(),
       ).rejects.toThrow(
         'LLM_API_KEY is required when MATCHING_ENGINE is "hybrid"',
+      );
+    });
+
+    it('defaults LLM_MODEL to gpt-4o-mini for hybrid when not configured', async () => {
+      const config = makeConfig({
+        MATCHING_ENGINE: 'hybrid',
+        LLM_API_KEY: 'sk-test',
+        LLM_MODEL: undefined,
+      });
+      const mockConfigService = { get: jest.fn((key: string) => config[key]) };
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          TailorService,
+          { provide: ConfigService, useValue: mockConfigService },
+        ],
+      }).compile();
+
+      const service = module.get<TailorService>(TailorService);
+      await service.tailor(makeRequest());
+
+      // `model ?? 'gpt-4o-mini'` fallback applies when LLM_MODEL is unset.
+      expect(HybridEngine).toHaveBeenCalledWith(
+        { apiKey: 'sk-test', model: 'gpt-4o-mini' },
+        5,
       );
     });
   });
