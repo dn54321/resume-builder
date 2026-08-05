@@ -75,6 +75,7 @@ interface MockPrisma {
   resume: {
     findMany: jest.Mock;
     findUnique: jest.Mock;
+    findFirst: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
     delete: jest.Mock;
@@ -173,6 +174,7 @@ describe('ResumesService', () => {
       resume: {
         findMany: jest.fn(),
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
         delete: jest.fn(),
@@ -930,6 +932,45 @@ describe('ResumesService', () => {
       expect(resumeCreate).toHaveBeenCalledWith({
         data: { userId, name: 'Copy of', layout: 'standard' },
       });
+    });
+
+    it("upsert updates the user's first existing resume", async () => {
+      mockPrisma.resume.findFirst.mockResolvedValue({ id: 'resume-1' });
+      const updateSpy = jest
+        .spyOn(service, 'update')
+        .mockResolvedValue(makeResumeResponse({ id: 'resume-1' }) as never);
+
+      const result = await service.upsert(userId, {
+        name: 'Updated',
+        layout: 'standard',
+      });
+
+      expect(updateSpy).toHaveBeenCalledWith(
+        'resume-1',
+        userId,
+        expect.objectContaining({ name: 'Updated' }),
+      );
+      expect(result.id).toBe('resume-1');
+      updateSpy.mockRestore();
+    });
+
+    it('upsert creates a new resume when the user has none', async () => {
+      mockPrisma.resume.findFirst.mockResolvedValue(null);
+      const createSpy = jest
+        .spyOn(service, 'create')
+        .mockResolvedValue(makeResumeResponse({ id: 'new-1' }) as never);
+
+      const result = await service.upsert(userId, {
+        name: 'Fresh',
+        layout: 'standard',
+      });
+
+      expect(createSpy).toHaveBeenCalledWith(
+        userId,
+        expect.objectContaining({ name: 'Fresh' }),
+      );
+      expect(result.id).toBe('new-1');
+      createSpy.mockRestore();
     });
 
     it('duplicates nested children entries and re-encrypts child values', async () => {

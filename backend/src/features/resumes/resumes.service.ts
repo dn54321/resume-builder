@@ -130,6 +130,27 @@ export class ResumesService {
     });
   }
 
+  /**
+   * Upsert the authenticated user's resume: update the first existing one,
+   * or create if they have none. This backs the frontend's autosave contract
+   * (PUT /api/v1/resumes without an id, RES-93) — autosave never needs to
+   * know the resume id in advance.
+   * @param {string} userId - The authenticated user id
+   * @param {UpdateResumeDto} dto - The resume payload
+   * @returns {Promise<ResumeTree>} The saved (decrypted) resume
+   */
+  async upsert(userId: string, dto: UpdateResumeDto): Promise<ResumeTree> {
+    const existing = await this.prisma.resume.findFirst({
+      where: { userId },
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (existing) {
+      return this.update(existing.id, userId, dto);
+    }
+    return this.create(userId, dto as CreateResumeDto);
+  }
+
   async duplicate(id: string, userId: string): Promise<ResumeTree> {
     const original = await this.findOne(id, userId);
 

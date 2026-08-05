@@ -47,6 +47,22 @@ export class ResumesController {
     return this.resumesService.create(req.user.id, dto);
   }
 
+  /**
+   * Upsert the authenticated user's resume — create if they have none, else
+   * update the first one. This is the contract the frontend's saveResume()
+   * expects (PUT /api/v1/resumes without an id, RES-93): autosave should
+   * never need to know the resume id in advance.
+   * @param dto
+   * @param req
+   */
+  @Put()
+  async upsert(
+    @Body() dto: UpdateResumeDto,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<ResumeFull> {
+    return this.resumesService.upsert(req.user.id, dto);
+  }
+
   @Post(':id/duplicate')
   async duplicate(
     @Param('id') id: string,

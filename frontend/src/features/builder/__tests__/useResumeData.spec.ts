@@ -227,6 +227,11 @@ describe('useResumeData', () => {
       )
       await auth.login('test@test.com', 'password')
 
+      // GET /api/v1/resumes → LIST of summaries (RES-93)
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse([{ id: 'resume-1', name: null, layout: 'column2-1' }]),
+      )
+      // Then GET /api/v1/resumes/resume-1 → full tree
       mockFetch.mockResolvedValueOnce(
         createFetchResponse({
           id: 'resume-1',
@@ -249,6 +254,16 @@ describe('useResumeData', () => {
       const { loadResume } = useResumeData()
       await loadResume()
 
+      // RES-93 contract: GET /resumes returns a LIST; loadResume fetches the
+      // list, takes the first id, then GETs the full tree by id.
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/resumes',
+        expect.anything(),
+      )
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/resumes/resume-1',
+        expect.anything(),
+      )
       expect(store.layout).toBe('column2-1')
       // loadFromPayload fills missing sections — the saved one is enabled, rest are disabled
       expect(store.sections).toHaveLength(10)

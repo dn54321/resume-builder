@@ -177,17 +177,24 @@ export function useResumeData() {
       }
 
       try {
-        const data = await api.get<{ id: string; layout: string; sections: unknown[] }>(
-          '/api/v1/resumes',
-        )
-        if (data.sections?.length > 0) {
-          store.loadFromPayload({
-            layout: data.layout as 'standard' | 'column2-1',
-            sections: data.sections as ResumePayload['sections'],
-          })
-          initialLoadComplete = true
-          dirty.value = false
-          return
+        // GET /api/v1/resumes returns a LIST of summaries (RES-93). Load the
+        // first resume's full tree via /resumes/:id so sections are included.
+        const list = await api.get<Array<{ id: string }>>('/api/v1/resumes')
+        if (list.length > 0) {
+          const firstId = list[0]!.id
+          const data = await api.get<{ id: string; layout: string; sections: unknown[] }>(
+            `/api/v1/resumes/${firstId}`,
+          )
+          store.id = firstId
+          if (data.sections?.length > 0 || data.layout) {
+            store.loadFromPayload({
+              layout: data.layout as 'standard' | 'column2-1',
+              sections: data.sections as ResumePayload['sections'],
+            })
+            initialLoadComplete = true
+            dirty.value = false
+            return
+          }
         }
       } catch (err) {
         if (err instanceof ApiRequestError && err.status === 404) {
