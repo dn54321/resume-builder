@@ -292,6 +292,24 @@ export class AgentPool {
     // cwd must exist or the pane shell errors on cd.
     const spawnCwd = fs.existsSync(worktreePath) ? worktreePath : getRepoRoot();
 
+    // stream-output extension: the worker launches with `--stream=all`, which
+    // requires the stream-output extension to be loaded. New worktrees get it
+    // via project-local auto-discovery (their committed .pi/extensions carries
+    // it). But worktrees branched BEFORE commit 3b165b2 have a committed .pi
+    // WITHOUT stream-output — and pre.sh's "symlink the main .pi in" NEVER
+    // fires for them because .pi already exists (it's git-tracked), so
+    // auto-discovery misses the extension and pi exits with
+    // 'Unknown option: --stream' (worker dies instantly, ticket re-queues in
+    // a loop). For those worktrees, load the extension explicitly with -e.
+    // Do NOT pass -e when the worktree already has it — double-loading the
+    // extension makes pi exit with 'Flag "--stream" conflicts' (f212ebe).
+    const streamExtPath = path.join(getRepoRoot(), '.pi', 'extensions', 'stream-output', 'index.ts');
+    const worktreeStreamExt = path.join(spawnCwd, '.pi', 'extensions', 'stream-output', 'index.ts');
+    const streamExtArgs =
+      !fs.existsSync(worktreeStreamExt) && fs.existsSync(streamExtPath)
+        ? ['-e', streamExtPath]
+        : [];
+
     // The pane runs a fresh bash shell — set env inline so the tmux session
     // env is not polluted. PI_* session vars must be unset to prevent
     // intercom/session clash with the boss.
@@ -334,6 +352,7 @@ export class AgentPool {
         PI_BIN,
         [
           '-p',
+          ...streamExtArgs,
           '--stream=all',
           '--system-prompt',
           `@${promptContent}`,
@@ -386,12 +405,15 @@ export class AgentPool {
       // with pi so the pane goes dead and the pool slot frees up.
       //
       // --stream=all: the stream-output extension is auto-discovered from the
-      // worktree's .pi/extensions (pre.sh symlinks the main repo .pi in). Do
-      // NOT also pass `-e <path>` — that loads the extension twice and pi
-      // exits with 'Flag "--stream" conflicts' (the worker dies and the
-      // ticket re-queues in a loop).
+      // worktree's .pi/extensions when the branch carries it. Do NOT pass -e
+      // in that case — double-loading the extension makes pi exit with
+      // 'Flag "--stream" conflicts' (the worker dies and the ticket re-queues
+      // in a loop). Worktrees branched before 3b165b2 lack it in their
+      // committed .pi (pre.sh's symlink only fires when .pi is missing, and
+      // .pi is git-tracked so it always exists), so those load it explicitly.
+      const extFlag = streamExtArgs.length ? ` -e "${streamExtArgs[1]}"` : '';
       sendKeys(
-        `${PI_BIN} -p --stream=all --system-prompt "@${promptContent}" "Begin work on your assigned TASK now. Implement it fully, then report completion and exit."; exit`,
+        `${PI_BIN} -p${extFlag} --stream=all --system-prompt "@${promptContent}" "Begin work on your assigned TASK now. Implement it fully, then report completion and exit."; exit`,
       );
 
       // Worker output is now visible live in the tmux pane (capture with

@@ -213,8 +213,10 @@ describe('AgentPool — tmux pane wiring', () => {
       expect(joined).toContain(path.dirname(process.execPath));
       // Non-interactive one-shot: -p + --system-prompt, then exit
       expect(joined).toContain('pi -p');
-      // stream-output loaded via worktree .pi auto-discovery — do NOT pass
-      // -e (double-loading the extension makes pi exit with a flag conflict)
+      // stream-output: loaded via worktree .pi auto-discovery when the branch
+      // carries it (worktree missing → repo root fallback, no extension file
+      // present → no -e needed). Do NOT pass -e when auto-discovery would
+      // double-load it (f212ebe).
       expect(joined).not.toContain('-e ');
       expect(joined).toContain('--stream=all');
       expect(joined).toContain('--system-prompt "@');
@@ -245,6 +247,9 @@ describe('AgentPool — tmux pane wiring', () => {
       const args = spawnCall![1] as string[];
       expect(args).toContain('-p');
       expect(args).toContain('--stream=all');
+      // worktree .pi lacks stream-output AND repo-root copy is absent in the
+      // test env → no -e flag (avoids f212ebe double-load when present)
+      expect(args).not.toContain('-e');
 
       // Env mirrors the pane shell: node bin first on PATH, PI_* cleared
       const env = spawnCall![2] as { env: NodeJS.ProcessEnv };
@@ -350,7 +355,49 @@ describe('AgentPool — tmux pane wiring', () => {
         .filter((c) => c.includes('tmux send-keys'));
       expect(sent.join('\n')).toContain('pi -p');
       expect(sent.join('\n')).toContain('--stream=all');
+      // Worktree .pi lacks stream-output in the test env (no real extension
+      // file) AND the repo-root copy doesn't exist → no -e flag
       expect(sent.join('\n')).not.toContain('-e ');
+    });
+
+    it('passes -e for the stream-output extension when the worktree .pi lacks it', async () => {
+      // Simulate a worktree branched BEFORE 3b165b2: its committed .pi carries
+      // only the linear extension, so auto-discovery misses stream-output and
+      // pi would die with 'Unknown option: --stream'. The main repo HAS the
+      // extension — the pool must load it explicitly via -e.
+      const repoRoot = '/tmp/repo-root';
+      const wt = '/tmp/worktrees/RES-99';
+      const extFile = path.join(repoRoot, '.pi', 'extensions', 'stream-output', 'index.ts');
+      fs.mkdirSync(path.dirname(extFile), { recursive: true });
+      fs.writeFileSync(extFile, 'export default function e() {}');
+      // Worktree exists but its .pi/extensions has NO stream-output
+      fs.mkdirSync(path.join(wt, '.pi', 'extensions', 'linear'), { recursive: true });
+
+      const node = {
+        ticket: { id: 't1', identifier: 'RES-99', title: 'Test ticket', parentId: null, dependencies: [] },
+        state: {
+          status: 'pending', branch: 'ticket/res-99', worktreePath: '', workerName: null,
+          assignedPort: null, startedAt: null, finishedAt: null, pid: null, prUrl: null,
+          error: null, retryCount: 0,
+        },
+        dependencies: [],
+      } as never;
+
+      try {
+        const agent = await pool.spawn('worker', node as never);
+        expect(agent).not.toBeNull();
+
+        const sent = vi
+          .mocked(cp.execSync)
+          .mock.calls.map((c) => String(c[0]))
+          .filter((c) => c.includes('tmux send-keys'));
+        const joined = sent.join('\n');
+        expect(joined).toContain(`-e "${extFile}"`);
+        expect(joined).toContain('--stream=all');
+      } finally {
+        fs.rmSync(repoRoot, { recursive: true, force: true });
+        fs.rmSync(wt, { recursive: true, force: true });
+      }
     });
   });
 
