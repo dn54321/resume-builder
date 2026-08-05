@@ -6,6 +6,22 @@ import { nextTick } from 'vue'
 import ResumeBuilder from '@/features/builder/ResumeBuilder.vue'
 import { useResumeStore } from '@/features/builder/stores/resume'
 
+// ─── Mock vue-router useRoute ─────────────────────────────────────
+// ResumeBuilder reads route.query.layout (RES-86 feature flag) via useRoute.
+// The mock route object is shared/hoisted so the vi.mock factory can access
+// it; tests mutate mockRoute.query before mounting.
+const { mockRoute } = vi.hoisted(() => ({
+  mockRoute: { query: {} as Record<string, unknown> },
+}))
+
+vi.mock('vue-router', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('vue-router')>()
+  return {
+    ...actual,
+    useRoute: () => mockRoute,
+  }
+})
+
 // ─── Mock useResumeData ────────────────────────────────────────────
 const mockLoadResume = vi.fn<() => Promise<void>>()
 const mockSaveResume = vi.fn<() => Promise<void>>()
@@ -53,15 +69,18 @@ vi.mock('@/features/builder/composables/useTailor', () => ({
 vi.mock('@/features/builder/components/LayoutPicker.vue', () => ({
   default: {
     name: 'LayoutPicker',
-    props: ['modelValue'],
-    template: '<div data-testid="layout-picker">LayoutPicker</div>',
+    props: ['modelValue', 'showTwoColumn'],
+    template:
+      '<div data-testid="layout-picker" :data-show-two-column="String(showTwoColumn)">LayoutPicker</div>',
   },
 }))
 
 vi.mock('@/features/builder/components/SectionToggles.vue', () => ({
   default: {
     name: 'SectionToggles',
-    template: '<div data-testid="section-toggles">SectionToggles</div>',
+    props: ['showTwoColumn'],
+    template:
+      '<div data-testid="section-toggles" :data-show-two-column="String(showTwoColumn)">SectionToggles</div>',
   },
 }))
 
@@ -141,6 +160,7 @@ describe('ResumeBuilder', () => {
     pinia = createPinia()
     setActivePinia(pinia)
     vi.clearAllMocks()
+    mockRoute.query = {}
     mockLoadResume.mockResolvedValue(undefined)
     mockIsTailoring.value = false
     mockTailorError.value = null
@@ -154,6 +174,36 @@ describe('ResumeBuilder', () => {
     const jdBtn = wrapper.find('[data-testid="jd-toolbar-btn"]')
     expect(jdBtn.exists()).toBe(true)
     expect(jdBtn.text()).toBe('Job Description')
+  })
+
+  // ── 2:1 layout feature flag (?layout=True) ───────────────────────
+
+  it('passes showTwoColumn=false to LayoutPicker and SectionToggles by default', () => {
+    mockRoute.query = {}
+    const wrapper = mountBuilder()
+
+    expect(wrapper.find('[data-testid="layout-picker"]').attributes('data-show-two-column')).toBe('false')
+    expect(wrapper.find('[data-testid="section-toggles"]').attributes('data-show-two-column')).toBe('false')
+  })
+
+  it('passes showTwoColumn=true when ?layout=True is in the URL', () => {
+    mockRoute.query = { layout: 'True' }
+    const wrapper = mountBuilder()
+
+    expect(wrapper.find('[data-testid="layout-picker"]').attributes('data-show-two-column')).toBe('true')
+    expect(wrapper.find('[data-testid="section-toggles"]').attributes('data-show-two-column')).toBe('true')
+  })
+
+  it('keeps showTwoColumn=false for other layout query values (exact case match)', () => {
+    mockRoute.query = { layout: 'true' }
+    const wrapper = mountBuilder()
+
+    expect(wrapper.find('[data-testid="layout-picker"]').attributes('data-show-two-column')).toBe('false')
+    expect(wrapper.find('[data-testid="section-toggles"]').attributes('data-show-two-column')).toBe('false')
+
+    mockRoute.query = { layout: '1' }
+    const wrapper2 = mountBuilder()
+    expect(wrapper2.find('[data-testid="layout-picker"]').attributes('data-show-two-column')).toBe('false')
   })
 
   it('renders the Tailor Resume button in toolbar', () => {
