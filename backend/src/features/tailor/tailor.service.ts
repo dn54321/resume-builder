@@ -5,7 +5,8 @@ import { LlmEngine } from './engines/llm.engine';
 import { HybridEngine } from './engines/hybrid.engine';
 import type { MatchingEngine } from './engines/matching-engine.interface';
 import type { TailorRequest } from './models/tailor-request.model';
-import type { TailorResponse } from './models/tailor-response.model';
+import type { TailorFilterResponse } from './models/tailor-filter-response.model';
+import { toFilterResponse } from './tailor-filter-response.adapter';
 import type { EnvConfig } from '../../common/config/models/env-config.model';
 
 type MatchingEngineType = EnvConfig['MATCHING_ENGINE'];
@@ -68,7 +69,13 @@ export class TailorService {
     }
   }
 
-  async tailor(request: TailorRequest): Promise<TailorResponse> {
-    return this.engine.match(request);
+  async tailor(request: TailorRequest): Promise<TailorFilterResponse> {
+    // Engines return filtered `sections`; the frontend consumes a
+    // filteredBulletIndices/filteredHardSkills/filteredSoftSkills shape
+    // (see tailor-filter-response.adapter.ts). Locked sections are skipped
+    // by the engines and their filter state is ignored on the frontend, so
+    // locked visibility is never changed by Tailor.
+    const engineResponse = await this.engine.match(request);
+    return toFilterResponse(request, engineResponse);
   }
 }

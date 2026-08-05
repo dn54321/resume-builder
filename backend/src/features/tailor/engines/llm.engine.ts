@@ -29,9 +29,11 @@ interface LlmParsedResponse {
 }
 
 /**
- * Field keys that identify bullet-type entries.
+ * Field keys that identify bullet-type entries. `text` is the key the
+ * builder editors (BulletList) actually emit; bullet/description/detail
+ * are accepted for legacy payloads.
  */
-const BULLET_FIELD_KEYS = new Set(['bullet', 'description', 'detail']);
+const BULLET_FIELD_KEYS = new Set(['bullet', 'description', 'detail', 'text']);
 
 /**
  * Field keys that identify skill-type entries.

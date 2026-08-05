@@ -42,6 +42,8 @@ export interface ResumeSectionPayload {
 }
 
 export interface ResumeEntryPayload {
+  /** Client-side entry id — lets the backend associate parented bullets with their parent entry. */
+  id?: string;
   order: number;
   parentId: string | null;
   fields: ResumeFieldPayload[];
