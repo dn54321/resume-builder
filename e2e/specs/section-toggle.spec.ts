@@ -2,6 +2,9 @@
  * Section toggle flow — critical path: core builder feature for controlling
  * what appears on the resume. Broken toggle means wrong content on export.
  *
+ * RES-91: the old checkbox/switch toggle was replaced with an eye icon
+ * (visibility) and a lock icon (Tailor-protect) per section row.
+ *
  * Tests the full stack: browser → frontend → backend → database.
  */
 import { test, expect } from '@playwright/test'
@@ -37,72 +40,108 @@ test.describe('Section toggle', () => {
     }
   })
 
-  test('can toggle a section off and on', async ({ page }) => {
+  test('every section row shows an eye icon and a lock icon', async ({ page }) => {
+    await page.goto('/builder')
+    await page.waitForSelector('text=Name & Contact', { timeout: 10_000 })
+
+    const rows = page
+      .locator('li')
+      .filter({ has: page.locator('[data-testid="section-eye-toggle"]') })
+    await expect(rows).toHaveCount(10)
+
+    for (let i = 0; i < 10; i++) {
+      const row = rows.nth(i)
+      await expect(row.locator('[data-testid="section-eye-toggle"]')).toBeVisible()
+      await expect(row.locator('[data-testid="section-lock-toggle"]')).toBeVisible()
+    }
+  })
+
+  test('eye icon toggles a section off and on', async ({ page }) => {
     await page.goto('/builder')
     await page.waitForSelector('text=Summary', { timeout: 10_000 })
 
-    // Find the "Summary" section item
-    const summaryLi = page.locator('li').filter({ hasText: 'Summary' })
+    const summaryRow = page.locator('li').filter({ hasText: 'Summary' })
 
-    // The toggle is an input[type="checkbox"] element
-    const checkbox = summaryLi.locator('input[type="checkbox"]')
-    const wasChecked = await checkbox.isChecked()
-    expect(wasChecked).toBe(true)
+    // Enabled by default: open Eye icon shown, row at full opacity
+    await expect(summaryRow.locator('svg.lucide-eye')).toBeVisible()
+    await expect(summaryRow.locator('svg.lucide-eye-off')).toHaveCount(0)
 
-    // Toggle it off by clicking the switch span next to the checkbox
-    // The switch is a sibling span with rounded styling
-    const switchSpan = summaryLi.locator('span').filter({
-      has: summaryLi.locator('input[type="checkbox"]'),
-    }).first()
+    // Click the eye → section becomes disabled: slashed EyeOff icon + dimmed row
+    await summaryRow.locator('[data-testid="section-eye-toggle"]').click()
+    await expect(summaryRow.locator('svg.lucide-eye-off')).toBeVisible()
+    await expect(summaryRow.locator('svg.lucide-eye')).toHaveCount(0)
+    await expect(summaryRow).toHaveClass(/opacity-55/)
 
-    // Actually, the click needs to hit the visible toggle. Use the label click.
-    await summaryLi.locator('label').first().click()
-    // This should select the section (enable it if disabled, or select it if enabled)
-    // But to toggle, we need to click the checkbox/switch specifically
-
-    // Try a different approach: toggle via the switch
-    // The switch is the span.after that acts as the visual toggle
-    const toggleSpans = summaryLi.locator('span')
-    const count = await toggleSpans.count()
-
-    if (count > 0) {
-      // First span with a specific class should be the switch
-      // Click the switch (not the label text)
-      await toggleSpans.nth(1).click()
-    }
-
-    // After toggling off, the li should have opacity-55 class
-    // Wait briefly for the DOM to update
-    await page.waitForTimeout(500)
-
-    // Verify the checkbox is now unchecked
-    const isCheckedAfter = await checkbox.isChecked()
-    // It was checked before, should be unchecked now
-    // (but may still be checked if our click missed)
-    if (isCheckedAfter) {
-      // Try again - click the label which might trigger toggle
-      await summaryLi.locator('label').click({ position: { x: 10, y: 10 } })
-      await page.waitForTimeout(500)
-    }
-
-    // Toggle back on
-    await summaryLi.locator('label').click({ position: { x: 10, y: 10 } })
-    await page.waitForTimeout(500)
+    // Click the eye again → re-enabled
+    await summaryRow.locator('[data-testid="section-eye-toggle"]').click()
+    await expect(summaryRow.locator('svg.lucide-eye')).toBeVisible()
+    await expect(summaryRow.locator('svg.lucide-eye-off')).toHaveCount(0)
+    await expect(summaryRow).not.toHaveClass(/opacity-55/)
   })
 
-  test('disabled section has reduced opacity', async ({ page }) => {
+  test('lock icon toggles a section locked state', async ({ page }) => {
+    await page.goto('/builder')
+    await page.waitForSelector('text=Summary', { timeout: 10_000 })
+
+    const summaryRow = page.locator('li').filter({ hasText: 'Summary' })
+    const lockBtn = summaryRow.locator('[data-testid="section-lock-toggle"]')
+
+    // Unlocked by default: open LockOpen icon shown at full opacity
+    await expect(summaryRow.locator('svg.lucide-lock-open')).toBeVisible()
+    await expect(summaryRow.locator('svg.lucide-lock')).toHaveCount(0)
+
+    // Click the lock → locked: closed Lock icon, semi-transparent inactive state
+    await lockBtn.click()
+    await expect(summaryRow.locator('svg.lucide-lock')).toBeVisible()
+    await expect(summaryRow.locator('svg.lucide-lock-open')).toHaveCount(0)
+    await expect(lockBtn).toHaveClass(/text-muted-foreground\/50/)
+
+    // Click again → unlocked
+    await lockBtn.click()
+    await expect(summaryRow.locator('svg.lucide-lock-open')).toBeVisible()
+    await expect(summaryRow.locator('svg.lucide-lock')).toHaveCount(0)
+    await expect(lockBtn).not.toHaveClass(/text-muted-foreground\/50/)
+  })
+
+  test('lock state is independent of visibility state', async ({ page }) => {
+    await page.goto('/builder')
+    await page.waitForSelector('text=Summary', { timeout: 10_000 })
+
+    const summaryRow = page.locator('li').filter({ hasText: 'Summary' })
+
+    // Lock the section…
+    await summaryRow.locator('[data-testid="section-lock-toggle"]').click()
+    await expect(summaryRow.locator('svg.lucide-lock')).toBeVisible()
+
+    // …then hide it. The lock must survive the visibility toggle.
+    await summaryRow.locator('[data-testid="section-eye-toggle"]').click()
+    await expect(summaryRow.locator('svg.lucide-eye-off')).toBeVisible()
+    await expect(summaryRow.locator('svg.lucide-lock')).toBeVisible()
+  })
+
+  test('label click selects the section in the editor', async ({ page }) => {
+    await page.goto('/builder')
+    await page.waitForSelector('text=Experience', { timeout: 10_000 })
+
+    const experienceRow = page.locator('li').filter({ hasText: 'Experience' })
+
+    // Click the label text (not the icons) — selects + highlights the section
+    await experienceRow.locator('label').first().click()
+    await expect(experienceRow.locator('label span').first()).toHaveClass(/text-primary/)
+  })
+
+  test('disabled section is not draggable', async ({ page }) => {
     await page.goto('/builder')
     await page.waitForSelector('text=Hobbies', { timeout: 10_000 })
 
-    const hobbiesLi = page.locator('li').filter({ hasText: 'Hobbies' })
+    const hobbiesRow = page.locator('li').filter({ hasText: 'Hobbies' })
 
-    // Click the switch area
-    await hobbiesLi.locator('label').click({ position: { x: 10, y: 10 } })
-    await page.waitForTimeout(500)
+    // Enabled by default → draggable
+    await expect(hobbiesRow).toHaveAttribute('draggable', 'true')
 
-    // Verify the li has opacity class
-    const classes = await hobbiesLi.getAttribute('class')
-    // Should have some indication of being disabled
-    expect(classes).toBeTruthy()
+    // Disable it via the eye icon → no longer draggable
+    await hobbiesRow.locator('[data-testid="section-eye-toggle"]').click()
+    await expect(hobbiesRow).toHaveAttribute('draggable', 'false')
+    await expect(hobbiesRow).toHaveClass(/opacity-55/)
   })
 })

@@ -32,8 +32,8 @@ test.describe('Anonymous resume builder', () => {
   test('fill personal info section', async ({ page }) => {
     await page.goto('/builder')
 
-    // Select the name-contact section (first section)
-    const sections = page.locator('[data-testid="section-toggle"]')
+    // Select the name-contact section (first section) via its eye toggle
+    const sections = page.locator('[data-testid="section-eye-toggle"]')
     const sectionCount = await sections.count()
     if (sectionCount > 0) {
       await sections.first().click()
