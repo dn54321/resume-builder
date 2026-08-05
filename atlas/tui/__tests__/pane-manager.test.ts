@@ -247,9 +247,10 @@ describe('PaneManager', () => {
       const callOrder = vi
         .mocked(cp.execSync)
         .mock.calls.map((c) => String(c[0]));
-      expect(callOrder.indexOf(resizeCalls[0])).toBeLessThan(
-        callOrder.findIndex((c) => c.includes('split-window')),
-      );
+      const compactIdx = callOrder.indexOf(resizeCalls[0] ?? '');
+      const splitIdx = callOrder.findIndex((c) => c.includes('split-window'));
+      expect(compactIdx).toBeGreaterThanOrEqual(0);
+      expect(splitIdx).toBeGreaterThan(compactIdx);
     });
   });
 
