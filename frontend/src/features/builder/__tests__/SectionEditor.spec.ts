@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { useResumeStore } from '@/features/builder/stores/resume'
@@ -10,6 +10,21 @@ describe('SectionEditor', () => {
     setActivePinia(createPinia())
     const store = useResumeStore()
     store.initializeDefaults()
+  })
+
+  // SectionEditor lazy-loads all 10 editors via defineAsyncComponent; the
+  // BulletList chain (ExperienceEditor → BulletList.vue) can still be
+  // resolving when the test tears down, producing a vitest
+  // EnvironmentTeardownError unhandled rejection that FAILS test:cov
+  // (which is why every git push was being rejected). Drain all pending
+  // async component loads after each test so nothing resolves post-teardown.
+  afterEach(async () => {
+    await flushPromises()
+    await flushPromises()
+    // Give lazy import chains (defineAsyncComponent → dynamic import) a real
+    // tick to settle; 50ms is ample for local module resolution.
+    await new Promise((r) => setTimeout(r, 50))
+    await flushPromises()
   })
 
   /**
