@@ -136,7 +136,8 @@ onMounted(async () => {
 })
 
 /**
- *
+ * Fetch the resume list from the API.
+ * @returns {Promise<void>} Resolves when the list has been loaded
  */
 async function fetchResumes(): Promise<void> {
   isLoading.value = true
@@ -156,7 +157,8 @@ async function fetchResumes(): Promise<void> {
 }
 
 /**
- *
+ * Create a new resume and navigate to its builder.
+ * @returns {Promise<void>} Resolves once navigation is triggered
  */
 async function handleCreateResume(): Promise<void> {
   error.value = ''
