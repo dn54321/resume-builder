@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# ═══════════════════════════════════════════════════════════════════════
+# ⚠️ PRE-COMMIT GUARD — the boss must NOT stage atlas changes in master.
+#
+# Workers merge into the MAIN repo working tree. If the boss stages atlas
+# fixes there, a worker merge conflict + `git merge --abort` wipes them
+# (happened 3+ times: boss-relay.ts, server.ts, prompt.md changes lost).
+#
+# This hook REFUSES to commit atlas/* changes from the MAIN repo (not a
+# worktree) unless the commit is explicitly marked urgent. The boss's
+# non-urgent work goes in its own worktree (see agents/boss/prompt.md).
+#
+# Override for genuine emergencies: prefix the message with `[URGENT]` or
+# set ATLAS_BOSS_URGENT=1.
+# ═══════════════════════════════════════════════════════════════════════
+set -euo pipefail
+
+# Only guard when the BOSS is committing (marker set by atlas.sh in the boss
+# pane). The human committing atlas changes from their own shell, and all
+# worker worktrees, are NEVER blocked.
+if [[ "${ATLAS_BOSS_SESSION:-}" != "1" ]]; then
+  exit 0
+fi
+
+# Only guard the MAIN repo — worktree commits are the intended path.
+if ! git rev-parse --git-common-dir >/dev/null 2>&1; then
+  exit 0
+fi
+MAIN_REPO="$(git worktree list --porcelain 2>/dev/null | head -1 | sed 's/^worktree //')"
+if [ -z "$MAIN_REPO" ] || [ "$(pwd)" != "$MAIN_REPO" ]; then
+  exit 0  # not the main repo → allowed (worktree / boss worktree)
+fi
+
+# Merge commits (git merge) are worker deliveries — allow them.
+if [ -f "$(git rev-parse --git-dir)/MERGE_HEAD" ]; then
+  exit 0
+fi
+
+# Does this commit touch atlas/? Only guard those.
+STAGED_ATLAS="$(git diff --cached --name-only | grep '^atlas/' || true)"
+if [ -z "$STAGED_ATLAS" ]; then
+  exit 0  # no atlas changes → fine (e.g. docs in root, backend, frontend)
+fi
+
+# Urgent override?
+MSG="$(git log --format=%B -1 2>/dev/null || true)"
+if [[ "${ATLAS_BOSS_URGENT:-}" == "1" ]] || [[ "$MSG" == *"[URGENT]"* ]]; then
+  exit 0
+fi
+
+echo ""
+echo "⛔ [pre-commit] BLOCKED: atlas/ changes in the MAIN repo." >&2
+echo "" >&2
+echo "Staging atlas fixes in master gets them clobbered by worker merges" >&2
+echo "(conflict + merge --abort wipes staged work). Use your own worktree:" >&2
+echo "" >&2
+echo "  git worktree add ../atlas-boss-<fix> -b boss/fix-<desc>" >&2
+echo "  # edit/test/commit there, then merge to master cleanly" >&2
+echo "" >&2
+echo "If this is a GENUINE EMERGENCY (hotfix), either:" >&2
+echo "  - prefix the commit message with [URGENT], or" >&2
+echo "  - ATLAS_BOSS_URGENT=1 git commit ..." >&2
+echo "" >&2
+exit 1

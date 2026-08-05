@@ -174,8 +174,13 @@ log "  Banner → pane $BANNER_PANE (PERSISTENT)"
 
 # Pane 2: Boss (bottom-left)
 log "Creating boss pane..."
+# Export ATLAS_BOSS_SESSION=1 in the boss's own environment so the
+# pre-commit hook can tell BOSS commits from the human's. The hook blocks
+# atlas/ commits in the main repo ONLY when this marker is present (boss) —
+# the human and workers are never blocked. Must be set BEFORE pi launches so
+# the pi process (and any git it spawns) inherits it.
 tmux split-window -v -t "$SESSION_NAME:0.0" -c "$SCRIPT_DIR" -l 10 \
-  "$PI_BIN --append-system-prompt ${BOSS_PROMPT_ARG} Start" || die "tmux split-window for boss failed"
+  "ATLAS_BOSS_SESSION=1 $PI_BIN --append-system-prompt ${BOSS_PROMPT_ARG} Start" || die "tmux split-window for boss failed"
 log "  Boss pane created"
 
 # ─── Done ────────────────────────────────────────────────────────
