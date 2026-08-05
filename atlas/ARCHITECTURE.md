@@ -934,12 +934,14 @@ class AgentPool {
     // 2. Allocate port from pool
     // 3. Run pre.sh
     // 4. Build prompt from prompt.md + template variables
-    // 5. Spawn pi -s --append-system-prompt @prompt.md
-    // 6. Create worker pane by splitting the banner:
-    //    tmux split-window -v -t <banner-pane> -l 8
-    //    Start worker-pane.sh in the new pane
+    // 5. Create worker pane by splitting the banner:
+    //    tmux split-window -P -F '#{pane_id}' -v -t <banner-pane> -l 8 "bash"
+    //    (pane manager returns the real pane id, e.g. "%3")
+    // 6. Launch pi inside the pane via tmux send-keys (real TTY):
+    //    unset PI_* session vars; export ATLAS_* env; then
+    //    pi --system-prompt @prompt.md + /name + REGISTER/IDLE commands
     // 7. Wait for REGISTER intercom message
-    // 8. Return AgentInstance
+    // 8. Return AgentInstance (processPid=null — pi lives in the pane)
     // NOTE: The banner pane is NEVER killed (see § Tmux Pane Architecture)
   }
 
@@ -949,17 +951,15 @@ class AgentPool {
     // 3. Send via intercom: TASK <uuid> {"identifier":...}
     // 4. Wait for agent to acknowledge
     // 5. Update agent status → active
-    // 6. Send THINKING:<worktree-path> to the agent's FIFO
-    //    → worker-pane.sh starts tailing agent-status.txt
+    //    (the worker writes agent-status.txt in the worktree; its pane
+    //    shows the live pi session, so no FIFO tailing is needed)
   }
 
   async stop(agent: AgentInstance): Promise<void> {
     // 1. Send STOP <uuid> via intercom
     // 2. Wait for graceful shutdown (timeout: 30s)
-    // 3. SIGTERM if still running
-    // 4. Run post.sh
-    // 5. Release port
-    // 6. Send IDLE to agent's FIFO, then kill-pane
+    // 3. Run post.sh
+    // 4. paneManager.killWorkerPane(name) → tmux kill-pane
     //    → space returns to banner/boss, right column preserved
   }
 
@@ -1189,6 +1189,13 @@ done
 ```
 
 ### `worker-pane.sh`
+
+> **Note (current design):** worker panes no longer run this script. Since the
+> pane wiring was introduced, a worker pane runs a plain `bash` shell and the
+> AgentPool launches pi inside it via `tmux send-keys` — the pane shows the
+> worker's live pi session (real TTY), exactly like the boss pane. This script
+> and the per-agent FIFO (THINKING/IDLE) are retained for bookkeeping and
+> historical reference only.
 
 ```bash
 #!/bin/bash

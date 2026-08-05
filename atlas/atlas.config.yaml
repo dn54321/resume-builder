@@ -121,14 +121,14 @@ strategy:
 
   # Branch targets for each strategy
   branches:
-    pr_target: main               # PRs are created against this branch
+    pr_target: master             # PRs are created against this branch
     review_target: staging        # Review PRs target this branch
-    direct_push: main             # Direct merges push to this branch
-    worktree_base: main           # Worktrees branch off this (the starting point)
+    direct_push: master           # Direct merges push to this branch
+    worktree_base: master         # Worktrees branch off this (the starting point)
 
   # Per-branch-pattern overrides (glob matching, first match wins)
   overrides:
-    # Hotfix branches skip review — merge directly to main
+    # Hotfix branches skip review — merge directly to master
     - pattern: "hotfix/*"
       strategy: direct
 
@@ -136,7 +136,7 @@ strategy:
     - pattern: "release/*"
       strategy: direct
 
-    # Feature branches PR into develop (not main) for integration testing
+    # Feature branches PR into develop (not master) for integration testing
     - pattern: "feature/*"
       strategy: direct
       #pr_target: develop

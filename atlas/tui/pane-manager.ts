@@ -62,6 +62,13 @@ export class PaneManager {
 
   /**
    * Create a worker pane by splitting the banner vertically.
+   *
+   * The pane runs a plain `bash` shell (NOT worker-pane.sh) so the AgentPool
+   * can launch pi inside it via `tmux send-keys` — giving each worker a real
+   * TTY. The workerPanes map + banner update are still maintained so
+   * killWorkerPane() can clean up and the banner shows live worker counts.
+   *
+   * Returns the tmux pane id (e.g. "%1") or null on failure.
    */
   createWorkerPane(agentName: string, ticketId: string): string | null {
     if (!this.bannerPaneId) {
@@ -73,16 +80,12 @@ export class PaneManager {
     if (!this.sessionExists()) return null;
 
     try {
-      const workerScript = path.join(
-        this.stateDir,
-        'panes',
-        'worker-pane.sh',
-      );
-
-      // Split banner vertically with 8 lines
+      // Split the banner vertically (8 lines) and start a shell in the pane.
+      // `-P -F '#{pane_id}'` is REQUIRED: split-window prints nothing without
+      // -P, and plain -P prints "session:window.pane" rather than the pane id
+      // (e.g. "%1") that the caller needs for send-keys / kill-pane.
       const result = cp.execSync(
-        `tmux split-window -v -t "${this.bannerPaneId}" -l 8 -c "${process.cwd()}" ` +
-        `"${workerScript}" "${agentName}" "${this.fifoDir}"`,
+        `tmux split-window -P -F '#{pane_id}' -v -t "${this.bannerPaneId}" -l 8 -c "${process.cwd()}" "bash"`,
         { timeout: 5000, encoding: 'utf-8' },
       ).trim();
 
@@ -98,9 +101,9 @@ export class PaneManager {
         };
         this.workerPanes.set(agentName, pane);
 
-        // Send THINKING signal so the pane starts showing status
-        const worktreePath = path.join(this.stateDir, 'worktrees', ticketId);
-        this.writeToFifo(fifoPath, `THINKING:${worktreePath}`);
+        // NOTE: worker-pane.sh (the FIFO display loop) no longer runs in
+        // worker panes — pi itself occupies the pane with a real TTY. The
+        // agent FIFO is kept for bookkeeping only, so no THINKING write here.
 
         this.updateBanner();
         return result;
@@ -119,16 +122,11 @@ export class PaneManager {
     if (!pane) return;
 
     try {
-      // Send IDLE briefly
-      this.writeToFifo(pane.fifoPath, 'IDLE');
-
-      // Small delay then kill
-      setTimeout(() => {
-        try {
-          cp.execSync(`tmux kill-pane -t "${pane.paneId}"`, { timeout: 3000 });
-        } catch { /* already dead */ }
-      }, 500);
-    } catch { /* ignore */ }
+      // The pane runs pi (launched via send-keys) — killing the pane
+      // terminates the worker's TTY session. No IDLE FIFO write: the
+      // worker-pane.sh display loop no longer runs in worker panes.
+      cp.execSync(`tmux kill-pane -t "${pane.paneId}"`, { timeout: 3000 });
+    } catch { /* already dead */ }
 
     this.workerPanes.delete(agentName);
     this.updateBanner();
@@ -152,14 +150,35 @@ export class PaneManager {
    */
   healthCheck(): boolean {
     if (!this.bannerPaneId) return false;
+    return this.paneAlive(this.bannerPaneId, /* warnOnDead */ true);
+  }
+
+  /**
+   * Check whether a worker pane still exists and its process is running.
+   *
+   * NOTE: `display-message -p '#{pane_id}'` is NOT a valid liveness check —
+   * tmux prints nothing and exits 0 for a pane id that no longer resolves,
+   * so a killed pane would look alive. `#{pane_dead}` prints 0 while the
+   * pane's process runs and 1 once it has exited; a gone pane prints empty,
+   * which we treat as dead.
+   */
+  isPaneAlive(paneId: string): boolean {
+    return this.paneAlive(paneId, /* warnOnDead */ false);
+  }
+
+  private paneAlive(paneId: string, warnOnDead: boolean): boolean {
+    if (!this.sessionExists()) return false;
     try {
-      cp.execSync(
-        `tmux display-message -t "${this.bannerPaneId}" -p '#{pane_id}' 2>/dev/null`,
-        { timeout: 2000 },
-      );
-      return true;
+      const dead = cp.execSync(
+        `tmux display-message -t "${paneId}" -p '#{pane_dead}' 2>/dev/null`,
+        { timeout: 2000, encoding: 'utf-8' },
+      ).trim();
+      const alive = dead === '0';
+      if (!alive && warnOnDead) {
+        console.error('[PaneManager] BANNER PANE IS DEAD! Right column collapsed.');
+      }
+      return alive;
     } catch {
-      console.error('[PaneManager] BANNER PANE IS DEAD! Right column collapsed.');
       return false;
     }
   }
@@ -191,11 +210,9 @@ export class PaneManager {
     try {
       if (fs.existsSync(bannerFile)) {
         const savedId = fs.readFileSync(bannerFile, 'utf-8').trim();
-        if (this.sessionExists()) {
-          cp.execSync(
-            `tmux display-message -t "${savedId}" -p '#{pane_id}' 2>/dev/null`,
-            { timeout: 2000 },
-          );
+        // Pane ids are session-scoped; a saved id only counts if it resolves
+        // to a live pane in the current session.
+        if (savedId && this.isPaneAlive(savedId)) {
           this.bannerPaneId = savedId;
           return;
         }

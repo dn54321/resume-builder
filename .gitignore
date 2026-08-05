@@ -9,6 +9,7 @@ frontend/resume.pdf
 
 # Atlas agent system state
 atlas/state/
+atlas/.pi/
 atlas/node_modules/
 atlas/coverage/
 playwright-report/

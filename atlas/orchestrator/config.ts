@@ -137,10 +137,10 @@ const DEFAULTS: AtlasConfig = {
   strategy: {
     default: 'pr',
     branches: {
-      pr_target: 'main',
+      pr_target: 'master',
       review_target: 'staging',
-      direct_push: 'main',
-      worktree_base: 'main',
+      direct_push: 'master',
+      worktree_base: 'master',
     },
     overrides: [],
   },

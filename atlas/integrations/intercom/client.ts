@@ -22,8 +22,26 @@ export interface IntercomMessage {
   timestamp: number;
 }
 
+/** Broker-level outcome of a send. `delivered: true` means the broker
+ * accepted the message (live delivery OR offline mailbox) — NOT that the
+ * receiver actually got it. Use receipts (onReceipt) for real delivery. */
+export interface SendResult {
+  id: string;
+  delivered: boolean;
+  reason?: string;
+}
+
+/** Delivery receipt echoed back from the receiver via the broker. */
+export interface ReceiptInfo {
+  messageId: string;
+  status: string;
+  timestamp: number;
+  detail?: string;
+}
+
 type MessageHandler = (from: IntercomSession, message: IntercomMessage) => void | Promise<void>;
 type SessionHandler = (session: IntercomSession) => void | Promise<void>;
+type ReceiptHandler = (session: IntercomSession, receipt: ReceiptInfo) => void | Promise<void>;
 
 // ─── Client ─────────────────────────────────────────────────────────
 
@@ -31,6 +49,7 @@ export class IntercomClient {
   private intercom: any = null;
   private messageHandlers: MessageHandler[] = [];
   private sessionHandlers: SessionHandler[] = [];
+  private receiptHandlers: ReceiptHandler[] = [];
   private connected = false;
   private name: string;
 
@@ -78,6 +97,15 @@ export class IntercomClient {
       }
     });
 
+    // Receipts flow back from the receiver through the broker. They are the
+    // only authoritative signal that a message reached its destination — the
+    // broker acks sends even when it mailboxes them for an offline session.
+    this.intercom.on('message_receipt', (session: IntercomSession, receipt: ReceiptInfo) => {
+      for (const handler of this.receiptHandlers) {
+        try { handler(session, receipt); } catch { /* handler errors are non-fatal */ }
+      }
+    });
+
     this.connected = true;
     console.log(`[Intercom] Connected as "${this.name}"`);
   }
@@ -98,9 +126,14 @@ export class IntercomClient {
     this.sessionHandlers.push(handler);
   }
 
-  async send(to: string, text: string): Promise<void> {
+  onReceipt(handler: ReceiptHandler): void {
+    this.receiptHandlers.push(handler);
+  }
+
+  /** Returns broker-level delivery info (see SendResult doc). */
+  async send(to: string, text: string): Promise<SendResult> {
     if (!this.intercom) throw new Error('Not connected');
-    await this.intercom.send(to, { text });
+    return await this.intercom.send(to, { text });
   }
 
   async listSessions(): Promise<IntercomSession[]> {

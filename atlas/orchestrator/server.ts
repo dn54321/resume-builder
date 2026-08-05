@@ -8,6 +8,7 @@ import * as cp from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { IntercomClient } from '../integrations/intercom/client';
+import { BossRelay } from './boss-relay';
 import { Scheduler } from './scheduler';
 import { AgentPool } from './pool';
 import { PaneManager } from '../tui/pane-manager';
@@ -38,7 +39,7 @@ import type { GraphNode } from './types';
 let intercom: IntercomClient;
 let scheduler: Scheduler;
 let pool: AgentPool;
-let bossSessionId: string | null = null;
+let bossRelay: BossRelay | null = null;
 const epicGraphs = new Map<string, { nodes: Map<string, GraphNode>; rootId: string }>();
 let webhookServer: http.Server | null = null;
 
@@ -51,11 +52,17 @@ function log(msg: string): void {
 
 // ─── Boss Communication ─────────────────────────────────────────────
 
+// Messages to the boss go through BossRelay: it validates delivery via
+// intercom receipts and queues anything undeliverable (boss dead or not yet
+// registered) in an IN-MEMORY queue that flushes when the next boss
+// registers. In-memory by design — server death clears the queue.
+
 async function tellBoss(msg: string): Promise<void> {
-  if (!intercom || !bossSessionId) return;
-  try {
-    await intercom.send(bossSessionId, msg);
-  } catch { /* boss may have disconnected */ }
+  if (!bossRelay) return;
+  const status = await bossRelay.tell(msg);
+  if (status === 'queued') {
+    log(`Boss message queued (${bossRelay.queuedCount} in queue): ${msg.slice(0, 60)}`);
+  }
 }
 
 // ─── Dashboard ──────────────────────────────────────────────────────
@@ -81,6 +88,7 @@ function writeDashboard(): void {
   lines.push(`══ Atlas Dashboard ${now.padStart(30)} ══`);
   lines.push(`${epicGraphs.size} epics · ${totalTickets} tickets · ${totalRunning} running · ${totalDone} done · ${totalFailed} failed`);
   lines.push(`Pool: ${pool.count()} agents (${pool.getByType('worker').length} workers)`);
+  lines.push(`Boss: ${bossRelay ? bossRelay.getState() : 'unregistered'}${bossRelay && bossRelay.queuedCount > 0 ? ` (${bossRelay.queuedCount} queued)` : ''}`);
   lines.push('');
 
   for (const [, epic] of epicGraphs) {
@@ -703,11 +711,20 @@ export async function startOrchestrator(): Promise<void> {
   await intercom.connect();
   log(`Intercom connected as "${orchName}"`);
 
+  // Boss messaging with offline queue (see boss-relay.ts).
+  bossRelay = new BossRelay({
+    send: (to, text) => intercom.send(to, text),
+    log: (msg) => log(msg),
+  });
+  intercom.onReceipt((_session, receipt) => {
+    bossRelay!.onReceipt(receipt.messageId, receipt.status);
+  });
+
   // Scheduler
   scheduler = new Scheduler();
 
   // Agent pool
-  pool = new AgentPool(intercom);
+  pool = new AgentPool(intercom, paneManager);
 
   // Handle intercom messages
   intercom.onMessage(async (from, message) => {
@@ -715,9 +732,11 @@ export async function startOrchestrator(): Promise<void> {
 
     // Boss registration
     if (text.startsWith('BOSS:')) {
-      bossSessionId = from.id;
-      log(`Boss registered: ${from.name} (${from.id.slice(0, 8)})`);
-      await intercom.send(from.id, 'BOSS registered. Atlas is ready.');
+      const flushed = await bossRelay!.registerBoss(from.id);
+      log(`Boss registered: ${from.name} (${from.id.slice(0, 8)})${flushed > 0 ? ` — flushed ${flushed} queued message(s)` : ''}`);
+      try {
+        await intercom.send(from.id, 'BOSS registered. Atlas is ready.');
+      } catch { /* boss may have disconnected immediately after registering */ }
       return;
     }
 

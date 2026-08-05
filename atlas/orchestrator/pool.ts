@@ -19,6 +19,7 @@ import {
 import { resolveStrategy } from './strategist';
 import { IntercomClient } from '../integrations/intercom/client';
 import { transitionTicket } from '../integrations/linear/client';
+import { PaneManager } from '../tui/pane-manager';
 
 // ─── Pi binary resolution ─────────────────────────────────────────
 
@@ -121,10 +122,12 @@ function recordSpawnSuccess(type: string): void {
 export class AgentPool {
   private agents: Map<string, AgentInstance> = new Map();
   private intercom: IntercomClient;
+  private paneManager: PaneManager;
   private nextId = 1;
 
-  constructor(intercom: IntercomClient) {
+  constructor(intercom: IntercomClient, paneManager: PaneManager) {
     this.intercom = intercom;
+    this.paneManager = paneManager;
   }
 
   // ─── Spawn ────────────────────────────────────────────────────────
@@ -175,99 +178,101 @@ export class AgentPool {
     // Build prompt
     const promptContent = this.buildPrompt(type, name, port ?? 0, worktreePath);
 
-    // Spawn pi process inside 'script' to provide a pseudo-TTY.
-    // pi requires a TTY to stay alive in interactive mode; without it
-    // the process exits immediately even with stdio pipes open.
-    //
-    // We feed initial commands (registration) then keep stdin open with
-    // tail -f /dev/null so pi stays alive waiting for intercom TASK messages.
-    const logPath = path.join(getStateDir(), 'logs', `${name}.log`);
-    const logStream = fs.createWriteStream(logPath, { flags: 'a' });
-
-    // cwd must exist or spawn fails with ENOENT.
-    const spawnCwd = fs.existsSync(worktreePath) ? worktreePath : getRepoRoot();
-
-    // Write auto-registration commands to a temp file
+    // Launch pi inside a tmux worker pane (created by the pane manager by
+    // splitting the banner). The pane gives pi a real TTY — no `script`
+    // wrapper or stdin-pipe hacks needed. Commands are typed into the pane
+    // with `tmux send-keys`; keys sent before pi has booted sit in the pty
+    // input buffer and are processed in order, mirroring the old
+    // (cat init | pi) startup semantics.
     const uuid = this.generateUUID();
     const orchNameForReg = `orchestrator-${process.pid}`;
-    const stdinFile = path.join(getStateDir(), 'prompts', `${name}-stdin.txt`);
-    fs.mkdirSync(path.dirname(stdinFile), { recursive: true });
-    fs.writeFileSync(stdinFile, [
-      `/name ${name}`,
+
+    // Workers are spawned before ticket assignment, so there is no ticket
+    // yet — the pane is created unassigned (banner shows no ticket).
+    const paneId = this.paneManager.createWorkerPane(name, '');
+    if (!paneId) {
+      console.error(`[Pool] ${name} failed to create tmux pane — spawn aborted`);
+      recordSpawnFailure(type);
+      return null;
+    }
+
+    // cwd must exist or the pane shell errors on cd.
+    const spawnCwd = fs.existsSync(worktreePath) ? worktreePath : getRepoRoot();
+
+    // The pane runs a fresh bash shell — set env inline so the tmux session
+    // env is not polluted. PI_* session vars must be unset to prevent
+    // intercom/session clash with the boss.
+    const workerEnv = {
+      ATLAS_AGENT_NAME: name,
+      ATLAS_AGENT_TYPE: type,
+      ATLAS_AGENT_PORT: String(port ?? ''),
+      ATLAS_WORKTREE: worktreePath,
+      ATLAS_CONFIG: path.join(process.cwd(), 'atlas.config.yaml'),
+      ATLAS_STATE_DIR: getStateDir(),
+    };
+    const envAssignments = Object.entries(workerEnv)
+      .map(([k, v]) => `${k}='${v}'`)
+      .join(' ');
+
+    // Type a command line into the pane's shell, then press Enter.
+    // sq() shell-quotes for the orchestrator's bash; tmux then types the
+    // literal characters into the pane's bash, which parses them itself.
+    const sendKeys = (keys: string): void => {
+      const sq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
+      try {
+        cp.execSync(`tmux send-keys -t ${sq(paneId)} ${sq(keys)} Enter`, {
+          timeout: 5000,
+        });
+      } catch (err: any) {
+        console.error(`[Pool] send-keys to ${paneId} failed: ${err.message}`);
+      }
+    };
+
+    sendKeys('unset PI_INTERCOM_SESSION_ID PI_SESSION_ID PI_SESSION_FILE');
+    sendKeys(`cd '${spawnCwd}'`);
+    sendKeys(`export ${envAssignments}`);
+    sendKeys(`${PI_BIN} --system-prompt "@${promptContent}"`);
+    sendKeys(`/name ${name}`);
+    sendKeys(
       `intercom({ action: "send", to: "${orchNameForReg}", message: "REGISTER ${uuid} worker ${name}" })`,
+    );
+    sendKeys(
       `intercom({ action: "send", to: "${orchNameForReg}", message: "IDLE ${uuid}" })`,
-      '',
-    ].join('\n'), 'utf-8');
+    );
 
-    // Spawn: (cat init; tail -f /dev/null) | script -q -c "pi ..." /dev/null
-    // The tail -f keeps stdin open so pi doesn't exit after processing init commands.
-    const proc = cp.spawn('bash', [
-      '-c',
-      `(cat '${stdinFile}'; tail -f /dev/null) | script -q -c "${PI_BIN} --system-prompt @${promptContent}" /dev/null`,
-    ], {
-      cwd: spawnCwd,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: (() => {
-        const env = { ...process.env };
-        // Prevent intercom/session clash with boss
-        delete env.PI_INTERCOM_SESSION_ID;
-        delete env.PI_SESSION_ID;
-        delete env.PI_SESSION_FILE;
-        env.ATLAS_AGENT_NAME = name;
-        env.ATLAS_AGENT_TYPE = type;
-        env.ATLAS_AGENT_PORT = String(port ?? '');
-        env.ATLAS_WORKTREE = worktreePath;
-        env.ATLAS_CONFIG = path.join(process.cwd(), 'atlas.config.yaml');
-        env.ATLAS_STATE_DIR = getStateDir();
-        return env;
-      })(),
-    });
-
-    proc.stdout?.pipe(logStream);
-    proc.stderr?.pipe(logStream);
+    // Worker output is now visible live in the tmux pane (capture with
+    // `tmux capture-pane`). Keep a log file for API compatibility.
+    const logPath = path.join(getStateDir(), 'logs', `${name}.log`);
+    fs.mkdirSync(path.dirname(logPath), { recursive: true });
+    fs.writeFileSync(
+      logPath,
+      `[${new Date().toISOString()}] ${name} launched in pane ${paneId} (type=${type}, port=${port})\n`,
+      'utf-8',
+    );
 
     const instance: AgentInstance = {
       id: uuid,
       name,
       type,
-      processPid: proc.pid ?? null,
-      process: proc,
+      // pi runs inside the tmux pane — there is no direct child process.
+      processPid: null,
+      process: null,
       status: 'spawning',
       currentTask: null,
       port: port ?? 0,
-      paneId: null,
+      paneId,
       logPath,
       spawnedAt: Date.now(),
       lastHeartbeat: Date.now(),
     };
 
-    proc.on('close', (code) => {
-      logStream.end();
-      // Track whether the agent actually ran or crashed immediately
-      if (Date.now() - instance.spawnedAt < 5000 && code !== 0) {
-        recordSpawnFailure(type);
-      } else {
-        recordSpawnSuccess(type);
-      }
-      this.handleAgentExit(instance, code ?? 1);
-    });
-
-    proc.on('error', (err) => {
-      logStream.end();
-      recordSpawnFailure(type);
-      console.error(`[Pool] ${name} spawn error: ${err.message}`);
-      instance.status = 'stopping';
-    });
-
     this.agents.set(instance.id, instance);
     // Increment lifetime counter (hard cap, never resets)
     SPAWN_LIFETIME_COUNT.set(type, (SPAWN_LIFETIME_COUNT.get(type) ?? 0) + 1);
-    // Do NOT call recordSpawnSuccess here — the close handler decides success/failure.
-    // Calling it here resets the failure counter on every spawn, defeating cooldowns.
-
-    logStream.write(`[${new Date().toISOString()}] ${name} spawned (type=${type}, port=${port})\n`);
-
-    // Create worker pane (split from banner) — handled by pane manager
+    // No close handler exists for tmux panes — a successful pane creation +
+    // send-keys sequence counts as a successful spawn. Failures (no banner,
+    // tmux error) are caught above via recordSpawnFailure.
+    recordSpawnSuccess(type);
 
     return instance;
   }
@@ -330,12 +335,9 @@ export class AgentPool {
     // Wait for graceful shutdown
     await new Promise((resolve) => setTimeout(resolve, 5000));
 
-    // Force kill if still alive
-    if (agent.processPid) {
-      try {
-        process.kill(agent.processPid, 'SIGTERM');
-      } catch { /* already dead */ }
-    }
+    // Kill the worker's tmux pane — this terminates pi and closes the pane.
+    // The banner pane is never touched (see PaneManager invariant).
+    this.paneManager.killWorkerPane(agent.name);
 
     agent.status = 'stopping';
 
@@ -371,14 +373,25 @@ export class AgentPool {
 
   async healthCheck(): Promise<void> {
     for (const [id, agent] of this.agents) {
-      // Check process alive
-      if (agent.processPid) {
+      // Workers now run inside tmux panes — verify the pane is still alive
+      // (there is no direct child process to signal). An alive pane refreshes
+      // the heartbeat, mirroring the old process-alive check.
+      if (agent.paneId) {
+        if (!this.paneManager.isPaneAlive(agent.paneId)) {
+          console.log(`[Pool] ${agent.name} pane dead — cleaning up`);
+          await this.handleAgentExit(agent, -1);
+          continue;
+        }
+        agent.lastHeartbeat = Date.now();
+      } else if (agent.processPid) {
+        // Legacy path (AgentInstances created without a pane)
         try {
           process.kill(agent.processPid, 0);
           agent.lastHeartbeat = Date.now();
         } catch {
           console.log(`[Pool] ${agent.name} process dead — cleaning up`);
           await this.handleAgentExit(agent, -1);
+          continue;
         }
       }
 
