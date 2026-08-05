@@ -32,7 +32,7 @@ import {
   unregisterWebhooks,
 } from '../integrations/github/client';
 import { getConfig } from './config';
-import { getRepoRoot, removeWorktree, hasMeaningfulWork } from '../git/operations';
+import { getRepoRoot, removeWorktree, hasMeaningfulWork, isBranchMergedTo } from '../git/operations';
 import type { GraphNode } from './types';
 
 // ─── Globals ────────────────────────────────────────────────────────
@@ -329,7 +329,20 @@ async function onWorkerComplete(
         // worker/commit landed mid-merge) are RETRYABLE — re-queue the
         // ticket up to retry_limit instead of permanently failing it.
         const maxRetries = config.agents.worker.retry_limit ?? 2;
-        if (node.state.retryCount <= maxRetries) {
+        // ⚠️ The dirty-tree guard's "defer" is NOT a real failure — it means
+        // the main repo had uncommitted work (e.g. the boss's) and the merge
+        // waited 45s without clearing. Re-queue WITHOUT consuming a retry so
+        // a busy main repo can't fail tickets (observed: RES-93 failed after
+        // the guard's defer burned all 3 retries).
+        const isDefer = (result.error ?? '').includes('stayed dirty');
+        if (isDefer) {
+          node.state.status = 'pending';
+          node.state.workerName = null;
+          node.state.pid = null;
+          node.state.error = `Deferred: main repo busy (${result.error})`;
+          requeueTracker?.record(identifier, 'deferred (main repo dirty)');
+          await tellBoss(`🔄 ${identifier}: deferred (main repo had uncommitted work) — will retry without consuming a retry`);
+        } else if (node.state.retryCount <= maxRetries) {
           node.state.status = 'pending';
           node.state.workerName = null;
           node.state.pid = null;
@@ -345,10 +358,29 @@ async function onWorkerComplete(
         }
       }
     } else {
-      node.state.status = 'failed';
-      node.state.finishedAt = new Date().toISOString();
-      node.state.error = 'No meaningful changes — only generated files modified';
-      await tellBoss(`❌ ${identifier}: No meaningful work detected`);
+      // No meaningful diff vs base — the worker found nothing to change.
+      // This is a COMPLETION when the work is already on the target branch
+      // (re-verified already-merged tickets), not a failure. Check if the
+      // branch is already merged; if so, mark done (no-op). Otherwise it's
+      // a genuine no-work failure (worker did nothing).
+      const baseBranch = config.strategy.branches.worktree_base;
+      const alreadyMerged =
+        node.state.worktreePath &&
+        isBranchMergedTo(node.state.worktreePath, node.state.branch, config.strategy.branches.direct_push);
+      if (alreadyMerged) {
+        node.state.status = 'done';
+        node.state.finishedAt = new Date().toISOString();
+        node.state.pid = null;
+        recordCompletedWork('worker');
+        await transitionTicket(node.ticket.id, config.linear.transitions.on_done);
+        await tellBoss(`✅ ${identifier}: already merged (no-op completion — worker had no changes because work is in master)`);
+        pruneWorktree(node);
+      } else {
+        node.state.status = 'failed';
+        node.state.finishedAt = new Date().toISOString();
+        node.state.error = 'No meaningful changes — only generated files modified';
+        await tellBoss(`❌ ${identifier}: No meaningful work detected`);
+      }
     }
   } else if (exitCode === 143 || exitCode === 137) {
     // Killed externally
