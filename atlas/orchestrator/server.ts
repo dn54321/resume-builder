@@ -705,13 +705,11 @@ async function autoStart(): Promise<void> {
   // completes the ticket instead of it being orphaned and re-queued.
   adoptSurvivingWorkers();
 
-  // Pre-spawn workers if there's work
+  // One-shot workers are spawned per-ticket by launchReady() — no bare
+  // pre-spawn. Previously this loop called pool.spawn('worker') WITHOUT a
+  // node, producing workers whose prompts had no TASK block; they sat idle
+  // asking the orchestrator which ticket they were assigned (worker-4).
   if (epicGraphs.size > 0) {
-    const config = getConfig();
-    const workerCount = config.agents.worker.max_instances;
-    for (let i = 0; i < workerCount; i++) {
-      await pool.spawn('worker');
-    }
     await launchReady();
   }
 }
