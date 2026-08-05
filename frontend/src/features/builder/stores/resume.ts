@@ -201,15 +201,17 @@ export const useResumeStore = defineStore('resume', () => {
     sections.value = SECTION_TYPES.map((type, i) => {
       const saved = savedMap.get(type)
       if (saved) {
-        return {
-          sectionId: saved.sectionId,
-          sectionType: type,
-          column: saved.column,
-          order: saved.order,
-          enabled: (saved as { enabled?: boolean }).enabled ?? true,
-          locked: (saved as { locked?: boolean }).locked ?? false,
-          entries: saved.entries.map((e) => ({
-            id: generateId(),
+        // Entry ids are regenerated below (the payload's ids may collide
+        // with the current session or across anonymous/anonymous imports), so
+        // child entries' parentId must be remapped to the NEW ids — otherwise
+        // children keep pointing at stale payload ids and every bullet
+        // silently disappears from the editors after a reload (RES-83 e2e).
+        const idMap = new Map<string, string>()
+        const entries = saved.entries.map((e) => {
+          const newId = generateId()
+          if (e.id) idMap.set(e.id, newId)
+          return {
+            id: newId,
             order: e.order,
             parentId: e.parentId,
             fields: e.fields.map((f) => ({
@@ -217,7 +219,21 @@ export const useResumeStore = defineStore('resume', () => {
               value: f.value,
               order: f.order,
             })),
-          })),
+          }
+        })
+        for (const entry of entries) {
+          if (entry.parentId && idMap.has(entry.parentId)) {
+            entry.parentId = idMap.get(entry.parentId)!
+          }
+        }
+        return {
+          sectionId: saved.sectionId,
+          sectionType: type,
+          column: saved.column,
+          order: saved.order,
+          enabled: (saved as { enabled?: boolean }).enabled ?? true,
+          locked: (saved as { locked?: boolean }).locked ?? false,
+          entries,
         }
       }
       // Section type added after resume was created — insert as disabled

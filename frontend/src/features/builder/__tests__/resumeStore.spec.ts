@@ -330,6 +330,70 @@ describe('useResumeStore', () => {
       expect(output.sections).toHaveLength(10)
     })
 
+    it('re-links child entries to regenerated parent ids on load (RES-83)', () => {
+      const store = useResumeStore()
+
+      // A saved payload where bullet children reference the parent's
+      // payload id — as produced by toPayload() (localStorage) or the
+      // backend wire shape (GET /resumes/:id).
+      const parentId = 'parent-payload-id'
+      store.loadFromPayload({
+        layout: 'standard',
+        sections: [
+          {
+            sectionId: 'experience',
+            column: 'right',
+            order: 0,
+            entries: [
+              {
+                id: parentId,
+                order: 0,
+                parentId: null,
+                fields: [{ key: 'company', value: 'Acme', order: 0 }],
+              },
+              {
+                id: 'bullet-1',
+                order: 0,
+                parentId,
+                fields: [{ key: 'text', value: 'Built stuff', order: 0 }],
+              },
+              {
+                id: 'bullet-2',
+                order: 1,
+                parentId,
+                fields: [{ key: 'text', value: 'Managed coffee', order: 0 }],
+              },
+            ],
+          },
+        ],
+      })
+
+      const experience = store.sections.find(
+        (s) => s.sectionType === 'experience',
+      )
+      expect(experience).toBeDefined()
+      expect(experience!.entries).toHaveLength(3)
+
+      const parent = experience!.entries.find((e) => e.parentId === null)
+      expect(parent).toBeDefined()
+
+      // Children must be re-linked to the NEW parent id — not the stale
+      // payload id (otherwise bullets vanish from the editors on reload).
+      const children = experience!.entries.filter(
+        (e) => e.parentId === parent!.id,
+      )
+      expect(children).toHaveLength(2)
+      expect(children.map((c) => c.fields[0]!.value).sort()).toEqual([
+        'Built stuff',
+        'Managed coffee',
+      ])
+
+      // No entry may still reference the stale payload id
+      expect(
+        experience!.entries.some((e) => e.parentId === parentId),
+      ).toBe(false)
+    })
+
     it('round-trips enabled flag correctly', () => {
       const store = useResumeStore()
       store.initializeDefaults()
