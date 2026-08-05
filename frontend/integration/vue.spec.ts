@@ -50,3 +50,44 @@ test('renders the footer', async ({ page }) => {
   await page.goto('/')
   await expect(page.locator('footer')).toContainText('Resume Builder')
 })
+
+test('applies the fade transition while navigating between routes', async ({ page }) => {
+  await page.goto('/')
+
+  // Arm a watcher that resolves true the moment the fade transition classes
+  // (RES-82: .fade-enter-active / .fade-leave-active, 150ms out-in) appear
+  // on the routed view inside <main> during navigation.
+  const sawFade = page.evaluate(() => {
+    return new Promise<boolean>((resolve) => {
+      const main = document.querySelector('main')
+      if (!main) {
+        resolve(false)
+        return
+      }
+      const observer = new MutationObserver(() => {
+        if (main.querySelector('.fade-enter-active, .fade-leave-active')) {
+          observer.disconnect()
+          resolve(true)
+        }
+      })
+      observer.observe(main, {
+        subtree: true,
+        childList: true,
+        attributes: true,
+        attributeFilter: ['class'],
+      })
+      // The out-in transition is ~300ms total; give it a generous timeout.
+      setTimeout(() => {
+        observer.disconnect()
+        resolve(false)
+      }, 3000)
+    })
+  })
+
+  // Navigate home → login via the navbar link.
+  await page.locator('header a', { hasText: 'Log in' }).click()
+
+  await expect(page).toHaveURL(/\/login/)
+  await expect(page.locator('main')).toContainText('Log in')
+  await expect(sawFade).resolves.toBe(true)
+})
