@@ -78,6 +78,7 @@ export function saveFullState(
     teamKey: existing?.teamKey ?? '',
     usedPorts: existing?.usedPorts ?? [],
     epicRoots: existing?.epicRoots ?? [],
+    spawnsPaused: existing?.spawnsPaused ?? false,
   });
 }
 
@@ -99,6 +100,7 @@ export function saveTicketState(
     teamKey: existing?.teamKey ?? '',
     usedPorts: existing?.usedPorts ?? [],
     epicRoots: existing?.epicRoots ?? [],
+    spawnsPaused: existing?.spawnsPaused ?? false,
   });
 }
 

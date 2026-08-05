@@ -44,6 +44,12 @@ let bossRelay: BossRelay | null = null;
 // Tracks re-queue storms per ticket so worker crash-loops surface on the
 // dashboard and to the boss within minutes instead of buried log lines.
 let requeueTracker: RequeueTracker | null = null;
+// Boss-controlled worker-spawn switch. When true, launchReady() refuses to
+// spawn new workers — lets the boss freeze the board mid-diagnosis (e.g.
+// duplicate workers) instead of burning tokens on more spawns. Set via
+// PAUSE_SPAWNS / RESUME_SPAWNS boss commands; persisted in state so a
+// restart doesn't silently resume spawning.
+let spawnsPaused = false;
 const epicGraphs = new Map<string, { nodes: Map<string, GraphNode>; rootId: string }>();
 // Tickets currently being spawned across launchReady() calls. A ticket can
 // be a child of SEVERAL epics, each holding its OWN GraphNode instance with
@@ -114,7 +120,7 @@ function writeDashboard(): void {
   const headlessCount = active.filter((a) => !a.paneId).length;
   lines.push(`${epicGraphs.size} epics · ${totalTickets} tickets · ${totalRunning} running · ${totalDone} done · ${totalFailed} failed`);
   lines.push(`Pool: ${pool.count()} agents (${pool.getByType('worker').length} workers${headlessCount > 0 ? `, ${headlessCount} headless` : ''})`);
-  lines.push(`Boss: ${bossRelay ? bossRelay.getState() : 'unregistered'}${bossRelay && bossRelay.queuedCount > 0 ? ` (${bossRelay.queuedCount} queued)` : ''}`);
+  lines.push(`Spawns: ${spawnsPaused ? '⏸ PAUSED (boss)' : '▶ active'} · Boss: ${bossRelay ? bossRelay.getState() : 'unregistered'}${bossRelay && bossRelay.queuedCount > 0 ? ` (${bossRelay.queuedCount} queued)` : ''}`);
 
   // ⚠️ Worker pain-point detector: tickets with 2+ re-queues in the rolling
   // window are churning. This surfaces crash-loops (worker dies instantly),
@@ -270,6 +276,13 @@ function isTicketInProgress(ticketId: string): boolean {
 
 async function launchReady(): Promise<void> {
   if (areAllEpicsDone()) return;
+  // Boss paused worker spawning (PAUSE_SPAWNS) — e.g. while diagnosing
+  // duplicate workers. Freeze the board: no new spawns until RESUME_SPAWNS.
+  // Existing workers keep running; queued tickets simply wait.
+  if (spawnsPaused) {
+    log('launchReady: spawns PAUSED by boss — skipping');
+    return;
+  }
 
   const allReady: GraphNode[] = [];
   const seen = new Set<string>();
@@ -552,7 +565,24 @@ async function handleBossCommand(text: string): Promise<void> {
       if (st === 'done' || st === 'merged') totalDone++;
       if (st === 'in_progress') totalRunning++;
     }
-    await tellBoss(`${epicGraphs.size} epics · ${totalTickets} tickets: ${totalRunning} running, ${totalDone} done. ${pool.count()} agents.`);
+    await tellBoss(`${epicGraphs.size} epics · ${totalTickets} tickets: ${totalRunning} running, ${totalDone} done. ${pool.count()} agents. Spawns: ${spawnsPaused ? '⏸ PAUSED' : '▶ active'}.`);
+
+  } else if (trimmed === 'PAUSE_SPAWNS' || trimmed === 'pause-spawns' || trimmed === 'PAUSE') {
+    spawnsPaused = true;
+    // Persist so a restart keeps spawns frozen while the boss diagnoses.
+    const ex = loadState();
+    if (ex) { ex.spawnsPaused = true; saveState(ex); }
+    writeDashboard();
+    await tellBoss('⏸ Worker spawns PAUSED — launchReady will not spawn new workers. Existing workers keep running. Diagnose, then RESUME_SPAWNS.');
+
+  } else if (trimmed === 'RESUME_SPAWNS' || trimmed === 'resume-spawns' || trimmed === 'RESUME') {
+    spawnsPaused = false;
+    const ex = loadState();
+    if (ex) { ex.spawnsPaused = false; saveState(ex); }
+    writeDashboard();
+    await tellBoss('▶ Worker spawns RESUMED — launchReady is active again.');
+    // Spawn for any tickets that became ready while paused.
+    await launchReady();
 
   } else if (trimmed.startsWith('SPAWN ') || trimmed.startsWith('spawn ')) {
     const agentType = trimmed.split(/\s+/)[1]?.trim() as any;
@@ -853,6 +883,11 @@ async function autoStart(): Promise<void> {
   log('Looking for work...');
 
   const existingState = loadState();
+  // Restore the boss's spawn-pause flag across restarts — if the boss
+  // PAUSE_SPAWNS'd to diagnose duplicate workers and the orchestrator
+  // restarts mid-diagnosis, spawns must stay frozen until RESUME_SPAWNS.
+  spawnsPaused = existingState?.spawnsPaused ?? false;
+  if (spawnsPaused) log('⚠️ spawnsPaused restored from state — worker spawning is FROZEN until RESUME_SPAWNS');
   const epicRoots = existingState?.epicRoots ?? [];
 
   if (epicRoots.length > 0) {
@@ -1123,7 +1158,8 @@ export async function startOrchestrator(): Promise<void> {
       text === 'STATUS' || text.startsWith('CLOSE ') ||
       text.startsWith('DROP ') || text.startsWith('SPAWN ') ||
       text.startsWith('KILL ') || text.startsWith('SET_INTERVAL ') ||
-      text === 'GET_CONFIG'
+      text === 'GET_CONFIG' || text === 'PAUSE_SPAWNS' || text === 'RESUME_SPAWNS' ||
+      text === 'PAUSE' || text === 'RESUME'
     ) {
       await handleBossCommand(text);
       return;

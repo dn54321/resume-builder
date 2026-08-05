@@ -160,6 +160,11 @@ export interface OrchestratorState {
   teamKey: string;
   usedPorts: number[];
   epicRoots: string[];
+  /** When true, launchReady() must NOT spawn new workers. Set by the boss
+   * via PAUSE_SPAWNS while diagnosing a problem (e.g. duplicate workers);
+   * RESUME_SPAWNS clears it. Persisted so a restart doesn't silently
+   * resume spawning while the boss is mid-diagnosis. */
+  spawnsPaused?: boolean;
 }
 
 // ─── Atlas Configuration ────────────────────────────────────────────
