@@ -62,7 +62,7 @@ test.describe('Tailor Resume skips locked sections', () => {
     await page
       .locator('[data-testid="jd-textarea"]')
       .fill('React developer with TypeScript experience')
-    await page.locator('[data-testid="jd-modal-save"]').click()
+    await page.locator('[data-testid="jd-modal-tailor"]').click()
     await page.locator('[data-testid="toolbar-tailor-btn"]').click()
 
     // Filter became active…
