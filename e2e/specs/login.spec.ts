@@ -29,7 +29,9 @@ test.describe('Login flow', () => {
   }) => {
     // 1. Visit login page
     await page.goto('/login')
-    await expect(page.locator('h1, h2').first()).toContainText('Log')
+    // The login page renders the heading at <h3> level — match by role/text,
+    // not heading level.
+    await expect(page.getByRole('heading', { name: /log in/i })).toBeVisible()
 
     // 2. Fill credentials
     await page.fill('#login-email', email)
@@ -43,19 +45,19 @@ test.describe('Login flow', () => {
     await expect(page.locator('h1').first()).toContainText('My Resumes')
 
     // 5. Verify authenticated nav state — profile icon shown instead of email
+    //    (getByRole('banner') — the dashboard renders TWO <header> elements)
     await expect(page.locator('header button svg.lucide-user')).toBeVisible()
-    await expect(page.locator('header')).not.toContainText(email)
+    await expect(page.getByRole('banner')).not.toContainText(email)
 
-    // 6. Verify session cookie / token in localStorage
-    const token = await page.evaluate(() =>
-      localStorage.getItem('auth_token'),
-    )
-    expect(token).toBeTruthy()
+    // 6. Verify session cookie is set — auth is cookie-based (HttpOnly
+    //    `session_token` cookie), there is no auth_token in localStorage.
+    const cookies = await page.context().cookies()
+    const sessionCookie = cookies.find((c) => c.name === 'session_token')
+    expect(sessionCookie).toBeTruthy()
 
-    // 7. Verify /api/v1/auth/me returns user
-    const meRes = await page.request.get(`${API_BASE}/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    // 7. Verify /api/v1/auth/me returns user. The HttpOnly cookie is sent
+    //    automatically by page.request (shares the context's cookie jar).
+    const meRes = await page.request.get(`${API_BASE}/auth/me`)
     expect(meRes.status()).toBe(200)
     const meBody = await meRes.json()
     expect(meBody.user.email).toBe(email)
@@ -85,9 +87,11 @@ test.describe('Login flow', () => {
   })
 
   test('login: redirects to requested page after auth', async ({ page }) => {
-    // Try to visit dashboard without auth — should redirect to login
+    // Try to visit dashboard without auth — should redirect to login.
+    // The browser decodes %2F in the query to a literal '/', so match with
+    // a regex rather than a glob containing %2F.
     await page.goto('/dashboard')
-    await page.waitForURL('**/login?redirect=%2Fdashboard')
+    await page.waitForURL(/\/login\?redirect=/)
 
     // Now login
     await page.fill('#login-email', email)

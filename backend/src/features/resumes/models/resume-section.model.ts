@@ -15,5 +15,7 @@ export interface ResumeSection {
   order: number;
   /** Whether the section is locked (e.g. protected from further edits). */
   locked: boolean;
+  /** Whether the section is visible in the rendered resume (soft-toggle). */
+  enabled: boolean;
   entries: SectionEntry[];
 }

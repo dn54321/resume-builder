@@ -46,12 +46,9 @@ test.describe('Logout', () => {
     await expect(page.locator('header')).toContainText('Log in')
     await expect(page.locator('header')).toContainText('Sign up')
 
-    // 6. Verify /api/v1/auth/me returns null user
-    const token = await page.evaluate(() =>
-      localStorage.getItem('auth_token'),
-    )
-    // Token should be cleared from localStorage
-    expect(token).toBeNull()
+    // 6. Verify the session cookie was cleared by the logout API
+    const cookies = await page.context().cookies()
+    expect(cookies.find((c) => c.name === 'session_token')).toBeUndefined()
 
     // 7. Try to visit /dashboard — should redirect to /login
     await page.goto('/dashboard')
@@ -67,9 +64,20 @@ test.describe('Logout', () => {
     await page.waitForURL('**/dashboard', { timeout: 15_000 })
 
     // 2. Create a resume and go to builder
-    await page.getByRole('button', { name: 'Create New Resume' }).click()
+    await page.getByRole('button', { name: 'Create New Resume' }).first().click()
     await page.waitForURL('**/builder/**', { timeout: 15_000 })
     await expect(page.locator('input[aria-label="Resume name"]')).toBeVisible()
+
+    // 2b. Wait for the autosave to complete ("✓ Saved" indicator).
+    // The SectionEditor components add default entries to empty sections on
+    // mount, which marks the store dirty and schedules an autosave ~1.5s
+    // later. With the RES-93-fixed contract that autosave PUT succeeds and
+    // clears the dirty flag. Leaving the builder while still dirty would
+    // trigger the Unsaved Changes guard, which is not what this test
+    // (logout-from-anywhere) is about.
+    await expect(
+      page.locator('[data-testid="toolbar-saved-msg"]'),
+    ).toBeVisible({ timeout: 10_000 })
 
     // 3. Logout from builder
     const userBtn = page.locator('header button', { has: page.locator('svg.lucide-user') })

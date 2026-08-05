@@ -4,6 +4,8 @@ import {
   type SectionType,
   type ResumeSectionState,
   type ResumePayload,
+  type ResumePayloadEntry,
+  type SectionFieldState,
   type LayoutType,
   SECTION_TYPES,
 } from '@/features/builder/types/resume'
@@ -84,6 +86,15 @@ export const useResumeStore = defineStore('resume', () => {
     name.value = ''
     layout.value = 'standard'
     sections.value = SECTION_TYPES.map((type, i) => createDefaultSection(type, i))
+  }
+
+  /**
+   * Set the backend resume id (e.g. after loading a saved resume or
+   * after a POST creates one). The id drives PUT /resumes/:id on save.
+   * @param resumeId
+   */
+  function setId(resumeId: string) {
+    id.value = resumeId
   }
 
   /**
@@ -183,7 +194,79 @@ export const useResumeStore = defineStore('resume', () => {
   }
 
   /**
+   * Flatten nested payload entries (children arrays, as the backend API
+   * returns and as toPayload now serializes) into the flat list the store
+   * keeps, preserving parent/child relationships via parentId.
    *
+   * Also normalizes legacy flat payloads (pre-RES-93) whose entries carry
+   * `parentId` directly instead of `children` arrays.
+   * @param entries
+   * @returns
+   */
+  function flattenPayloadEntries(
+    entries: ResumePayloadEntry[],
+  ): {
+    id: string
+    order: number
+    parentId: string | null
+    fields: SectionFieldState[]
+  }[] {
+    const flat: {
+      id: string
+      order: number
+      parentId: string | null
+      fields: SectionFieldState[]
+    }[] = []
+    // Maps payload entry ids → freshly generated store ids so legacy flat
+    // parentId references resolve to the new id space regardless of order.
+    const idMap = new Map<string, string>()
+
+    // Phase A: assign fresh ids to every entry that declares one (nested
+    // and flat alike), so parentId lookups in Phase B always succeed.
+    const assignIds = (entry: ResumePayloadEntry) => {
+      if (entry.id) idMap.set(entry.id, generateId())
+      for (const child of entry.children ?? []) assignIds(child)
+    }
+    for (const entry of entries) assignIds(entry)
+
+    // Phase B: flatten. Nested children inherit the parent's new id via
+    // recursion; legacy flat entries resolve parentId through idMap.
+    //
+    // Prisma's nested include returns each child BOTH inside its parent's
+    // `children` array AND as a flat row in `entries` (with parentId set) —
+    // dedupe by old id so the store doesn't end up with duplicate bullets.
+    const seenIds = new Set<string>()
+    const walk = (entry: ResumePayloadEntry, parentNewId: string | null) => {
+      if (entry.id && seenIds.has(entry.id)) {
+        // Already emitted (e.g. via a parent's children array) — skip it
+        // and its nested children, which were emitted too.
+        return
+      }
+      const newId = entry.id ? (idMap.get(entry.id) ?? generateId()) : generateId()
+      if (entry.id) seenIds.add(entry.id)
+      flat.push({
+        id: newId,
+        order: entry.order,
+        parentId:
+          entry.parentId != null
+            ? (idMap.get(entry.parentId) ?? null)
+            : parentNewId,
+        fields: (entry.fields ?? []).map((f) => ({
+          key: f.key,
+          value: f.value,
+          order: f.order ?? 0,
+        })),
+      })
+      for (const child of entry.children ?? []) walk(child, newId)
+    }
+    for (const entry of entries) walk(entry, null)
+
+    return flat
+  }
+  /**
+   * Load a saved payload (from the API, sessionStorage, or localStorage)
+   * into the store. Entries may be nested (children arrays) or legacy flat
+   * (parentId) — both are normalized to the store's flat list.
    * @param payload
    */
   function loadFromPayload(payload: ResumePayload) {
@@ -208,16 +291,7 @@ export const useResumeStore = defineStore('resume', () => {
           order: saved.order,
           enabled: (saved as { enabled?: boolean }).enabled ?? true,
           locked: (saved as { locked?: boolean }).locked ?? false,
-          entries: saved.entries.map((e) => ({
-            id: generateId(),
-            order: e.order,
-            parentId: e.parentId,
-            fields: e.fields.map((f) => ({
-              key: f.key,
-              value: f.value,
-              order: f.order,
-            })),
-          })),
+          entries: flattenPayloadEntries(saved.entries),
         }
       }
       // Section type added after resume was created — insert as disabled
@@ -235,6 +309,38 @@ export const useResumeStore = defineStore('resume', () => {
   }
 
   /**
+   * Build a nested entries tree (children arrays) matching the backend
+   * API contract. Bullets (entries with parentId) become `children` of
+   * their parent; leaf entries always get an empty `children` array
+   * because SectionEntryDto.children is required.
+   * @param entries
+   * @returns
+   */
+  function toNestedEntries(entries: ResumeSectionState['entries']): ResumePayload['sections'][number]['entries'] {
+    const byOrder = (a: { order: number }, b: { order: number }) => a.order - b.order
+    const topLevel = entries.filter((e) => !e.parentId).sort(byOrder)
+
+    return topLevel.map((e) => ({
+      order: e.order,
+      fields: e.fields
+        .slice()
+        .sort(byOrder)
+        .map((f) => ({ key: f.key, value: f.value, order: f.order })),
+      children: entries
+        .filter((c) => c.parentId === e.id)
+        .sort(byOrder)
+        .map((c) => ({
+          order: c.order,
+          fields: c.fields
+            .slice()
+            .sort(byOrder)
+            .map((f) => ({ key: f.key, value: f.value, order: f.order })),
+          children: [],
+        })),
+    }))
+  }
+
+  /**
    *
    */
   function toPayload(): ResumePayload {
@@ -247,15 +353,7 @@ export const useResumeStore = defineStore('resume', () => {
         order: s.order,
         enabled: s.enabled,
         locked: s.locked,
-        entries: s.entries.map((e) => ({
-          order: e.order,
-          parentId: e.parentId,
-          fields: e.fields.map((f) => ({
-            key: f.key,
-            value: f.value,
-            order: f.order,
-          })),
-        })),
+        entries: toNestedEntries(s.entries),
       })),
     }
   }
@@ -374,6 +472,7 @@ export const useResumeStore = defineStore('resume', () => {
     filteredSoftSkills,
     // Actions
     initializeDefaults,
+    setId,
     setLayout,
     toggleSection,
     toggleLock,

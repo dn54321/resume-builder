@@ -1,30 +1,26 @@
 /*
- * ⚠️ WARNING — authenticated save/load contract is broken against the real backend.
+ * Authenticated save/load contract (RES-93) — FIXED.
  *
- * Verified 2026-08-05 (RES-90) with curl against a fresh backend:
+ * The contract is now aligned end-to-end:
  *
- *   1. saveResume() calls PUT /api/v1/resumes (no :id), but the backend only
- *      exposes PUT /resumes/:id → always 404.
- *   2. The 404 fallback POSTs the payload, which the whitelisted
- *      ResumeSectionDto rejects because the frontend's toPayload() sends an
- *      `enabled` property per section: "sections.0.property enabled should
- *      not exist" → 400.
- *   3. loadResume() GETs /api/v1/resumes, which returns ResumeSummary[] (a
- *      LIST), but the code expects a single object with `.sections` — so a
- *      saved authenticated resume is never loaded either.
+ *   1. loadResume() GETs /api/v1/resumes (a LIST of ResumeSummary), picks
+ *      the most recent row, stores its id, then GETs /api/v1/resumes/:id
+ *      for the full decrypted tree (sections + nested entries).
+ *   2. saveResume() PUTs /api/v1/resumes/:id using the stored resume id;
+ *      POSTs /api/v1/resumes when no id exists yet (or the id 404s),
+ *      then stores the created id for subsequent saves.
+ *   3. The payload sent to the API matches the whitelisted DTOs: sections
+ *      carry `enabled`, entries are nested trees with `children` arrays
+ *      (never flat parentId), and fields may carry `order`.
+ *   4. The backend persists `enabled` (ResumeSection.enabled) and field
+ *      `order` (SectionField.order) so soft-toggles and field ordering
+ *      survive reloads.
  *
- * Net effect: for authenticated users, autosave ALWAYS fails (error lands in
- * the console only) and the "✓ Saved" indicator never appears; the session-
- * storage safety net is the only thing preserving edits. Introduced in the
- * RES-66/RES-67 era and never caught because the repo-root e2e suite
- * (e2e/) is not wired into CI and the backend has no integration tests for
- * these endpoints.
- *
- * This is a PRE-EXISTING bug, out of scope for the RES-90 frontend-only
- * ticket. Fix in a dedicated ticket: align the API contract (PUT
- * /resumes/:id with the resume id, drop `enabled` from the payload or add
- * it to ResumeSectionDto, and GET /resumes/:id for load). Do NOT paper
- * over it in the frontend with hardcoded ids or by stripping fields.
+ * Previously (RES-66/RES-67 era, verified 2026-08-05 during RES-90):
+ *   - PUT /api/v1/resumes (no :id) → 404; fallback POST → 400 because the
+ *     DTO rejected `enabled` and flat entries lack the required `children`.
+ *   - GET /api/v1/resumes returned a LIST but loadResume expected a single
+ *     object — a saved authenticated resume was never loaded.
  */
 import { ref, watch } from 'vue'
 import { useResumeStore } from '@/features/builder/stores/resume'
@@ -152,9 +148,30 @@ export function useResumeData() {
    */
   async function loadResume() {
     if (isAuthenticated.value) {
-      // Check sessionStorage first for pending changes that survived a refresh.
-      // This is the safety net: if the user edited and refreshed before the
-      // debounced auto-save fired, sessionStorage still has the pending state.
+      // Resolve the backend resume id FIRST (GET /api/v1/resumes returns a
+      // LIST of ResumeSummary ordered by createdAt desc) so that pending
+      // sessionStorage changes — and every subsequent save — PUT to the
+      // correct resume instead of creating duplicates.
+      let backendResumeId: string | null = null
+      try {
+        const list = await api.get<
+          { id: string; name: string | null; layout: string }[]
+        >('/api/v1/resumes')
+        if (list.length > 0) {
+          backendResumeId = list[0]!.id
+          store.setId(backendResumeId)
+        }
+      } catch (err) {
+        if (!(err instanceof ApiRequestError && err.status === 404)) {
+          throw err
+        }
+        // 404 → no resume yet; fall through
+      }
+
+      // Check sessionStorage next for pending changes that survived a
+      // refresh. This is the safety net: if the user edited and refreshed
+      // before the debounced auto-save fired, sessionStorage still has the
+      // pending state.
       const pending = readFromSessionStorage()
       if (
         pending &&
@@ -164,11 +181,20 @@ export function useResumeData() {
         Array.isArray((pending as Record<string, unknown>).sections) &&
         ((pending as Record<string, unknown>).sections as unknown[]).length > 0
       ) {
-        const payload = pending as { layout?: string; sections: unknown[] }
+        const payload = pending as {
+          name?: string | null
+          layout?: string
+          sections: unknown[]
+        }
         store.loadFromPayload({
+          // Preserve the pending name — the safety net captures the whole
+          // toPayload() including name. Dropping it here wiped the resume
+          // name on every reload that took this path (RES-93).
+          name: payload.name ?? null,
           layout: (payload.layout as 'standard' | 'column2-1') ?? 'standard',
           sections: payload.sections as ResumePayload['sections'],
         })
+        if (backendResumeId) store.setId(backendResumeId)
         initialLoadComplete = true
         dirty.value = true
         // Keep sessionStorage data — it will be cleared on explicit save.
@@ -176,24 +202,33 @@ export function useResumeData() {
         return
       }
 
-      try {
-        const data = await api.get<{ id: string; layout: string; sections: unknown[] }>(
-          '/api/v1/resumes',
-        )
-        if (data.sections?.length > 0) {
-          store.loadFromPayload({
-            layout: data.layout as 'standard' | 'column2-1',
-            sections: data.sections as ResumePayload['sections'],
-          })
+      if (backendResumeId) {
+        try {
+          // Fetch the full decrypted tree by id (sections + nested entries).
+          const data = await api.get<
+            { id: string; layout: string; sections: unknown[] }
+          >(`/api/v1/resumes/${backendResumeId}`)
+          if (data.sections?.length > 0) {
+            store.loadFromPayload(data as unknown as ResumePayload)
+            initialLoadComplete = true
+            dirty.value = false
+            return
+          }
+          // Backend resume row exists but has no sections yet (e.g. created
+          // from the dashboard). Initialize defaults but KEEP the backend id
+          // so the first save updates this resume instead of creating a
+          // duplicate.
+          store.initializeDefaults()
+          store.setId(backendResumeId)
           initialLoadComplete = true
           dirty.value = false
           return
-        }
-      } catch (err) {
-        if (err instanceof ApiRequestError && err.status === 404) {
-          // No resume yet, fall through to defaults
-        } else {
-          throw err
+        } catch (err) {
+          if (!(err instanceof ApiRequestError && err.status === 404)) {
+            throw err
+          }
+          // Resume was deleted between the list and the fetch — fall through
+          // to defaults; saveResume's PUT 404 → POST fallback recreates it.
         }
       }
     }
@@ -201,9 +236,16 @@ export function useResumeData() {
     // Anonymous or authenticated user with no resume: try localStorage
     const local = readFromLocalStorage()
     if (local && typeof local === 'object' && local !== null) {
-      const payload = local as { layout?: string; sections?: unknown[] }
+      const payload = local as {
+        name?: string | null
+        layout?: string
+        sections?: unknown[]
+      }
       if (payload.sections && Array.isArray(payload.sections) && payload.sections.length > 0) {
         store.loadFromPayload({
+          // Preserve the stored name (same RES-93 bug as the sessionStorage
+          // path — dropping it wiped the resume name on reload).
+          name: payload.name ?? null,
           layout: (payload.layout as 'standard' | 'column2-1') ?? 'standard',
           sections: payload.sections as ResumePayload['sections'],
         })
@@ -232,15 +274,29 @@ export function useResumeData() {
       const payload = store.toPayload()
 
       if (isAuthenticated.value) {
-        try {
-          await api.put('/api/v1/resumes', payload)
-        } catch (err) {
-          if (err instanceof ApiRequestError && err.status === 404) {
-            // Resume doesn't exist yet, POST it
-            await api.post('/api/v1/resumes', payload)
-          } else {
-            throw err
+        if (store.id) {
+          try {
+            await api.put(`/api/v1/resumes/${store.id}`, payload)
+          } catch (err) {
+            if (err instanceof ApiRequestError && err.status === 404) {
+              // Resume was deleted server-side — recreate it via POST
+              const created = await api.post<{ id: string }>(
+                '/api/v1/resumes',
+                payload,
+              )
+              store.setId(created.id)
+            } else {
+              throw err
+            }
           }
+        } else {
+          // No backend resume yet — create it and remember the id so
+          // subsequent saves update (PUT) instead of duplicating.
+          const created = await api.post<{ id: string }>(
+            '/api/v1/resumes',
+            payload,
+          )
+          store.setId(created.id)
         }
         // Successful backend save — clear the sessionStorage safety net
         clearSessionStorage()
