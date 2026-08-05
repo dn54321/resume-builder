@@ -1,4 +1,11 @@
-import { IsString, IsInt, IsArray, IsOptional, ValidateNested, Min } from 'class-validator';
+import {
+  IsString,
+  IsInt,
+  IsArray,
+  IsOptional,
+  ValidateNested,
+  Min,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { SectionFieldDto } from '../../resumes/dto/create-resume.dto';
 

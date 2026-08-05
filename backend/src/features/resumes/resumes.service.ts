@@ -218,7 +218,7 @@ export class ResumesService {
               column: sectionDto.column ?? 'right',
               order: sectionDto.order,
               locked: sectionDto.locked ?? false,
-            enabled: sectionDto.enabled ?? true,
+              enabled: sectionDto.enabled ?? true,
             },
           });
 
