@@ -5,5 +5,7 @@ import type { SectionEntry } from './section-entry.model';
  */
 export interface ResumeSection {
   id: string;
+  /** Whether the section is locked (e.g. protected from further edits). */
+  locked: boolean;
   entries: SectionEntry[];
 }

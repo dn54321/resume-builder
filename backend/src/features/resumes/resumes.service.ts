@@ -94,6 +94,7 @@ export class ResumesService {
             sectionId: sectionDto.sectionId,
             column: sectionDto.column ?? 'right',
             order: sectionDto.order,
+            locked: sectionDto.locked ?? false,
           },
         });
 
@@ -155,6 +156,7 @@ export class ResumesService {
               sectionId: sectionDto.sectionId,
               column: sectionDto.column ?? 'right',
               order: sectionDto.order,
+              locked: sectionDto.locked ?? false,
             },
           });
 

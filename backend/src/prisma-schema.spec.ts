@@ -58,6 +58,15 @@ describe('Prisma Schema and Seed', () => {
       );
       expect(result.rows).toHaveLength(1);
     });
+
+    it('has locked column on ResumeSection defaulting to false', async () => {
+      const result = await client.execute('PRAGMA table_info(ResumeSection)');
+      const columns = result.rows.map((row) => row[1] as string);
+      expect(columns).toContain('locked');
+
+      const dflt = result.rows.find((row) => row[1] === 'locked')?.[4];
+      expect(dflt === 'false' || dflt === '0' || dflt === 0).toBe(true);
+    });
   });
 
   describe('Section seed', () => {

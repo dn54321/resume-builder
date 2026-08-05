@@ -3,6 +3,7 @@ import {
   IsOptional,
   IsArray,
   IsInt,
+  IsBoolean,
   ValidateNested,
   Min,
 } from 'class-validator';
@@ -43,6 +44,10 @@ export class ResumeSectionDto {
   @IsInt()
   @Min(0)
   order!: number;
+
+  @IsBoolean()
+  @IsOptional()
+  locked?: boolean;
 
   @IsArray()
   @ValidateNested({ each: true })

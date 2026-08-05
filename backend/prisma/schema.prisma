@@ -56,6 +56,7 @@ model ResumeSection {
   sectionId String
   column    String  @default("right")
   order     Int     @default(0)
+  locked    Boolean @default(false)
 
   resume  Resume  @relation(fields: [resumeId], references: [id], onDelete: Cascade)
   section Section @relation(fields: [sectionId], references: [id])
