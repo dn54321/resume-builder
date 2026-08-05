@@ -50,7 +50,8 @@ async function run(): Promise<void> {
         "id" TEXT NOT NULL PRIMARY KEY,
         "email" TEXT NOT NULL,
         "password" TEXT NOT NULL,
-        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" DATETIME NOT NULL
       )
     `);
     await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "User_email_key" ON "User"("email")`);
@@ -78,6 +79,7 @@ async function run(): Promise<void> {
         "sectionId" TEXT NOT NULL,
         "column" TEXT NOT NULL DEFAULT 'right',
         "order" INTEGER NOT NULL DEFAULT 0,
+        "locked" BOOLEAN NOT NULL DEFAULT false,
         CONSTRAINT "ResumeSection_resumeId_fkey" FOREIGN KEY ("resumeId") REFERENCES "Resume" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
         CONSTRAINT "ResumeSection_sectionId_fkey" FOREIGN KEY ("sectionId") REFERENCES "Section" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
       )
@@ -99,10 +101,23 @@ async function run(): Promise<void> {
         "sectionEntryId" TEXT NOT NULL,
         "key" TEXT NOT NULL,
         "value" TEXT NOT NULL,
+        "iv" TEXT NOT NULL,
+        "authTag" TEXT NOT NULL,
         "order" INTEGER NOT NULL,
         CONSTRAINT "SectionField_sectionEntryId_fkey" FOREIGN KEY ("sectionEntryId") REFERENCES "SectionEntry" ("id") ON DELETE CASCADE ON UPDATE CASCADE
       )
     `);
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "Session" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "token" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "expiresAt" DATETIME NOT NULL,
+        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "Session_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+      )
+    `);
+    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "Session_token_key" ON "Session"("token")`);
 
     console.log('\n  1. User model');
     console.log('  ─────────────');
@@ -174,7 +189,14 @@ async function run(): Promise<void> {
     });
     assert(rs.column === 'right', 'ResumeSection.column defaults to "right"');
     assert(rs.order === 0, 'ResumeSection.order defaults to 0');
+    assert(rs.locked === false, 'ResumeSection.locked defaults to false');
     assert(rs.resumeId === resume.id, 'ResumeSection FK to Resume works');
+
+    const lockedRs = await prisma.resumeSection.update({
+      where: { id: rs.id },
+      data: { locked: true },
+    });
+    assert(lockedRs.locked === true, 'ResumeSection.locked can be set to true');
 
     await assertRejects(
       () =>

@@ -52,6 +52,7 @@ interface ResumeSectionRow {
   sectionId: string;
   column: string;
   order: number;
+  locked: boolean;
   entries: SectionEntryRow[];
 }
 
@@ -139,6 +140,7 @@ describe('ResumesService', () => {
           sectionId: 'summary',
           column: 'right',
           order: 0,
+          locked: false,
           entries: [
             {
               id: 'entry-1',
@@ -284,6 +286,21 @@ describe('ResumesService', () => {
       expect(result.sections[0].entries[0].fields[0].value).toBe(
         'Software Engineer',
       );
+      expect(result.sections[0].locked).toBe(false);
+    });
+
+    it('returns the locked flag on sections', async () => {
+      const dbResume = makeResumeResponse();
+      dbResume.sections[0].locked = true;
+      mockPrisma.resume.findUnique.mockResolvedValue(dbResume);
+      mockCrypto.decryptField.mockImplementation(
+        (encrypted: string, _iv: string, _authTag: string) =>
+          encrypted.replace('enc_', ''),
+      );
+
+      const result = await service.findOne(resumeId, userId);
+
+      expect(result.sections[0].locked).toBe(true);
     });
 
     it('decrypts nested children entries', async () => {
@@ -295,6 +312,7 @@ describe('ResumesService', () => {
             sectionId: 'summary',
             column: 'right',
             order: 0,
+            locked: false,
             entries: [
               {
                 id: 'parent-1',
@@ -468,6 +486,8 @@ describe('ResumesService', () => {
         parentId: 'entry-1',
       };
 
+      const sectionCreate = jest.fn().mockResolvedValue(createdSection);
+
       mockPrisma.$transaction.mockImplementation(
         async (cb: TransactionCallback<ResumeTreeRow>) => {
           const tx = {
@@ -476,7 +496,7 @@ describe('ResumesService', () => {
               findUnique: jest.fn().mockResolvedValue(makeResumeResponse()),
             },
             resumeSection: {
-              create: jest.fn().mockResolvedValue(createdSection),
+              create: sectionCreate,
             },
             sectionEntry: {
               create: jest
@@ -503,12 +523,94 @@ describe('ResumesService', () => {
 
       const result = await service.create(userId, dto);
 
+      expect(sectionCreate).toHaveBeenCalledWith({
+        data: {
+          resumeId,
+          sectionId: 'summary',
+          column: 'right',
+          order: 0,
+          locked: false,
+        },
+      });
       expect(mockCrypto.encryptField).toHaveBeenCalledWith('Software Engineer');
       expect(mockCrypto.encryptField).toHaveBeenCalledWith('Experienced dev');
       expect(mockCrypto.encryptField).toHaveBeenCalledWith('child value');
       expect(mockCrypto.encryptField).toHaveBeenCalledTimes(3);
 
       expect(result.sections).toBeDefined();
+    });
+
+    it('persists locked=true when provided on a section', async () => {
+      const createdResume = {
+        id: resumeId,
+        userId,
+        name: null,
+        layout: 'standard',
+      };
+      const createdSection = {
+        id: 'rs-1',
+        resumeId,
+        sectionId: 'summary',
+        column: 'left',
+        order: 0,
+        locked: true,
+      };
+      const sectionCreate = jest.fn().mockResolvedValue(createdSection);
+
+      mockPrisma.$transaction.mockImplementation(
+        async (cb: TransactionCallback<ResumeTreeRow>) => {
+          const tx = {
+            resume: {
+              create: jest.fn().mockResolvedValue(createdResume),
+              findUnique: jest.fn().mockResolvedValue(makeResumeResponse()),
+            },
+            resumeSection: {
+              create: sectionCreate,
+            },
+            sectionEntry: {
+              create: jest.fn().mockResolvedValue({}),
+            },
+            sectionField: {
+              create: jest.fn().mockResolvedValue({}),
+            },
+          };
+          const result = cb(tx);
+          return result instanceof Promise ? result : Promise.resolve(result);
+        },
+      );
+
+      mockCrypto.encryptField.mockImplementation((value: string) =>
+        makeEncryptedField(value),
+      );
+      mockCrypto.decryptField.mockImplementation(
+        (encrypted: string, _iv: string, _authTag: string) =>
+          encrypted.replace('enc_', ''),
+      );
+
+      const dtoWithLocked: CreateResumeDto = {
+        layout: 'standard',
+        sections: [
+          {
+            sectionId: 'summary',
+            column: 'left',
+            order: 0,
+            locked: true,
+            entries: [],
+          },
+        ],
+      };
+
+      await service.create(userId, dtoWithLocked);
+
+      expect(sectionCreate).toHaveBeenCalledWith({
+        data: {
+          resumeId,
+          sectionId: 'summary',
+          column: 'left',
+          order: 0,
+          locked: true,
+        },
+      });
     });
 
     it('creates resume with name when provided', async () => {
@@ -803,6 +905,83 @@ describe('ResumesService', () => {
 
       expect(entryDeleteCallCount).toBe(2);
       expect(mockPrisma.$transaction).toHaveBeenCalled();
+    });
+
+    it('persists locked=true on replacement sections during update', async () => {
+      const existingResume: ResumeRow = {
+        id: resumeId,
+        userId,
+        name: null,
+        layout: 'standard',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      const existingSections = [{ id: 'rs-1' }];
+      const updatedResume = makeResumeResponse();
+      const sectionCreate = jest.fn().mockResolvedValue({
+        id: 'rs-2',
+        resumeId,
+        sectionId: 'summary',
+        column: 'right',
+        order: 0,
+        locked: true,
+      });
+
+      mockPrisma.$transaction.mockImplementation(
+        async (cb: TransactionCallback<ResumeTreeRow>) => {
+          const tx = {
+            resume: {
+              findUnique: jest
+                .fn()
+                .mockResolvedValueOnce(existingResume)
+                .mockResolvedValueOnce(updatedResume),
+              update: jest.fn().mockResolvedValue({}),
+            },
+            resumeSection: {
+              findMany: jest.fn().mockResolvedValue(existingSections),
+              deleteMany: jest.fn().mockResolvedValue({}),
+              create: sectionCreate,
+            },
+            sectionEntry: {
+              deleteMany: jest.fn().mockResolvedValue({}),
+              create: jest.fn().mockResolvedValue({}),
+            },
+            sectionField: {
+              create: jest.fn().mockResolvedValue({}),
+            },
+          };
+          const result = cb(tx);
+          return result instanceof Promise ? result : Promise.resolve(result);
+        },
+      );
+
+      mockCrypto.decryptField.mockImplementation(
+        (encrypted: string, _iv: string, _authTag: string) =>
+          encrypted.replace('enc_', ''),
+      );
+
+      const dto: UpdateResumeDto = {
+        sections: [
+          {
+            sectionId: 'summary',
+            order: 0,
+            locked: true,
+            entries: [{ order: 0, fields: [], children: [] }],
+          },
+        ],
+      };
+
+      await service.update(resumeId, userId, dto);
+
+      expect(sectionCreate).toHaveBeenCalledWith({
+        data: {
+          resumeId,
+          sectionId: 'summary',
+          column: 'right',
+          order: 0,
+          locked: true,
+        },
+      });
     });
 
     it('throws NotFoundException when updating non-existent resume', async () => {

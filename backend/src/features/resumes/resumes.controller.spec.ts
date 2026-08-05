@@ -26,6 +26,7 @@ interface ResumeBody {
 
 interface SectionBody {
   id: string;
+  locked?: boolean;
   entries: EntryBody[];
 }
 
@@ -163,6 +164,23 @@ describe('ResumesController', () => {
       expect(mockResumesService.findOne).toHaveBeenCalledWith('r1', 'user-1');
     });
 
+    it('returns the locked flag on sections', async () => {
+      const resume: ResumeBody = {
+        id: 'r1',
+        name: null,
+        layout: 'standard',
+        sections: [{ id: 'rs-1', locked: true, entries: [] }],
+      };
+      mockResumesService.findOne.mockResolvedValue(resume);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/resumes/r1')
+        .expect(200);
+
+      const body = response.body as ResumeBody;
+      expect(body.sections![0].locked).toBe(true);
+    });
+
     it('returns 404 for non-existent resume', async () => {
       mockResumesService.findOne.mockRejectedValue(
         new NotFoundException('Resume not found'),
@@ -248,6 +266,49 @@ describe('ResumesController', () => {
         .expect(400);
     });
 
+    it('accepts a locked flag per section', async () => {
+      const created: ResumeBody = {
+        id: 'new-resume',
+        name: 'My Resume',
+        layout: 'standard',
+        sections: [
+          {
+            id: 'rs-1',
+            locked: true,
+            entries: [],
+          },
+        ],
+      };
+      mockResumesService.create.mockResolvedValue(created);
+
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/resumes')
+        .send({
+          ...validDto,
+          sections: [{ ...validDto.sections[0], locked: true }],
+        })
+        .expect(201);
+
+      const body = response.body as ResumeBody;
+      expect(body.sections![0].locked).toBe(true);
+
+      const createCalls = mockResumesService.create.mock
+        .calls as unknown as Array<
+        [string, { sections: Array<{ locked?: boolean }> }]
+      >;
+      expect(createCalls[0][1].sections[0].locked).toBe(true);
+    });
+
+    it('rejects a non-boolean locked flag', async () => {
+      await request(app.getHttpServer())
+        .post('/api/v1/resumes')
+        .send({
+          ...validDto,
+          sections: [{ ...validDto.sections[0], locked: 'yes' }],
+        })
+        .expect(400);
+    });
+
     it('returns 400 for extra unknown properties', async () => {
       await request(app.getHttpServer())
         .post('/api/v1/resumes')
@@ -305,6 +366,40 @@ describe('ResumesController', () => {
         .put('/api/v1/resumes/r1')
         .send({ layout: 123 })
         .expect(400);
+    });
+
+    it('accepts a locked flag per section when updating', async () => {
+      const updated: ResumeBody = {
+        id: 'r1',
+        name: null,
+        layout: 'compact',
+        sections: [{ id: 'rs-1', locked: true, entries: [] }],
+      };
+      mockResumesService.update.mockResolvedValue(updated);
+
+      const response = await request(app.getHttpServer())
+        .put('/api/v1/resumes/r1')
+        .send({
+          sections: [
+            {
+              sectionId: 'summary',
+              column: 'right',
+              order: 0,
+              locked: true,
+              entries: [],
+            },
+          ],
+        })
+        .expect(200);
+
+      const body = response.body as ResumeBody;
+      expect(body.sections![0].locked).toBe(true);
+
+      const updateCalls = mockResumesService.update.mock
+        .calls as unknown as Array<
+        [string, string, { sections: Array<{ locked?: boolean }> }]
+      >;
+      expect(updateCalls[0][2].sections[0].locked).toBe(true);
     });
 
     it('returns 401 when not authenticated', async () => {
