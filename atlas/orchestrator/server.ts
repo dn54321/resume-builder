@@ -209,8 +209,16 @@ async function launchReady(): Promise<void> {
   if (areAllEpicsDone()) return;
 
   const allReady: GraphNode[] = [];
+  const seen = new Set<string>();
   for (const [, epic] of epicGraphs) {
     for (const node of readyTickets(epic.nodes)) {
+      // A ticket can be a child of SEVERAL epics (e.g. RES-85 is in RES-77,
+      // RES-92, RES-91, RES-85, RES-83, RES-76). Without dedup, launchReady
+      // spawns ONE WORKER PER EPIC for the same ticket → 3-5 workers
+      // colliding on the same worktree (git races: 'something committed my
+      // staged changes') and test DB ('database is locked'). Spawn once.
+      if (seen.has(node.ticket.id)) continue;
+      seen.add(node.ticket.id);
       allReady.push(node);
     }
   }
