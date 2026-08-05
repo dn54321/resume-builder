@@ -394,6 +394,51 @@ describe('useResumeStore', () => {
       expect(store.lockedSections).toEqual([])
     })
 
+    it('round-trips nested bullet children through toPayload/loadFromPayload', () => {
+      const store = useResumeStore()
+      store.initializeDefaults()
+
+      // Add a parent entry with a bullet child (the store keeps these flat)
+      const experience = store.sections.find((s) => s.sectionType === 'experience')!
+      const parentId = crypto.randomUUID()
+      experience.entries.push({
+        id: parentId,
+        order: 0,
+        parentId: null,
+        fields: [{ key: 'company', value: 'Acme', order: 0 }],
+      })
+      experience.entries.push({
+        id: crypto.randomUUID(),
+        order: 0,
+        parentId,
+        fields: [{ key: 'detail', value: 'Built things', order: 0 }],
+      })
+
+      // toPayload serializes entries as a NESTED tree (backend contract):
+      // the bullet becomes children[0] of the parent, with no parentId field.
+      const payload = store.toPayload()
+      const expPayload = payload.sections.find((s) => s.sectionId === 'experience')!
+      expect(expPayload.entries).toHaveLength(1)
+      expect(expPayload.entries[0]!.parentId).toBeUndefined()
+      expect(expPayload.entries[0]!.children).toHaveLength(1)
+      expect(expPayload.entries[0]!.children![0]!.fields[0]!.value).toBe('Built things')
+
+      // loadFromPayload flattens the nested tree back to the flat store shape.
+      const reloaded = useResumeStore()
+      reloaded.loadFromPayload(payload)
+      const expReloaded = reloaded.sections.find((s) => s.sectionType === 'experience')!
+      expect(expReloaded.entries).toHaveLength(2)
+      const bullet = expReloaded.entries.find((e) => e.fields[0]?.key === 'detail')
+      expect(bullet).toBeDefined()
+      expect(bullet!.parentId).toBe(expReloaded.entries[0]!.id)
+      expect(bullet!.fields[0]!.value).toBe('Built things')
+      // A second round-trip is stable (idempotent)
+      const payload2 = reloaded.toPayload()
+      const expPayload2 = payload2.sections.find((s) => s.sectionId === 'experience')!
+      expect(expPayload2.entries).toHaveLength(1)
+      expect(expPayload2.entries[0]!.children).toHaveLength(1)
+    })
+
     it('fills in missing sections as disabled and keeps saved ones', () => {
       const store = useResumeStore()
 

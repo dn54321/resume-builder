@@ -3,6 +3,12 @@
  * what appears on the resume. Broken toggle means wrong content on export.
  *
  * Tests the full stack: browser → frontend → backend → database.
+ *
+ * NOTE (RES-93 rebase): RES-91 replaced the old toggle-switch checkbox UI
+ * with eye/lock icon buttons in SectionToggles.vue. This spec was left
+ * testing the removed checkbox DOM (`input[type="checkbox"]`, switch
+ * `span`), so it was red on master. It now targets the current
+ * `data-testid="section-eye-toggle"` button.
  */
 import { test, expect } from '@playwright/test'
 import { resetE2eDatabase } from '../helpers/db-reset'
@@ -35,6 +41,13 @@ test.describe('Section toggle', () => {
     for (const label of sectionLabels) {
       await expect(page.locator('text=' + label).first()).toBeVisible()
     }
+
+    // Every row has an eye toggle, and it is "pressed" (section enabled)
+    const eyeToggles = page.getByTestId('section-eye-toggle')
+    expect(await eyeToggles.count()).toBe(10)
+    for (let i = 0; i < 10; i++) {
+      await expect(eyeToggles.nth(i)).toHaveAttribute('aria-pressed', 'true')
+    }
   })
 
   test('can toggle a section off and on', async ({ page }) => {
@@ -44,50 +57,19 @@ test.describe('Section toggle', () => {
     // Find the "Summary" section item
     const summaryLi = page.locator('li').filter({ hasText: 'Summary' })
 
-    // The toggle is an input[type="checkbox"] element
-    const checkbox = summaryLi.locator('input[type="checkbox"]')
-    const wasChecked = await checkbox.isChecked()
-    expect(wasChecked).toBe(true)
+    // The eye toggle button starts pressed (section visible)
+    const eyeToggle = summaryLi.getByTestId('section-eye-toggle')
+    await expect(eyeToggle).toHaveAttribute('aria-pressed', 'true')
 
-    // Toggle it off by clicking the switch span next to the checkbox
-    // The switch is a sibling span with rounded styling
-    const switchSpan = summaryLi.locator('span').filter({
-      has: summaryLi.locator('input[type="checkbox"]'),
-    }).first()
+    // Toggle it off — aria-pressed flips and the row gets reduced opacity
+    await eyeToggle.click()
+    await expect(eyeToggle).toHaveAttribute('aria-pressed', 'false')
+    await expect(summaryLi).toHaveClass(/opacity-55/)
 
-    // Actually, the click needs to hit the visible toggle. Use the label click.
-    await summaryLi.locator('label').first().click()
-    // This should select the section (enable it if disabled, or select it if enabled)
-    // But to toggle, we need to click the checkbox/switch specifically
-
-    // Try a different approach: toggle via the switch
-    // The switch is the span.after that acts as the visual toggle
-    const toggleSpans = summaryLi.locator('span')
-    const count = await toggleSpans.count()
-
-    if (count > 0) {
-      // First span with a specific class should be the switch
-      // Click the switch (not the label text)
-      await toggleSpans.nth(1).click()
-    }
-
-    // After toggling off, the li should have opacity-55 class
-    // Wait briefly for the DOM to update
-    await page.waitForTimeout(500)
-
-    // Verify the checkbox is now unchecked
-    const isCheckedAfter = await checkbox.isChecked()
-    // It was checked before, should be unchecked now
-    // (but may still be checked if our click missed)
-    if (isCheckedAfter) {
-      // Try again - click the label which might trigger toggle
-      await summaryLi.locator('label').click({ position: { x: 10, y: 10 } })
-      await page.waitForTimeout(500)
-    }
-
-    // Toggle back on
-    await summaryLi.locator('label').click({ position: { x: 10, y: 10 } })
-    await page.waitForTimeout(500)
+    // Toggle it back on
+    await eyeToggle.click()
+    await expect(eyeToggle).toHaveAttribute('aria-pressed', 'true')
+    await expect(summaryLi).not.toHaveClass(/opacity-55/)
   })
 
   test('disabled section has reduced opacity', async ({ page }) => {
@@ -96,13 +78,11 @@ test.describe('Section toggle', () => {
 
     const hobbiesLi = page.locator('li').filter({ hasText: 'Hobbies' })
 
-    // Click the switch area
-    await hobbiesLi.locator('label').click({ position: { x: 10, y: 10 } })
-    await page.waitForTimeout(500)
+    // The row is fully opaque while enabled
+    await expect(hobbiesLi).not.toHaveClass(/opacity-55/)
 
-    // Verify the li has opacity class
-    const classes = await hobbiesLi.getAttribute('class')
-    // Should have some indication of being disabled
-    expect(classes).toBeTruthy()
+    // Toggle it off via the eye button
+    await hobbiesLi.getByTestId('section-eye-toggle').click()
+    await expect(hobbiesLi).toHaveClass(/opacity-55/)
   })
 })

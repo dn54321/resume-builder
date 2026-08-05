@@ -24,9 +24,12 @@ test.describe('Anonymous resume builder', () => {
     await page.waitForURL('**/builder')
     await expect(page.locator('input[aria-label="Resume name"]')).toBeVisible()
 
-    // 4. Verify anonymous banner is shown (no auth)
-    await expect(page.locator('header')).toContainText('Log in')
-    await expect(page.locator('header')).toContainText('Sign up')
+    // 4. Verify anonymous banner is shown (no auth).
+    // NOTE: use getByRole('banner') — the builder page renders TWO <header>
+    // elements (app header + builder toolbar header), so the bare tag
+    // selector is a strict-mode violation.
+    await expect(page.getByRole('banner')).toContainText('Log in')
+    await expect(page.getByRole('banner')).toContainText('Sign up')
   })
 
   test('fill personal info section', async ({ page }) => {
@@ -65,7 +68,8 @@ test.describe('Anonymous resume builder', () => {
     await page.goto('/builder')
 
     // Header should show Log in and Sign up
-    await expect(page.locator('header')).toContainText('Log in')
-    await expect(page.locator('header')).toContainText('Sign up')
+    // (getByRole('banner') — see note above about the two <header> elements)
+    await expect(page.getByRole('banner')).toContainText('Log in')
+    await expect(page.getByRole('banner')).toContainText('Sign up')
   })
 })
