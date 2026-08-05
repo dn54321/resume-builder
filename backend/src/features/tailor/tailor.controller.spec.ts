@@ -3,21 +3,14 @@ import { TailorController } from './tailor.controller';
 import { TailorService } from './tailor.service';
 import { TailorRequestDto } from './dto/tailor-request.dto';
 import type { TailorRequest } from './models/tailor-request.model';
-import type { TailorResponse } from './models/tailor-response.model';
+import type { TailorFilterResponse } from './models/tailor-filter-response.model';
 
-const mockTailorResult: TailorResponse = {
-  sections: [
-    {
-      sectionId: 'experience',
-      entries: [
-        {
-          order: 0,
-          fields: [{ key: 'bullet', value: 'Built React applications' }],
-          children: [],
-        },
-      ],
-    },
-  ],
+const mockTailorResult = {
+  filteredBulletIndices: {
+    experience: [{ entryOrder: 0, bulletIndices: [0] }],
+  },
+  filteredHardSkills: ['react'],
+  filteredSoftSkills: [],
 };
 
 const mockTailorService = {
@@ -89,7 +82,7 @@ describe('TailorController', () => {
     expect(request.resume.sections[0].sectionId).toBe('experience');
   });
 
-  it('returns the TailorResponse from the service', async () => {
+  it('returns the TailorFilterResponse from the service', async () => {
     const dto = makeDto();
     const result = await controller.tailor(dto);
     expect(result).toEqual(mockTailorResult);

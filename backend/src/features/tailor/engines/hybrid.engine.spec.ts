@@ -241,12 +241,14 @@ describe('HybridEngine', () => {
       bulletEntry(1, 'React Native work'),
     ];
 
-    // Both entries have 0 keyword score for Python/Django
-    // Keyword with cap=6 keeps them anyway (top N even if 0)
+    // Both entries have 0 keyword score for Python/Django — the keyword
+    // pre-filter drops them (RES-92 restored relevance-only filtering), so
+    // the LLM re-rank step receives an empty section.
     const result = await engine.match(makeRequest(jd, entries));
 
-    // Should still work (keyword keeps top N even with 0 score)
-    expect(result.sections[0].entries.length).toBeGreaterThan(0);
+    // Section still present, but with zero entries (nothing survived pre-filter).
+    expect(result.sections).toHaveLength(1);
+    expect(result.sections[0].entries).toHaveLength(0);
   });
 
   // ── Locked sections ────────────────────────────────────────
