@@ -9,6 +9,7 @@ import { PrismaService } from '../../common/database/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { CreateResumeDto } from './dto/create-resume.dto';
 import { UpdateResumeDto } from './dto/update-resume.dto';
+import type { ResumeTree } from './models/resume-tree.model';
 
 // ─── Helper types for test data ────────────────────────────────────
 
@@ -657,6 +658,381 @@ describe('ResumesService', () => {
       const result = await service.create(userId, dtoWithName);
 
       expect(result.name).toBe('My Resume');
+    });
+  });
+
+  describe('duplicate', () => {
+    it('creates a copy named "Copy of <original>" with the same tree', async () => {
+      const original = makeResumeResponse({ name: 'My Resume' });
+      mockPrisma.resume.findUnique.mockResolvedValue(original);
+      mockCrypto.decryptField.mockImplementation(
+        (encrypted: string, _iv: string, _authTag: string) =>
+          encrypted.replace('enc_', ''),
+      );
+      mockCrypto.encryptField.mockImplementation((value: string) =>
+        makeEncryptedField(value),
+      );
+
+      const resumeCreate = jest.fn().mockResolvedValue({
+        id: 'resume-copy',
+        userId,
+        name: 'Copy of My Resume',
+        layout: 'standard',
+      });
+      const sectionCreate = jest.fn().mockResolvedValue({
+        id: 'rs-copy',
+        resumeId: 'resume-copy',
+        sectionId: 'summary',
+        column: 'right',
+        order: 0,
+        locked: false,
+      });
+
+      mockPrisma.$transaction.mockImplementation(
+        async (cb: TransactionCallback<ResumeTreeRow>) => {
+          const tx = {
+            resume: {
+              create: resumeCreate,
+              findUnique: jest.fn().mockResolvedValue(
+                makeResumeResponse({
+                  id: 'resume-copy',
+                  name: 'Copy of My Resume',
+                }),
+              ),
+            },
+            resumeSection: { create: sectionCreate },
+            sectionEntry: { create: jest.fn().mockResolvedValue({}) },
+            sectionField: { create: jest.fn().mockResolvedValue({}) },
+          };
+          const result = cb(tx);
+          return result instanceof Promise ? result : Promise.resolve(result);
+        },
+      );
+
+      const result = await service.duplicate(resumeId, userId);
+
+      expect(resumeCreate).toHaveBeenCalledWith({
+        data: {
+          userId,
+          name: 'Copy of My Resume',
+          layout: 'standard',
+        },
+      });
+      expect(sectionCreate).toHaveBeenCalledWith({
+        data: {
+          resumeId: 'resume-copy',
+          sectionId: 'summary',
+          column: 'right',
+          order: 0,
+          locked: false,
+        },
+      });
+      // the decrypted original value is re-encrypted for the copy
+      expect(mockCrypto.encryptField).toHaveBeenCalledWith('Software Engineer');
+      expect(result.name).toBe('Copy of My Resume');
+    });
+
+    it('names the copy "Copy of" when the original has no name', async () => {
+      const original = makeResumeResponse({ name: null });
+      mockPrisma.resume.findUnique.mockResolvedValue(original);
+      mockCrypto.decryptField.mockImplementation(
+        (encrypted: string, _iv: string, _authTag: string) =>
+          encrypted.replace('enc_', ''),
+      );
+      mockCrypto.encryptField.mockImplementation((value: string) =>
+        makeEncryptedField(value),
+      );
+
+      const resumeCreate = jest.fn().mockResolvedValue({
+        id: 'resume-copy',
+        userId,
+        name: 'Copy of',
+        layout: 'standard',
+      });
+
+      mockPrisma.$transaction.mockImplementation(
+        async (cb: TransactionCallback<ResumeTreeRow>) => {
+          const tx = {
+            resume: {
+              create: resumeCreate,
+              findUnique: jest
+                .fn()
+                .mockResolvedValue(
+                  makeResumeResponse({ id: 'resume-copy', name: 'Copy of' }),
+                ),
+            },
+            resumeSection: { create: jest.fn().mockResolvedValue({}) },
+            sectionEntry: { create: jest.fn().mockResolvedValue({}) },
+            sectionField: { create: jest.fn().mockResolvedValue({}) },
+          };
+          const result = cb(tx);
+          return result instanceof Promise ? result : Promise.resolve(result);
+        },
+      );
+
+      await service.duplicate(resumeId, userId);
+
+      expect(resumeCreate).toHaveBeenCalledWith({
+        data: { userId, name: 'Copy of', layout: 'standard' },
+      });
+    });
+
+    it('duplicates nested children entries and re-encrypts child values', async () => {
+      const original = makeResumeResponse({
+        name: 'My Resume',
+        sections: [
+          {
+            id: 'rs-1',
+            resumeId,
+            sectionId: 'experience',
+            column: 'right',
+            order: 0,
+            locked: false,
+            entries: [
+              {
+                id: 'parent-1',
+                resumeSectionId: 'rs-1',
+                order: 0,
+                parentId: null,
+                fields: [
+                  {
+                    id: 'f-1',
+                    sectionEntryId: 'parent-1',
+                    key: 'company',
+                    value: 'enc_Acme',
+                    iv: 'iv_Acme',
+                    authTag: 'tag_Acme',
+                    order: 0,
+                  },
+                ],
+                children: [
+                  {
+                    id: 'child-1',
+                    resumeSectionId: 'rs-1',
+                    order: 0,
+                    parentId: 'parent-1',
+                    fields: [
+                      {
+                        id: 'f-2',
+                        sectionEntryId: 'child-1',
+                        key: 'detail',
+                        value: 'enc_ChildValue',
+                        iv: 'iv_ChildValue',
+                        authTag: 'tag_ChildValue',
+                        order: 0,
+                      },
+                    ],
+                    children: [],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      });
+      mockPrisma.resume.findUnique.mockResolvedValue(original);
+      mockCrypto.decryptField.mockImplementation(
+        (encrypted: string, _iv: string, _authTag: string) =>
+          encrypted.replace('enc_', ''),
+      );
+      mockCrypto.encryptField.mockImplementation((value: string) =>
+        makeEncryptedField(value),
+      );
+
+      mockPrisma.$transaction.mockImplementation(
+        async (cb: TransactionCallback<ResumeTreeRow>) => {
+          const tx = {
+            resume: {
+              create: jest.fn().mockResolvedValue({
+                id: 'resume-copy',
+                userId,
+                name: 'Copy of My Resume',
+                layout: 'standard',
+              }),
+              findUnique: jest.fn().mockResolvedValue(
+                makeResumeResponse({
+                  id: 'resume-copy',
+                  name: 'Copy of My Resume',
+                }),
+              ),
+            },
+            resumeSection: { create: jest.fn().mockResolvedValue({}) },
+            sectionEntry: { create: jest.fn().mockResolvedValue({}) },
+            sectionField: { create: jest.fn().mockResolvedValue({}) },
+          };
+          const result = cb(tx);
+          return result instanceof Promise ? result : Promise.resolve(result);
+        },
+      );
+
+      await service.duplicate(resumeId, userId);
+
+      expect(mockCrypto.encryptField).toHaveBeenCalledWith('Acme');
+      expect(mockCrypto.encryptField).toHaveBeenCalledWith('ChildValue');
+    });
+
+    it('duplicates entries that have no children array', async () => {
+      const original = makeResumeResponse({
+        name: 'My Resume',
+        sections: [
+          {
+            id: 'rs-1',
+            resumeId,
+            sectionId: 'summary',
+            column: 'right',
+            order: 0,
+            locked: false,
+            entries: [
+              {
+                id: 'entry-1',
+                resumeSectionId: 'rs-1',
+                order: 0,
+                parentId: null,
+                fields: [
+                  {
+                    id: 'f-1',
+                    sectionEntryId: 'entry-1',
+                    key: 'title',
+                    value: 'enc_Software Engineer',
+                    iv: 'iv_Software Engineer',
+                    authTag: 'tag_Software Engineer',
+                    order: 0,
+                  },
+                ],
+                children: undefined as unknown as SectionEntryRow[],
+              },
+            ],
+          },
+        ],
+      });
+      mockPrisma.resume.findUnique.mockResolvedValue(original);
+      mockCrypto.decryptField.mockImplementation(
+        (encrypted: string, _iv: string, _authTag: string) =>
+          encrypted.replace('enc_', ''),
+      );
+      mockCrypto.encryptField.mockImplementation((value: string) =>
+        makeEncryptedField(value),
+      );
+
+      mockPrisma.$transaction.mockImplementation(
+        async (cb: TransactionCallback<ResumeTreeRow>) => {
+          const tx = {
+            resume: {
+              create: jest.fn().mockResolvedValue({
+                id: 'resume-copy',
+                userId,
+                name: 'Copy of My Resume',
+                layout: 'standard',
+              }),
+              findUnique: jest.fn().mockResolvedValue(
+                makeResumeResponse({
+                  id: 'resume-copy',
+                  name: 'Copy of My Resume',
+                }),
+              ),
+            },
+            resumeSection: { create: jest.fn().mockResolvedValue({}) },
+            sectionEntry: { create: jest.fn().mockResolvedValue({}) },
+            sectionField: { create: jest.fn().mockResolvedValue({}) },
+          };
+          const result = cb(tx);
+          return result instanceof Promise ? result : Promise.resolve(result);
+        },
+      );
+
+      await service.duplicate(resumeId, userId);
+
+      expect(mockCrypto.encryptField).toHaveBeenCalledWith('Software Engineer');
+    });
+
+    it('falls back to an empty children array when findOne returns undefined children', async () => {
+      const original: ResumeTree = {
+        id: resumeId,
+        userId,
+        name: 'My Resume',
+        layout: 'standard',
+        sections: [
+          {
+            id: 'rs-1',
+            sectionId: 'summary',
+            column: 'right',
+            order: 0,
+            locked: false,
+            entries: [
+              {
+                id: 'entry-1',
+                order: 0,
+                fields: [
+                  {
+                    id: 'f-1',
+                    key: 'title',
+                    value: 'Software Engineer',
+                    iv: 'iv',
+                    authTag: 'tag',
+                    order: 0,
+                  },
+                ],
+                children: undefined,
+              },
+            ],
+          },
+        ],
+      };
+      jest.spyOn(service, 'findOne').mockResolvedValue(original);
+      mockCrypto.encryptField.mockImplementation((value: string) =>
+        makeEncryptedField(value),
+      );
+
+      mockPrisma.$transaction.mockImplementation(
+        async (cb: TransactionCallback<ResumeTreeRow>) => {
+          const tx = {
+            resume: {
+              create: jest.fn().mockResolvedValue({
+                id: 'resume-copy',
+                userId,
+                name: 'Copy of My Resume',
+                layout: 'standard',
+              }),
+              findUnique: jest.fn().mockResolvedValue(
+                makeResumeResponse({
+                  id: 'resume-copy',
+                  name: 'Copy of My Resume',
+                }),
+              ),
+            },
+            resumeSection: { create: jest.fn().mockResolvedValue({}) },
+            sectionEntry: { create: jest.fn().mockResolvedValue({}) },
+            sectionField: { create: jest.fn().mockResolvedValue({}) },
+          };
+          const result = cb(tx);
+          return result instanceof Promise ? result : Promise.resolve(result);
+        },
+      );
+
+      const result = await service.duplicate(resumeId, userId);
+
+      expect(result.name).toBe('Copy of My Resume');
+      expect(mockCrypto.encryptField).toHaveBeenCalledWith('Software Engineer');
+    });
+
+    it('throws NotFoundException for a non-existent resume', async () => {
+      mockPrisma.resume.findUnique.mockResolvedValue(null);
+
+      await expect(service.duplicate('nonexistent', userId)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it("throws NotFoundException for another user's resume", async () => {
+      mockPrisma.resume.findUnique.mockResolvedValue(
+        makeResumeResponse({ userId: otherUserId }),
+      );
+
+      await expect(service.duplicate(resumeId, userId)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
     });
   });
 

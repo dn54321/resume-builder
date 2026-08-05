@@ -110,6 +110,39 @@ export class ResumesService {
     });
   }
 
+  async duplicate(id: string, userId: string): Promise<ResumeTree> {
+    const original = await this.findOne(id, userId);
+
+    const dto: CreateResumeDto = {
+      name: original.name ? `Copy of ${original.name}` : 'Copy of',
+      layout: original.layout,
+      sections: original.sections.map((section) => ({
+        sectionId: section.sectionId,
+        column: section.column,
+        order: section.order,
+        locked: section.locked,
+        entries: section.entries.map((entry) => this.entryToDto(entry)),
+      })),
+    };
+
+    return this.create(userId, dto);
+  }
+
+  private entryToDto(
+    entry: SectionEntry,
+  ): CreateResumeDto['sections'][number]['entries'][number] {
+    return {
+      order: entry.order,
+      fields: entry.fields.map((field) => ({
+        key: field.key,
+        value: field.value,
+      })),
+      children: entry.children
+        ? entry.children.map((child) => this.entryToDto(child))
+        : [],
+    };
+  }
+
   async update(
     id: string,
     userId: string,

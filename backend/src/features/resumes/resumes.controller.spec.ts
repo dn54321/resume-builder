@@ -48,6 +48,7 @@ describe('ResumesController', () => {
     findAll: jest.Mock;
     findOne: jest.Mock;
     create: jest.Mock;
+    duplicate: jest.Mock;
     update: jest.Mock;
     delete: jest.Mock;
   };
@@ -60,6 +61,7 @@ describe('ResumesController', () => {
       findAll: jest.fn(),
       findOne: jest.fn(),
       create: jest.fn(),
+      duplicate: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
     };
@@ -322,6 +324,55 @@ describe('ResumesController', () => {
       await request(app.getHttpServer())
         .post('/api/v1/resumes')
         .send(validDto)
+        .expect(401);
+    });
+  });
+
+  describe('POST /api/v1/resumes/:id/duplicate', () => {
+    it('duplicates a resume and returns the copy', async () => {
+      const copy: ResumeBody = {
+        id: 'resume-copy',
+        name: 'Copy of My Resume',
+        layout: 'standard',
+        sections: [],
+      };
+      mockResumesService.duplicate.mockResolvedValue(copy);
+
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/resumes/r1/duplicate')
+        .expect(201);
+
+      const body = response.body as ResumeBody;
+      expect(body.id).toBe('resume-copy');
+      expect(body.name).toBe('Copy of My Resume');
+      expect(mockResumesService.duplicate).toHaveBeenCalledWith('r1', 'user-1');
+    });
+
+    it('returns 404 when the resume does not exist', async () => {
+      mockResumesService.duplicate.mockRejectedValue(
+        new NotFoundException('Resume not found'),
+      );
+
+      await request(app.getHttpServer())
+        .post('/api/v1/resumes/nonexistent/duplicate')
+        .expect(404);
+    });
+
+    it('returns 404 when the resume belongs to another user', async () => {
+      mockResumesService.duplicate.mockRejectedValue(
+        new NotFoundException('Resume not found'),
+      );
+
+      await request(app.getHttpServer())
+        .post('/api/v1/resumes/other-user-resume/duplicate')
+        .expect(404);
+    });
+
+    it('returns 401 when not authenticated', async () => {
+      denyAuth();
+
+      await request(app.getHttpServer())
+        .post('/api/v1/resumes/r1/duplicate')
         .expect(401);
     });
   });

@@ -47,6 +47,14 @@ export class ResumesController {
     return this.resumesService.create(req.user.id, dto);
   }
 
+  @Post(':id/duplicate')
+  async duplicate(
+    @Param('id') id: string,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<ResumeFull> {
+    return this.resumesService.duplicate(id, req.user.id);
+  }
+
   @Put(':id')
   async update(
     @Param('id') id: string,
