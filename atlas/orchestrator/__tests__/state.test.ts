@@ -1,3 +1,28 @@
+/*
+ * ⚠️ WARNING — NEVER run `git init`/`git add`/`git commit` from these
+ * throwaway-repo tests without stripping inherited GIT_* env vars.
+ *
+ * When the pre-push hook runs this suite during a push from a linked
+ * worktree, git exports GIT_DIR=<common-git-dir>/worktrees/<branch> into
+ * the hook environment. `git init` in a throwaway /tmp repo then
+ * RE-INITIALIZES THE WRONG REPOSITORY instead of creating a new one, and
+ * the subsequent `git add`/`git commit` operate on the pushing worker's
+ * branch — silently corrupting it (observed 2026-08-06: the RES-91 branch
+ * gained stray "base" commits and its tree was replaced by a single
+ * file.txt while the atlas suite ran inside a worktree pre-push hook;
+ * tracked files such as frontend/.env and frontend/screenshots/*.png were
+ * deleted from the branch).
+ *
+ * Fix (two layers):
+ *  1. GIT_* vars are deleted from process.env at module load (below), so
+ *     EVERY git spawn in this suite — including production execGit calls
+ *     made via recoverFromWorktree → isBranchMergedTo — operates on the
+ *     throwaway repo, not the pushing branch's repo.
+ *  2. runGit() additionally spawns git with GIT_* stripped, as
+ *     defense-in-depth for any spawn that builds its own env.
+ * If you add a test that shells out to git, route it through runGit().
+ */
+
 /**
  * Tests for the State module.
  */
@@ -5,6 +30,19 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
+
+// See WARNING above — isolate this suite from any inherited GIT_* env vars
+// (the worktree pre-push hook sets GIT_DIR).
+for (const key of [
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_INDEX_FILE',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+  'GIT_CEILING_DIRECTORIES',
+]) {
+  delete process.env[key];
+}
 import {
   setStateDir,
   getStateDir,
@@ -385,7 +423,23 @@ describe('State — worktree recovery', () => {
 });
 
 function runGit(args: string[], cwd: string): void {
-  const res = require('node:child_process').spawnSync('git', args, { cwd, encoding: 'utf-8' });
+  // Strip git env vars inherited from the parent process (see WARNING at
+  // top of file). The pre-push hook of a linked worktree sets
+  // GIT_DIR=.../.git/worktrees/<branch>, which would make every `git init`
+  // / `git add` / `git commit` below operate on the WRONG repository —
+  // the pushing worker's branch — and corrupt it.
+  const env = { ...process.env };
+  for (const key of [
+    'GIT_DIR',
+    'GIT_WORK_TREE',
+    'GIT_INDEX_FILE',
+    'GIT_OBJECT_DIRECTORY',
+    'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+    'GIT_CEILING_DIRECTORIES',
+  ] as const) {
+    delete env[key];
+  }
+  const res = require('node:child_process').spawnSync('git', args, { cwd, encoding: 'utf-8', env });
   if (res.status !== 0) {
     throw new Error(`git ${args.join(' ')} failed: ${res.stderr || res.stdout}`);
   }
