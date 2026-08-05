@@ -270,10 +270,23 @@ async function onWorkerComplete(
         // Prune worktree if branch is merged
         pruneWorktree(node);
       } else {
-        node.state.status = 'failed';
-        node.state.finishedAt = new Date().toISOString();
-        node.state.error = result.error || 'Strategy execution failed';
-        await tellBoss(`❌ ${identifier}: ${node.state.error}`);
+        // Strategy failures (e.g. a transient merge race when another
+        // worker/commit landed mid-merge) are RETRYABLE — re-queue the
+        // ticket up to retry_limit instead of permanently failing it.
+        const maxRetries = config.agents.worker.retry_limit ?? 2;
+        if (node.state.retryCount <= maxRetries) {
+          node.state.status = 'pending';
+          node.state.workerName = null;
+          node.state.pid = null;
+          node.state.error = `${result.error || 'Strategy execution failed'} (retry ${node.state.retryCount}/${maxRetries})`;
+          node.state.retryCount += 1;
+          await tellBoss(`🔄 ${identifier}: strategy retry ${node.state.retryCount}/${maxRetries} — ${result.error}`);
+        } else {
+          node.state.status = 'failed';
+          node.state.finishedAt = new Date().toISOString();
+          node.state.error = result.error || 'Strategy execution failed';
+          await tellBoss(`❌ ${identifier}: ${node.state.error}`);
+        }
       }
     } else {
       node.state.status = 'failed';
