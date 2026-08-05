@@ -5,6 +5,9 @@
  */
 import { test, expect } from '@playwright/test'
 
+const BACKEND_PORT = parseInt(process.env.AGENT_PORT || '3000', 10)
+const API_BASE = `http://localhost:${BACKEND_PORT}/api/v1`
+
 test.describe('Sign Up flow', () => {
   const email = `signup-e2e-${Date.now()}@test.com`
   const password = 'TestPass123!'
@@ -14,7 +17,8 @@ test.describe('Sign Up flow', () => {
   }) => {
     // 1. Visit signup page
     await page.goto('/signup')
-    await expect(page.locator('h1, h2').first()).toContainText('Sign')
+    // Auth views render CardTitle as an h3 (not h1/h2) — target the heading by role
+    await expect(page.getByRole('heading', { name: 'Sign up' })).toBeVisible()
 
     // 2. Fill the form
     await page.fill('#signup-email', email)
@@ -29,28 +33,24 @@ test.describe('Sign Up flow', () => {
     await page.waitForURL('**/dashboard', { timeout: 15_000 })
     await expect(page.locator('h1').first()).toContainText('My Resumes')
 
-    // 5. Verify authenticated nav state — profile icon shown instead of email
-    await expect(page.locator('header button svg.lucide-user')).toBeVisible()
-    await expect(page.locator('header')).not.toContainText(email)
+    // 5. Verify authenticated nav state — profile icon shown instead of email.
+    //    Scope to the App navbar (role=banner) — the dashboard view also
+    //    renders its own <header>, so a bare 'header' locator is ambiguous.
+    await expect(
+      page.getByRole('banner').locator('svg.lucide-user'),
+    ).toBeVisible()
+    await expect(page.getByRole('banner')).not.toContainText(email)
 
     // 6. Verify Log in / Sign up buttons are gone
-    await expect(page.locator('header')).not.toContainText('Log in')
+    await expect(page.getByRole('banner')).not.toContainText('Log in')
 
     // 7. Verify session persists: reload page
     await page.reload()
     await page.waitForURL('**/dashboard')
     await expect(page.locator('h1').first()).toContainText('My Resumes')
 
-    // 8. Verify /api/v1/auth/me returns the user
-    const apiBase = process.env.VITE_API_BASE_URL || 'http://localhost:3000'
-    const token = await page.evaluate(() =>
-      localStorage.getItem('auth_token'),
-    )
-    expect(token).toBeTruthy()
-
-    const meRes = await page.request.get(`${apiBase}/api/v1/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    // 8. Verify /api/v1/auth/me returns the user (cookie-based session)
+    const meRes = await page.request.get(`${API_BASE}/auth/me`)
     expect(meRes.status()).toBe(200)
     const meBody = await meRes.json()
     expect(meBody.user).toBeTruthy()

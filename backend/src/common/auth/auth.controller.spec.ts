@@ -166,6 +166,17 @@ describe('AuthController', () => {
 
       expect(result).toEqual({ user: null });
     });
+
+    it('returns null user when session is invalid or expired', async () => {
+      mockAuthService.validateSession.mockResolvedValue(null);
+      const req = mockRequest('expired-token');
+
+      const result = await authController.me(req as any);
+
+      // result?.user is undefined for a null session, so the `?? null`
+      // fallback kicks in.
+      expect(result).toEqual({ user: null });
+    });
   });
 
   describe('changePassword', () => {
