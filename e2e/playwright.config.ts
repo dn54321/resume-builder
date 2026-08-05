@@ -26,7 +26,9 @@ export default defineConfig({
     actionTimeout: 0,
     baseURL: BASE_URL,
     trace: 'on-first-retry',
-    headless: !!process.env.CI,
+    // Headless by default (no Chrome popups). Opt into headed mode with
+    // PW_HEADED=1 (e.g. when debugging interactively).
+    headless: process.env.PW_HEADED ? false : true,
     // Allow self-signed certs in dev
     ignoreHTTPSErrors: true,
   },
@@ -38,7 +40,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: `pnpm prisma:generate && pnpm prisma:push --skip-generate && pnpm start`,
+      command: `pnpm prisma:generate && pnpm prisma:push && pnpm start`,
       cwd: '../backend',
       port: BACKEND_PORT,
       reuseExistingServer: false,
@@ -51,9 +53,9 @@ export default defineConfig({
         MATCHING_ENGINE: 'keyword',
         BULLET_CAP: '5',
         RESUME_FIELD_ENCRYPTION_KEY:
-          'e2e-test-key-00123456789abcdef0123456789abcdef0123456789abcdef01',
+          '19a0a676517cebcb0f9ca42047c3aa88be5b6d59c53421d919592823be636b7a',
         SESSION_ENCRYPTION_KEY:
-          'e2e-test-sess-0123456789abcdef0123456789abcdef0123456789abcdef01',
+          '21dde1e4e6d6a700b61cc79baa014891ed8ce8f33e39f7ece0458974f653dbcf',
       },
     },
     {

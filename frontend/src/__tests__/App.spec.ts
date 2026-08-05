@@ -52,8 +52,8 @@ type AppWrapper = Awaited<ReturnType<typeof mountApp>>
 
 /**
  * Find the dropdown trigger button that renders the Lucide User profile icon.
- * @param wrapper - mounted App wrapper
- * @returns the user-menu trigger button wrapper, or undefined when absent
+ * @param {AppWrapper} wrapper - mounted App wrapper
+ * @returns {ReturnType<AppWrapper['findAll']>[number] | undefined} the user-menu trigger button wrapper, or undefined when absent
  */
 function findUserTrigger(wrapper: AppWrapper) {
   return wrapper
