@@ -29,6 +29,7 @@ describe('useResumeStore', () => {
         expect(s.column).toBe('right')
         expect(s.order).toBe(i)
         expect(s.enabled).toBe(true)
+        expect(s.locked).toBe(false)
         expect(s.entries).toEqual([])
       }
     })
@@ -120,6 +121,55 @@ describe('useResumeStore', () => {
       store.toggleSection('unknown' as SectionType)
       // No change — unknown types are not in the sections array
       expect(store.sections).toHaveLength(10)
+    })
+  })
+
+  describe('toggleLock', () => {
+    it('toggles the locked flag on a section', () => {
+      const store = useResumeStore()
+      store.initializeDefaults()
+
+      const section = store.sections.find((s) => s.sectionType === 'experience')!
+      expect(section.locked).toBe(false)
+
+      store.toggleLock('experience')
+      expect(section.locked).toBe(true)
+      expect(store.lockedSections).toContain('experience' as SectionType)
+
+      store.toggleLock('experience')
+      expect(section.locked).toBe(false)
+      expect(store.lockedSections).not.toContain('experience' as SectionType)
+    })
+
+    it('keeps all 10 sections in the array while toggling lock', () => {
+      const store = useResumeStore()
+      store.initializeDefaults()
+
+      store.toggleLock('hobbies')
+      expect(store.sections).toHaveLength(10)
+      expect(store.lockedSections).toEqual(['hobbies'])
+    })
+
+    it('is a no-op for unknown section types', () => {
+      const store = useResumeStore()
+      store.initializeDefaults()
+      store.toggleLock('unknown' as SectionType)
+      expect(store.sections).toHaveLength(10)
+      expect(store.lockedSections).toEqual([])
+    })
+
+    it('is independent of the enabled flag', () => {
+      const store = useResumeStore()
+      store.initializeDefaults()
+
+      // Lock a section, then disable it — lock must survive
+      store.toggleLock('summary')
+      store.toggleSection('summary')
+
+      const section = store.sections.find((s) => s.sectionType === 'summary')!
+      expect(section.enabled).toBe(false)
+      expect(section.locked).toBe(true)
+      expect(store.lockedSections).toContain('summary' as SectionType)
     })
   })
 
@@ -299,6 +349,51 @@ describe('useResumeStore', () => {
       expect(store.isSectionEnabled('hobbies')).toBe(false)
     })
 
+    it('round-trips locked flag correctly', () => {
+      const store = useResumeStore()
+      store.initializeDefaults()
+      store.toggleLock('experience')
+      store.toggleLock('education')
+
+      const payload = store.toPayload()
+      const exp = payload.sections.find((s) => s.sectionId === 'experience')
+      expect(exp!.locked).toBe(true)
+      const edu = payload.sections.find((s) => s.sectionId === 'education')
+      expect(edu!.locked).toBe(true)
+      const contact = payload.sections.find((s) => s.sectionId === 'name_contact')
+      expect(contact!.locked).toBe(false)
+
+      // Reload and verify locked survives
+      store.loadFromPayload(payload)
+      expect(store.sections).toHaveLength(10)
+      expect(store.sections.find((s) => s.sectionType === 'experience')!.locked).toBe(true)
+      expect(store.sections.find((s) => s.sectionType === 'education')!.locked).toBe(true)
+      expect(store.sections.find((s) => s.sectionType === 'name_contact')!.locked).toBe(false)
+      expect(store.lockedSections).toEqual(['experience', 'education'])
+    })
+
+    it('defaults locked to false when a payload omits the field (backward compat)', () => {
+      const store = useResumeStore()
+
+      // Old payload without `locked`
+      const oldPayload = {
+        layout: 'standard' as const,
+        sections: [
+          {
+            sectionId: 'summary',
+            column: 'right' as const,
+            order: 0,
+            entries: [{ order: 0, parentId: null, fields: [{ key: 'text', value: 'Hello', order: 0 }] }],
+          },
+        ],
+      }
+
+      store.loadFromPayload(oldPayload)
+      const summary = store.sections.find((s) => s.sectionType === 'summary')!
+      expect(summary.locked).toBe(false)
+      expect(store.lockedSections).toEqual([])
+    })
+
     it('fills in missing sections as disabled and keeps saved ones', () => {
       const store = useResumeStore()
 
@@ -443,6 +538,23 @@ describe('useResumeStore', () => {
       const exp = payload.sections.find((s) => s.sectionId === 'experience')
       expect(exp).toBeDefined()
       expect(exp!.enabled).toBe(true)
+    })
+
+    it('includes locked flag for every section in payload', () => {
+      const store = useResumeStore()
+      store.initializeDefaults()
+      store.toggleLock('projects')
+
+      const payload = store.toPayload()
+      expect(payload.sections).toHaveLength(10)
+
+      const projects = payload.sections.find((s) => s.sectionId === 'projects')
+      expect(projects!.locked).toBe(true)
+
+      // All other sections serialize locked: false
+      for (const s of payload.sections) {
+        expect(typeof s.locked).toBe('boolean')
+      }
     })
   })
 })
