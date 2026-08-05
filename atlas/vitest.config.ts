@@ -5,6 +5,15 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['**/__tests__/**/*.test.ts', 'tests/**/*.test.ts'],
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      // Worker worktrees contain their own atlas/ copies (stale) — they must
+      // NOT run as part of the main suite. A stale pool.test.ts in a worktree
+      // failed against new behavior and blocked every push via pre-push.
+      '**/state/worktrees/**',
+      '**/.pi/**',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
