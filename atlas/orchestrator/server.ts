@@ -650,10 +650,21 @@ async function checkAgentHealth(): Promise<void> {
         // spawned 3 workers in 5 min). Complete it as done instead.
         const config = getConfig();
         const target = config.strategy.branches.direct_push;
+        const baseBranch = config.strategy.branches.worktree_base;
         const merged = node.state.worktreePath
           ? isBranchMergedTo(node.state.worktreePath, node.state.branch, target)
           : false;
-        if (merged) {
+        // ⚠️ isBranchMergedTo alone is NOT sufficient: an EMPTY worktree (the
+        // ticket was never implemented — branch tip == base, nothing committed)
+        // trivially satisfies 'branch is an ancestor of master', falsely
+        // completing tickets whose work was never done (observed: RES-94
+        // completed with the migration fix never implemented). Only complete
+        // as merged when the worktree actually HAS meaningful work beyond the
+        // base branch.
+        const hasWork = node.state.worktreePath
+          ? hasMeaningfulWork(node.state.worktreePath, baseBranch)
+          : false;
+        if (merged && hasWork) {
           log(`Completing ${node.ticket.identifier} (work already merged to ${target})`);
           node.state.status = 'done';
           node.state.finishedAt = new Date().toISOString();
