@@ -794,14 +794,16 @@ export async function startOrchestrator(): Promise<void> {
 
     // Agent status update
     if (text.startsWith('STATUS ')) {
-      // Forward to boss
-      await tellBoss(`📋 ${from.name}: ${text.replace('STATUS ', '')}`);
+      // Forward to boss, including the worker's session id so the boss can
+      // reply to the worker directly.
+      await tellBoss(`📋 ${from.name} (${from.id.slice(0, 8)}): ${text.replace('STATUS ', '')}`);
       return;
     }
 
     // Agent asking boss
     if (text.startsWith('ASK ')) {
-      await tellBoss(`❓ ${from.name}: ${text.replace('ASK ', '')}`);
+      // Include the worker's session id so the boss can reply directly.
+      await tellBoss(`❓ ${from.name} (${from.id.slice(0, 8)}): ${text.replace('ASK ', '')}`);
       return;
     }
 

@@ -190,9 +190,10 @@ sections:
 
 ## Priority
 1. Fix bugs that block ticket implementation
-2. Answer worker ASK messages immediately
-3. Monitor dashboard for stuck/failed tickets
-4. Proactively re-prioritize (DROP old epics, EPIC new ones)
+2. Answer worker ASK messages immediately — workers escalate via the orchestrator as `❓ <worker>: ASK ...`. Reply to the worker directly via intercom (target the session id shown in the message). If you cannot reach the worker, tell the orchestrator to relay.
+3. Ticket issues workers report — when a worker reports a bug, blocker, or pipeline problem, create a Linear ticket for it (or add it to the appropriate epic) and action it. Do not let reported issues vanish.
+4. Monitor dashboard for stuck/failed tickets
+5. Proactively re-prioritize (DROP old epics, EPIC new ones)
 
 ## Environment
 

@@ -34,9 +34,10 @@ Prefix active steps with `▸`, completed with `✓`, failed with `✗`:
   ✓ Codebase read complete
   ✓ Dependencies resolved
 ```
-Send phase changes to boss:
+Send phase changes to the ORCHESTRATOR (it relays to the boss — do NOT
+send to a session named "boss", it does not exist):
 ```
-intercom({ action: "send", to: "boss", message: "STATUS <uuid> Implementing X" })
+intercom({ action: "send", to: "{{ORCHESTRATOR_NAME}}", message: "STATUS <uuid> Implementing X" })
 ```
 
 ### 4. Test
@@ -67,7 +68,19 @@ The current strategy is **{{STRATEGY}}** targeting branch **{{PR_TARGET}}**.
 ## Important
 - Never run `prisma migrate dev`, `prisma db push`, or `pnpm format`
 - Write `agent-status.txt` with current phase (one line per step)
-- If stuck: `intercom({ action: "ask", to: "boss", message: "ASK <uuid> ..." })`
+- If stuck or you find a blocker (bug in the codebase, missing dependency,
+  conflicting change, broken pipeline behavior): report it to the boss via
+  the ORCHESTRATOR — do NOT silently work around it or give up. The boss
+  answers questions and creates Linear tickets for issues:
+```
+intercom({ action: "send", to: "{{ORCHESTRATOR_NAME}}", message: "ASK <uuid> <question-or-issue>" })
+```
+- If you discover a serious issue that would block other tickets (broken
+  build, wrong config, infrastructure problem), say so explicitly in your
+  ASK so the boss can ticket and fix it.
+- Do NOT wait for a reply — keep going if you can proceed; if you are
+  hard-blocked, wait briefly for the boss's answer (via intercom `pending`/
+  `list`) before giving up.
 
 ## Available Skills
 
