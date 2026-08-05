@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { RouterLink, RouterView, useRouter } from 'vue-router'
+import { User } from '@lucide/vue'
 import { useAuth } from '@/features/auth/composables/useAuth'
 import AppLogo from '@/components/AppLogo.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
@@ -14,7 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 
 const router = useRouter()
-const { isAuthenticated, authReady, user, checkSession, logout } = useAuth()
+const { isAuthenticated, authReady, checkSession, logout } = useAuth()
 
 onMounted(() => {
   checkSession()
@@ -63,7 +64,7 @@ async function handleLogout() {
             <DropdownMenu>
               <DropdownMenuTrigger as-child>
                 <Button variant="ghost" size="sm" class="gap-2">
-                  <span class="text-sm max-w-[160px] truncate">{{ user?.email }}</span>
+                  <User class="size-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" class="w-56">

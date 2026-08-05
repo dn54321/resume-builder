@@ -38,7 +38,7 @@ test.describe('Session persistence', () => {
 
     // 3. Verify still authenticated (no redirect to /login)
     await expect(page.locator('h1').first()).toContainText('My Resumes')
-    await expect(page.locator('header')).toContainText(email)
+    await expect(page.locator('header button svg.lucide-user')).toBeVisible()
 
     // 4. Verify /api/v1/auth/me returns user
     const token = await page.evaluate(() =>
@@ -73,7 +73,7 @@ test.describe('Session persistence', () => {
     await page.waitForURL('**/builder/**', { timeout: 15_000 })
 
     // 4. Verify still authenticated on builder
-    await expect(page.locator('header')).toContainText(email)
+    await expect(page.locator('header button svg.lucide-user')).toBeVisible()
   })
 
   test('unauthenticated user cannot access dashboard', async ({ page }) => {

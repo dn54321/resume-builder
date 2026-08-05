@@ -32,8 +32,8 @@ test.describe('Logout', () => {
     await page.waitForURL('**/dashboard', { timeout: 15_000 })
     await expect(page.locator('h1').first()).toContainText('My Resumes')
 
-    // 2. Open user dropdown
-    const userBtn = page.locator('header button', { hasText: email })
+    // 2. Open user dropdown (profile icon trigger)
+    const userBtn = page.locator('header button', { has: page.locator('svg.lucide-user') })
     await userBtn.click()
 
     // 3. Click Log out
@@ -72,7 +72,7 @@ test.describe('Logout', () => {
     await expect(page.locator('input[aria-label="Resume name"]')).toBeVisible()
 
     // 3. Logout from builder
-    const userBtn = page.locator('header button', { hasText: email })
+    const userBtn = page.locator('header button', { has: page.locator('svg.lucide-user') })
     await userBtn.click()
     await page.locator('[role="menuitem"]', { hasText: 'Log out' }).click()
 
