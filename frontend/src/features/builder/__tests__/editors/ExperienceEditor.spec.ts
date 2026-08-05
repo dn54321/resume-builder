@@ -84,6 +84,7 @@ describe('ExperienceEditor', () => {
       id: 'exp-1',
       order: 0,
       parentId: null,
+      locked: false,
       fields: [
         { key: 'company', value: 'Acme Corp', order: 0 },
         { key: 'title', value: 'Senior Engineer', order: 1 },
@@ -108,6 +109,7 @@ describe('ExperienceEditor', () => {
       id: 'exp-1',
       order: 0,
       parentId: null,
+      locked: false,
       fields: [
         { key: 'company', value: '', order: 0 },
         { key: 'title', value: '', order: 1 },
@@ -137,6 +139,7 @@ describe('ExperienceEditor', () => {
       id: 'exp-1',
       order: 0,
       parentId: null,
+      locked: false,
       fields: [
         { key: 'company', value: '', order: 0 },
         { key: 'title', value: '', order: 1 },
@@ -165,6 +168,7 @@ describe('ExperienceEditor', () => {
       id: 'exp-1',
       order: 0,
       parentId: null,
+      locked: false,
       fields: [
         { key: 'company', value: '', order: 0 },
         { key: 'title', value: '', order: 1 },
@@ -194,6 +198,7 @@ describe('ExperienceEditor', () => {
       id: 'exp-1',
       order: 0,
       parentId: null,
+      locked: false,
       fields: [
         { key: 'company', value: '', order: 0 },
         { key: 'title', value: '', order: 1 },
@@ -218,6 +223,7 @@ describe('ExperienceEditor', () => {
       id: 'exp-1',
       order: 0,
       parentId: null,
+      locked: false,
       fields: [
         { key: 'company', value: '', order: 0 },
         { key: 'title', value: '', order: 1 },
@@ -246,6 +252,7 @@ describe('ExperienceEditor', () => {
         id: 'exp-1',
         order: 0,
         parentId: null,
+        locked: false,
         fields: [
           { key: 'company', value: 'Startup Inc', order: 0 },
           { key: 'title', value: 'CTO', order: 1 },
@@ -275,6 +282,7 @@ describe('ExperienceEditor', () => {
         id: 'exp-1',
         order: 0,
         parentId: null,
+        locked: false,
         fields: [
           { key: 'company', value: 'Startup Inc', order: 0 },
           { key: 'title', value: 'CTO', order: 1 },
@@ -308,6 +316,7 @@ describe('ExperienceEditor', () => {
         id: 'exp-1',
         order: 0,
         parentId: null,
+        locked: false,
         fields: [
           { key: 'company', value: 'Startup Inc', order: 0 },
           { key: 'title', value: 'CTO', order: 1 },
@@ -338,6 +347,7 @@ describe('ExperienceEditor', () => {
         id: parentId,
         order: 0,
         parentId: null,
+        locked: false,
         fields: [
           { key: 'company', value: 'Acme Corp', order: 0 },
           { key: 'title', value: 'Engineer', order: 1 },
@@ -374,6 +384,7 @@ describe('ExperienceEditor', () => {
           id: parentId,
           order: 0,
           parentId: null,
+          locked: false,
           fields: [
             { key: 'company', value: 'Acme Corp', order: 0 },
             { key: 'title', value: 'Engineer', order: 1 },
@@ -414,6 +425,7 @@ describe('ExperienceEditor', () => {
           id: parentId,
           order: 0,
           parentId: null,
+          locked: false,
           fields: [
             { key: 'company', value: 'Acme Corp', order: 0 },
             { key: 'title', value: 'Engineer', order: 1 },
@@ -458,6 +470,7 @@ describe('ExperienceEditor', () => {
           id: parentId,
           order: 0,
           parentId: null,
+          locked: false,
           fields: [
             { key: 'company', value: 'Acme Corp', order: 0 },
             { key: 'title', value: 'Engineer', order: 1 },
@@ -501,6 +514,7 @@ describe('ExperienceEditor', () => {
           id: 'exp-1',
           order: 0,
           parentId: null,
+          locked: false,
           fields: [
             { key: 'company', value: 'Acme Corp', order: 0 },
             { key: 'title', value: 'Senior', order: 1 },
@@ -514,6 +528,7 @@ describe('ExperienceEditor', () => {
           id: 'exp-2',
           order: 1,
           parentId: null,
+          locked: false,
           fields: [
             { key: 'company', value: 'Beta Inc', order: 0 },
             { key: 'title', value: 'Junior', order: 1 },
@@ -547,6 +562,7 @@ describe('ExperienceEditor', () => {
           id: 'exp-1',
           order: 0,
           parentId: null,
+          locked: false,
           fields: [
             { key: 'company', value: 'Acme Corp', order: 0 },
             { key: 'title', value: 'Engineer', order: 1 },
@@ -573,6 +589,7 @@ describe('ExperienceEditor', () => {
           id: 'exp-1',
           order: 0,
           parentId: null,
+          locked: false,
           fields: [
             { key: 'company', value: 'Acme Corp', order: 0 },
             { key: 'title', value: 'Engineer', order: 1 },
@@ -586,12 +603,14 @@ describe('ExperienceEditor', () => {
           id: 'b1',
           order: 0,
           parentId: 'exp-1',
+          locked: false,
           fields: [{ key: 'text', value: 'Bullet 1', order: 0 }],
         },
         {
           id: 'b2',
           order: 1,
           parentId: 'exp-1',
+          locked: false,
           fields: [{ key: 'text', value: 'Bullet 2', order: 0 }],
         },
       ]

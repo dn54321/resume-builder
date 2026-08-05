@@ -2,8 +2,10 @@
  * Section toggle flow — critical path: core builder feature for controlling
  * what appears on the resume. Broken toggle means wrong content on export.
  *
- * RES-91: the old checkbox/switch toggle was replaced with an eye icon
- * (visibility) and a lock icon (Tailor-protect) per section row.
+ * The old checkbox/switch toggle was replaced with an eye icon
+ * (visibility) per section row. The Tailor-protect lock lives on the
+ * individual sub-items (entries) inside the editors — the eye stays on
+ * sections, the lock lives on entries.
  *
  * Tests the full stack: browser → frontend → backend → database.
  */
@@ -40,7 +42,7 @@ test.describe('Section toggle', () => {
     }
   })
 
-  test('every section row shows an eye icon and a lock icon', async ({ page }) => {
+  test('every section row shows an eye icon and no lock icon (RES-97)', async ({ page }) => {
     await page.goto('/builder')
     await page.waitForSelector('text=Name & Contact', { timeout: 10_000 })
 
@@ -52,7 +54,9 @@ test.describe('Section toggle', () => {
     for (let i = 0; i < 10; i++) {
       const row = rows.nth(i)
       await expect(row.locator('[data-testid="section-eye-toggle"]')).toBeVisible()
-      await expect(row.locator('[data-testid="section-lock-toggle"]')).toBeVisible()
+      // The lock toggle no longer exists on section rows.
+      await expect(row.locator('[data-testid="section-lock-toggle"]')).toHaveCount(0)
+      await expect(row.locator('svg.lucide-lock, svg.lucide-lock-open')).toHaveCount(0)
     }
   })
 
@@ -79,44 +83,35 @@ test.describe('Section toggle', () => {
     await expect(summaryRow).not.toHaveClass(/opacity-55/)
   })
 
-  test('lock icon toggles a section locked state', async ({ page }) => {
+  test('entry lock toggle protects a sub-item inside the editor (RES-97)', async ({ page }) => {
     await page.goto('/builder')
-    await page.waitForSelector('text=Summary', { timeout: 10_000 })
+    await page.waitForSelector('text=Experience', { timeout: 10_000 })
 
-    const summaryRow = page.locator('li').filter({ hasText: 'Summary' })
-    const lockBtn = summaryRow.locator('[data-testid="section-lock-toggle"]')
+    // Open the Experience editor (it is enabled by default; select it).
+    const experienceRow = page.locator('li').filter({ hasText: 'Experience' })
+    await experienceRow.locator('label').first().click()
 
-    // Unlocked by default: open LockOpen icon shown at full opacity
-    await expect(summaryRow.locator('svg.lucide-lock-open')).toBeVisible()
-    await expect(summaryRow.locator('svg.lucide-lock')).toHaveCount(0)
+    // Add a job entry so there is a sub-item to lock.
+    const addBtn = page.locator('button', { hasText: '+ Add Job' })
+    await addBtn.click()
 
-    // Click the lock → locked: closed Lock icon, semi-transparent inactive state
+    const entryPanel = page.locator('[data-entry-panel]').first()
+    const lockBtn = entryPanel.locator('[data-testid="entry-lock-toggle"]')
+    await expect(lockBtn).toBeVisible()
+
+    // Unlocked by default: open LockOpen icon.
+    await expect(entryPanel.locator('svg.lucide-lock-open')).toBeVisible()
+    await expect(entryPanel.locator('svg.lucide-lock')).toHaveCount(0)
+
+    // Click the lock → locked: closed Lock icon.
     await lockBtn.click()
-    await expect(summaryRow.locator('svg.lucide-lock')).toBeVisible()
-    await expect(summaryRow.locator('svg.lucide-lock-open')).toHaveCount(0)
-    await expect(lockBtn).toHaveClass(/text-muted-foreground\/50/)
+    await expect(entryPanel.locator('svg.lucide-lock')).toBeVisible()
+    await expect(entryPanel.locator('svg.lucide-lock-open')).toHaveCount(0)
 
-    // Click again → unlocked
+    // Click again → unlocked.
     await lockBtn.click()
-    await expect(summaryRow.locator('svg.lucide-lock-open')).toBeVisible()
-    await expect(summaryRow.locator('svg.lucide-lock')).toHaveCount(0)
-    await expect(lockBtn).not.toHaveClass(/text-muted-foreground\/50/)
-  })
-
-  test('lock state is independent of visibility state', async ({ page }) => {
-    await page.goto('/builder')
-    await page.waitForSelector('text=Summary', { timeout: 10_000 })
-
-    const summaryRow = page.locator('li').filter({ hasText: 'Summary' })
-
-    // Lock the section…
-    await summaryRow.locator('[data-testid="section-lock-toggle"]').click()
-    await expect(summaryRow.locator('svg.lucide-lock')).toBeVisible()
-
-    // …then hide it. The lock must survive the visibility toggle.
-    await summaryRow.locator('[data-testid="section-eye-toggle"]').click()
-    await expect(summaryRow.locator('svg.lucide-eye-off')).toBeVisible()
-    await expect(summaryRow.locator('svg.lucide-lock')).toBeVisible()
+    await expect(entryPanel.locator('svg.lucide-lock-open')).toBeVisible()
+    await expect(entryPanel.locator('svg.lucide-lock')).toHaveCount(0)
   })
 
   test('label click selects the section in the editor', async ({ page }) => {

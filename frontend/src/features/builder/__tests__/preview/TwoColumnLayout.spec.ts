@@ -55,6 +55,7 @@ describe('TwoColumnLayout', () => {
               {
                 order: 0,
                 parentId: null,
+                locked: false,
                 fields: [{ key: 'text', value: 'A software engineer with 5 years of experience.', order: 0 }],
               },
             ],
@@ -67,6 +68,7 @@ describe('TwoColumnLayout', () => {
               {
                 order: 0,
                 parentId: null,
+                locked: false,
                 fields: [
                   { key: 'company', value: 'Acme Corp', order: 0 },
                   { key: 'title', value: 'Senior Engineer', order: 1 },
@@ -112,6 +114,7 @@ describe('TwoColumnLayout', () => {
               {
                 order: 0,
                 parentId: null,
+                locked: false,
                 fields: [
                   { key: 'fullName', value: 'Jane Smith', order: 0 },
                   { key: 'email', value: 'jane@example.com', order: 1 },
@@ -157,6 +160,7 @@ describe('TwoColumnLayout', () => {
               {
                 order: 0,
                 parentId: null,
+                locked: false,
                 fields: [{ key: 'text', value: 'Experienced full-stack developer.', order: 0 }],
               },
             ],
@@ -209,6 +213,7 @@ describe('TwoColumnLayout', () => {
               {
                 order: 0,
                 parentId: null,
+                locked: false,
                 fields: [
                   { key: 'company', value: 'Acme Corp', order: 0 },
                   { key: 'title', value: 'Senior Engineer', order: 1 },
@@ -245,6 +250,7 @@ describe('TwoColumnLayout', () => {
               {
                 order: 0,
                 parentId: null,
+                locked: false,
                 fields: [
                   { key: 'company', value: 'Startup Inc', order: 0 },
                   { key: 'title', value: 'CTO', order: 1 },
@@ -283,6 +289,7 @@ describe('TwoColumnLayout', () => {
               {
                 order: 0,
                 parentId: null,
+                locked: false,
                 fields: [
                   { key: 'school', value: 'MIT', order: 0 },
                   { key: 'degree', value: 'BS', order: 1 },
@@ -353,6 +360,7 @@ describe('TwoColumnLayout', () => {
               {
                 order: 0,
                 parentId: null,
+                locked: false,
                 fields: [
                   { key: 'name', value: 'English', order: 0 },
                   { key: 'proficiency', value: 'Native', order: 1 },
@@ -386,6 +394,7 @@ describe('TwoColumnLayout', () => {
               {
                 order: 0,
                 parentId: null,
+                locked: false,
                 fields: [
                   { key: 'name', value: 'AWS Solutions Architect', order: 0 },
                   { key: 'issuer', value: 'Amazon', order: 1 },
@@ -422,6 +431,7 @@ describe('TwoColumnLayout', () => {
               {
                 order: 0,
                 parentId: null,
+                locked: false,
                 fields: [
                   { key: 'name', value: 'My Project', order: 0 },
                   { key: 'description', value: 'A cool project', order: 1 },
@@ -503,6 +513,7 @@ describe('TwoColumnLayout', () => {
         id: 's1',
         order: 0,
         parentId: null,
+        locked: false,
         fields: [{ key: 'text', value: 'A great summary.', order: 0 }],
       }]
       summarySection.column = 'left'
@@ -529,6 +540,7 @@ describe('TwoColumnLayout', () => {
         id: 's1',
         order: 0,
         parentId: null,
+        locked: false,
         fields: [{ key: 'text', value: 'A great summary.', order: 0 }],
       }]
 

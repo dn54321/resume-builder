@@ -47,6 +47,11 @@ export class SectionEntryDto {
   @IsOptional()
   parentId?: string;
 
+  /** Whether the entry is locked — Tailor must not modify/remove it. */
+  @IsBoolean()
+  @IsOptional()
+  locked?: boolean;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => SectionFieldDto)

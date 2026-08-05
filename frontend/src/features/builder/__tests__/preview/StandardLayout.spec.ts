@@ -56,6 +56,7 @@ describe('StandardLayout', () => {
               {
                 order: 0,
                 parentId: null,
+                locked: false,
                 fields: [
                   { key: 'fullName', value: 'John Doe', order: 0 },
                   { key: 'email', value: 'john@example.com', order: 1 },
@@ -103,6 +104,7 @@ describe('StandardLayout', () => {
               {
                 order: 0,
                 parentId: null,
+                locked: false,
                 fields: [
                   { key: 'fullName', value: '', order: 0 },
                   { key: 'email', value: 'a@b.com', order: 1 },
@@ -136,6 +138,7 @@ describe('StandardLayout', () => {
               {
                 order: 0,
                 parentId: null,
+                locked: false,
                 fields: [{ key: 'text', value: 'A dedicated software engineer with 5 years of experience.', order: 0 }],
               },
             ],
@@ -189,6 +192,7 @@ describe('StandardLayout', () => {
               {
                 order: 0,
                 parentId: null,
+                locked: false,
                 fields: [
                   { key: 'company', value: 'Acme Corp', order: 0 },
                   { key: 'title', value: 'Senior Engineer', order: 1 },
@@ -225,6 +229,7 @@ describe('StandardLayout', () => {
         id: parentId,
         order: 0,
         parentId: null,
+        locked: false,
         fields: [
           { key: 'company', value: 'Acme Corp', order: 0 },
           { key: 'title', value: 'Senior Engineer', order: 1 },
@@ -286,6 +291,7 @@ describe('StandardLayout', () => {
         id: 'exp-1',
         order: 0,
         parentId: null,
+        locked: false,
         fields: [
           { key: 'company', value: 'Startup Inc', order: 0 },
           { key: 'title', value: 'CTO', order: 1 },
@@ -316,6 +322,7 @@ describe('StandardLayout', () => {
         id: 'edu-1',
         order: 0,
         parentId: null,
+        locked: false,
         fields: [
           { key: 'school', value: 'MIT', order: 0 },
           { key: 'degree', value: 'Bachelor of Science', order: 1 },
@@ -355,18 +362,21 @@ describe('StandardLayout', () => {
         id: 's1',
         order: 0,
         parentId: null,
+        locked: false,
         fields: [{ key: 'name', value: 'TypeScript', order: 0 }],
       })
       skillSection.entries.push({
         id: 's2',
         order: 1,
         parentId: null,
+        locked: false,
         fields: [{ key: 'name', value: 'Python', order: 0 }],
       })
       skillSection.entries.push({
         id: 's3',
         order: 2,
         parentId: null,
+        locked: false,
         fields: [{ key: 'name', value: 'Rust', order: 0 }],
       })
 
@@ -388,12 +398,14 @@ describe('StandardLayout', () => {
         id: 's1',
         order: 0,
         parentId: null,
+        locked: false,
         fields: [{ key: 'name', value: 'Communication', order: 0 }],
       })
       skillSection.entries.push({
         id: 's2',
         order: 1,
         parentId: null,
+        locked: false,
         fields: [{ key: 'name', value: 'Leadership', order: 0 }],
       })
 
@@ -421,6 +433,7 @@ describe('StandardLayout', () => {
         id: 'l1',
         order: 0,
         parentId: null,
+        locked: false,
         fields: [
           { key: 'name', value: 'English', order: 0 },
           { key: 'proficiency', value: 'Native', order: 1 },
@@ -430,6 +443,7 @@ describe('StandardLayout', () => {
         id: 'l2',
         order: 1,
         parentId: null,
+        locked: false,
         fields: [
           { key: 'name', value: 'Spanish', order: 0 },
           { key: 'proficiency', value: 'Professional Working', order: 1 },
@@ -457,6 +471,7 @@ describe('StandardLayout', () => {
         id: 'l1',
         order: 0,
         parentId: null,
+        locked: false,
         fields: [
           { key: 'name', value: 'French', order: 0 },
           { key: 'proficiency', value: '', order: 1 },
@@ -482,6 +497,7 @@ describe('StandardLayout', () => {
         id: 'c1',
         order: 0,
         parentId: null,
+        locked: false,
         fields: [
           { key: 'name', value: 'AWS Solutions Architect', order: 0 },
           { key: 'issuer', value: 'Amazon Web Services', order: 1 },
@@ -513,6 +529,7 @@ describe('StandardLayout', () => {
         id: 'p1',
         order: 0,
         parentId: null,
+        locked: false,
         fields: [
           { key: 'name', value: 'My Project', order: 0 },
           { key: 'description', value: 'A cool project about things', order: 1 },
@@ -525,6 +542,7 @@ describe('StandardLayout', () => {
         id: 'pb1',
         order: 0,
         parentId: 'p1',
+        locked: false,
         fields: [{ key: 'text', value: 'Implemented feature X', order: 0 }],
       })
 
@@ -560,12 +578,14 @@ describe('StandardLayout', () => {
         id: 'h1',
         order: 0,
         parentId: null,
+        locked: false,
         fields: [{ key: 'name', value: 'Photography', order: 0 }],
       })
       hobbySection.entries.push({
         id: 'h2',
         order: 1,
         parentId: null,
+        locked: false,
         fields: [{ key: 'name', value: 'Rock Climbing', order: 0 }],
       })
 
@@ -591,12 +611,12 @@ describe('StandardLayout', () => {
       const skillSection = store.sections.find((s) => s.sectionType === 'hard_skills')!
       skillSection.entries = []
       skillSection.order = 0
-      skillSection.entries.push({ id: 's1', order: 0, parentId: null, fields: [{ key: 'name', value: 'TS', order: 0 }] })
+      skillSection.entries.push({ id: 's1', order: 0, parentId: null, locked: false, fields: [{ key: 'name', value: 'TS', order: 0 }] })
 
       const hobbySection = store.sections.find((s) => s.sectionType === 'hobbies')!
       hobbySection.entries = []
       hobbySection.order = 1
-      hobbySection.entries.push({ id: 'h1', order: 0, parentId: null, fields: [{ key: 'name', value: 'Running', order: 0 }] })
+      hobbySection.entries.push({ id: 'h1', order: 0, parentId: null, locked: false, fields: [{ key: 'name', value: 'Running', order: 0 }] })
 
       // Only these two have data
       store.sections = [skillSection, hobbySection]
@@ -636,6 +656,7 @@ describe('StandardLayout', () => {
         id: 's1',
         order: 0,
         parentId: null,
+        locked: false,
         fields: [{ key: 'text', value: 'A great summary.', order: 0 }],
       }]
 
@@ -661,6 +682,7 @@ describe('StandardLayout', () => {
         id: 's1',
         order: 0,
         parentId: null,
+        locked: false,
         fields: [{ key: 'text', value: 'A great summary.', order: 0 }],
       }]
 
