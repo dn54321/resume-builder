@@ -12,7 +12,21 @@ tickets get implemented correctly.
    ```
    This file contains the orchestrator's intercom name (e.g. `orchestrator-12345`).
    Use this name in ALL intercom send/ask calls below.
-3. Register:
+3. **Check spawn state FIRST — a previous boss may have paused spawning.**
+   The source of truth is `atlas/state/atlas.json` (survives orchestrator AND
+   boss restarts — the flag is persisted when you PAUSE_SPAWNS):
+   ```
+   python3 -c "import json; print(json.load(open('atlas/state/atlas.json')).get('spawnsPaused'))"
+   ```
+   - `True` → spawning is FROZEN. A previous boss paused it mid-diagnosis
+     (e.g. duplicate workers). Do NOT assume the board is broken because
+     no new workers spawn — check `state/dashboard.txt` (shows
+     `Spawns: ⏸ PAUSED (boss)`). Resume with `RESUME_SPAWNS` once you've
+     confirmed the problem is solved, or keep it paused while you diagnose.
+   - `False` / missing → spawning is active, normal operations.
+   - The dashboard line `Spawns: ⏸ PAUSED | ▶ active` and every `STATUS`
+     reply also report this — cross-check them with atlas.json.
+4. Register:
    ```
    intercom({ action: "send", to: "<orchestrator-name>", message: "BOSS: registering" })
    ```
@@ -21,7 +35,7 @@ tickets get implemented correctly.
    ```
    The orchestrator auto-discovers active epics on startup. Reply arrives as an
    intercom message in your session.
-4. If the board is empty or you need additional tickets, use `EPIC` / `TICKET`:
+5. If the board is empty or you need additional tickets, use `EPIC` / `TICKET`:
    ```
    intercom({ action: "send", to: "orchestrator", message: "EPIC RES-79" })
    intercom({ action: "send", to: "orchestrator", message: "TICKET RES-80" })
@@ -71,6 +85,8 @@ intercom({ action: "list" })
 | `KILL <type>` | Kill all agents of type |
 | `SET_INTERVAL <key> <s>` | Adjust scheduler interval |
 | `GET_CONFIG` | Show effective configuration |
+| `PAUSE_SPAWNS` | ⏸ Freeze worker spawning — launchReady stops spawning new workers (existing workers keep running). Persists across restarts. Use when diagnosing problems (e.g. duplicate workers) so you don't burn tokens on more spawns. |
+| `RESUME_SPAWNS` | ▶ Unfreeze worker spawning — launchReady active again, catches up on queued tickets. |
 
 ### ⛔ Blocked Commands (orchestrator rejects these)
 
@@ -146,6 +162,49 @@ Available intervals: `status_sync`, `pr_scan`, `dashboard_refresh`,
 - `SPAWN reviewer` — Start a reviewer agent
 - `SPAWN pr_manager` — Start a PR manager agent
 - `KILL reviewer` — Stop all reviewer agents
+
+### Duplicate Worker Protocol (freeze → kill → diagnose → fix → resume)
+
+When you suspect duplicate workers on the same ticket, **freeze the board
+FIRST** so you don't burn tokens on more spawns while diagnosing:
+
+1. **Freeze spawning** — stop new workers immediately:
+   ```
+   intercom({ action: "send", to: "orchestrator", message: "PAUSE_SPAWNS" })
+   ```
+   Existing workers keep running; launchReady stops spawning new ones. The
+   flag is PERSISTED (state/atlas.json + dashboard shows `Spawns: ⏸ PAUSED`)
+   so an orchestrator restart mid-diagnosis stays frozen.
+2. **Identify the duplicates** — cross-reference three sources:
+   ```
+   cat state/dashboard.txt                                  # agent → ticket mapping
+   ps -eo pid,ppid,etime,args | grep -E "\bpi\b" | grep -v grep   # live workers
+   for p in $(ls /proc | grep -E '^[0-9]+$'); do cwd=$(readlink /proc/$p/cwd 2>/dev/null); \
+     [[ "$cwd" == */atlas/state/worktrees/RES-* ]] && echo "$p ${cwd##*/worktrees/}"; done  # worker → worktree
+   ```
+   One worktree with 2+ pi processes = collision.
+3. **Kill the duplicates** — `STOP <name>` via intercom (ONE name per
+   command — STOP only reads the first arg):
+   ```
+   intercom({ action: "send", to: "orchestrator", message: "STOP worker-4" })
+   intercom({ action: "send", to: "orchestrator", message: "STOP worker-5" })
+   ```
+   For ORPHANED headless workers from a previous orchestrator session (ppid
+   chain does NOT trace to the current orchestrator pid, cwd=state/worktrees/
+   <TICKET>), intercom STOP can't reach them — kill the pid directly:
+   `kill -9 <pid>` (and its bash wrapper if any). They survived a SIGKILL
+   restart and are invisible to the pool.
+4. **Diagnose the root cause** with the board frozen — read logs, git log,
+   fix the bug (see Bug Fix Protocol), commit + push, restart orchestrator.
+5. **Resume** only when confident:
+   ```
+   intercom({ action: "send", to: "orchestrator", message: "RESUME_SPAWNS" })
+   ```
+   Verify `Spawns: ▶ active` on the dashboard and exactly one worker per
+   ticket after catch-up.
+
+Rule: when in doubt, PAUSE_SPAWNS first. Spawning can wait; a colliding
+worker burns tokens and corrupts worktrees.
 
 ### Bug Fix Protocol
 
