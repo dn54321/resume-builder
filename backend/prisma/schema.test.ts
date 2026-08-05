@@ -80,6 +80,7 @@ async function run(): Promise<void> {
         "column" TEXT NOT NULL DEFAULT 'right',
         "order" INTEGER NOT NULL DEFAULT 0,
         "locked" BOOLEAN NOT NULL DEFAULT false,
+        "enabled" BOOLEAN NOT NULL DEFAULT true,
         CONSTRAINT "ResumeSection_resumeId_fkey" FOREIGN KEY ("resumeId") REFERENCES "Resume" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
         CONSTRAINT "ResumeSection_sectionId_fkey" FOREIGN KEY ("sectionId") REFERENCES "Section" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
       )
