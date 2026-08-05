@@ -80,6 +80,27 @@ else
   echo "[pre.sh] WARNING: no backend/.env in main repo — DB-backed tests will fail"
 fi
 
+# ─── Seed backend/dev.db into the worktree ─────────────────────────
+# backend/dev.db is GITIGNORED (sqlite snapshot). DATABASE_URL=file:./dev.db
+# resolves cwd-relative to backend/dev.db (NOT prisma/dev.db — that 0-byte
+# file is a decoy). Without a populated copy, prisma-schema.spec.ts and
+# every DB-backed test fail with 'no such table: User' until the worker
+# figures out to restore it (observed 2026-08-06: worker 019fd440 reported
+# 0-byte dev.db in ALL worktrees blocking backend verification). Copy the
+# main repo's migrated snapshot so `pnpm test` is green out of the box.
+BACKEND_DB_SRC="${MAIN_REPO_ROOT}/backend/dev.db"
+BACKEND_DB_DST="${ATLAS_WORKTREE}/backend/dev.db"
+if [ -f "$BACKEND_DB_SRC" ] && [ -s "$BACKEND_DB_SRC" ]; then
+  if [ ! -f "$BACKEND_DB_DST" ] || [ ! -s "$BACKEND_DB_DST" ]; then
+    cp "$BACKEND_DB_SRC" "$BACKEND_DB_DST"
+    echo "[pre.sh] Seeded backend/dev.db → worktree (migrated sqlite snapshot)"
+  else
+    echo "[pre.sh] backend/dev.db already present in worktree"
+  fi
+else
+  echo "[pre.sh] WARNING: no non-empty backend/dev.db in main repo — DB tests will fail"
+fi
+
 # ─── Copy the generated Prisma client into the worktree ────────────
 # backend/src/generated/prisma is GITIGNORED (Prisma 7 output), so fresh
 # worktrees never get it — prisma-schema.spec.ts and every DB-backed test
