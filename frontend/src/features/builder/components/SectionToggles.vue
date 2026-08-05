@@ -35,7 +35,7 @@
           <EyeOff v-else class="w-4 h-4" />
         </button>
 
-        <!-- Lock toggle was removed from section rows in RES-97 — the
+        <!-- Lock toggle was removed from section rows — the
              Tailor-protect lock now lives on individual sub-items inside
              the editors. The eye (visibility) toggle stays on sections. -->
 
@@ -88,7 +88,7 @@ const props = withDefaults(defineProps<{
   orderedSectionTypes?: SectionType[]
   columnAssignments: Record<SectionType, 'left' | 'right'>
   selectedSectionId?: string | null
-  /** When false (default), the column assignment dropdowns are hidden behind the ?layout=True feature flag (RES-86). */
+  /** When false (default), the column assignment dropdowns are hidden behind the ?layout=True feature flag. */
   showTwoColumn?: boolean
 }>(), {
   showTwoColumn: false,

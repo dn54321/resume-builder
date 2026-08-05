@@ -214,7 +214,7 @@ export class KeywordEngine implements MatchingEngine {
     const scoredBullets: ScoredEntry[] = [];
     const scoredSkills: ScoredEntry[] = [];
     const passThrough: SectionEntryDto[] = [];
-    // Locked sub-items (RES-97) always pass through unfiltered — they are
+    // Locked sub-items always pass through unfiltered — they are
     // never removed or re-ranked, even when they score zero against the JD.
     const lockedPassThrough: SectionEntryDto[] = [];
 
@@ -261,7 +261,7 @@ export class KeywordEngine implements MatchingEngine {
       topBullets.push(...kept);
     }
 
-    // Combine: locked pass-through (RES-97) + pass-through + kept bullets +
+    // Combine: locked pass-through + pass-through + kept bullets +
     // kept skills, sorted by original order. Locked sub-items are included
     // unconditionally — never dropped for zero JD overlap, never counted
     // against the per-entry/section caps.

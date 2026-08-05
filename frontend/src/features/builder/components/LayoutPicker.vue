@@ -15,7 +15,7 @@
         <span class="text-[0.6875rem] text-muted-foreground">Single column</span>
       </button>
       <!--
-        2:1 Column layout is behind the ?layout=True feature flag (RES-86).
+        2:1 Column layout is behind the ?layout=True feature flag.
         It only renders when the parent passes showTwoColumn=true, otherwise
         the Standard layout is the only option shown. The TwoColumnLayout
         component itself is preserved and still used when selected.
@@ -43,7 +43,7 @@ import type { LayoutType } from '@/features/builder/types/resume'
 
 withDefaults(defineProps<{
   modelValue: LayoutType
-  /** When false (default), the 2:1 Column layout option is hidden behind the ?layout=True feature flag (RES-86). */
+  /** When false (default), the 2:1 Column layout option is hidden behind the ?layout=True feature flag. */
   showTwoColumn?: boolean
 }>(), {
   showTwoColumn: false,

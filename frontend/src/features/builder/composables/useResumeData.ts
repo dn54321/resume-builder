@@ -178,7 +178,7 @@ export function useResumeData() {
       }
 
       try {
-        // GET /api/v1/resumes returns a LIST of summaries (RES-93). Load the
+        // GET /api/v1/resumes returns a LIST of summaries. Load the
         // first resume's full tree via /resumes/:id so sections are included.
         const list = await api.get<Array<{ id: string }>>('/api/v1/resumes')
         if (list.length > 0) {

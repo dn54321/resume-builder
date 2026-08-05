@@ -72,8 +72,8 @@ model SectionEntry {
   resumeSectionId String
   order           Int
   parentId        String?
-  // Entry-level Tailor-protect flag (RES-97): a locked sub-item (job,
-  // project, skill, …) is never modified or removed by Tailor Resume.
+  // Entry-level Tailor-protect flag: a locked sub-item (job, project,
+  // skill, …) is never modified or removed by Tailor Resume.
   locked          Boolean @default(false)
 
   resumeSection ResumeSection  @relation(fields: [resumeSectionId], references: [id], onDelete: Cascade)

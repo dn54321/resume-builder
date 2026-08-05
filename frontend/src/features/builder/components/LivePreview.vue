@@ -2,10 +2,10 @@
   <div class="live-preview flex flex-col h-full bg-gray-200 dark:bg-gray-900">
     <!-- Header bar -->
     <!--
-      The fullscreen expand button that used to live here was removed in
-      RES-81 — on mobile the FullscreenPreview modal is now opened by the
-      FAB in ResumeBuilder.vue (the sole fullscreen trigger), and on
-      desktop (>=1024px) the inline preview is used directly (RES-86).
+      The fullscreen expand button that used to live here was removed: on
+      mobile the FullscreenPreview modal is now opened by the FAB in
+      ResumeBuilder.vue (the sole fullscreen trigger), and on desktop
+      (>=1024px) the inline preview is used directly.
     -->
     <div
       class="live-preview__header h-10 px-4 border-b border-gray-300 bg-white flex items-center justify-between shrink-0"

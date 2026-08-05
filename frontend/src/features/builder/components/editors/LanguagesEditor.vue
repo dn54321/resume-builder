@@ -38,7 +38,7 @@
           <option value="Native">Native</option>
           <option value="Bilingual">Bilingual</option>
         </select>
-        <!-- Entry lock toggle: protect this language from Tailor edits (RES-97) -->
+        <!-- Entry lock toggle: protect this language from Tailor edits -->
         <button
           type="button"
           class="w-6 h-6 flex items-center justify-center border-none bg-transparent rounded-sm text-xs shrink-0 transition-colors hover:bg-muted/50 hover:text-foreground"

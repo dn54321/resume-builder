@@ -28,7 +28,7 @@
           aria-label="Drag to reorder entry"
         >&#x2630;</span>
         <span class="flex-1 text-[0.8125rem] font-medium text-foreground overflow-hidden text-ellipsis whitespace-nowrap">{{ entryTitle(entry, index) }}</span>
-        <!-- Entry lock toggle: protect this sub-item from Tailor edits (RES-97) -->
+        <!-- Entry lock toggle: protect this sub-item from Tailor edits -->
         <button
           type="button"
           class="w-6 h-6 flex items-center justify-center border-none bg-transparent rounded-sm text-xs shrink-0 transition-colors hover:bg-muted/50 hover:text-foreground"

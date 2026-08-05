@@ -116,8 +116,8 @@ export const useResumeStore = defineStore('resume', () => {
   /**
    * Toggle the `locked` flag — protects the section from Tailor edits.
    * Kept for backward compatibility: the section-level lock remains a
-   * fast-path in the Tailor engine (RES-92) even though the UI lock now
-   * lives on individual entries (RES-97).
+   * fast-path in the Tailor engine even though the UI lock now lives on
+   * individual entries.
    * @param sectionType
    */
   function toggleLock(sectionType: SectionType) {
@@ -129,7 +129,7 @@ export const useResumeStore = defineStore('resume', () => {
 
   /**
    * Toggle the `locked` flag on an individual sub-item (entry) within a
-   * section (RES-97). Locked entries are never modified/removed by Tailor
+   * section. Locked entries are never modified/removed by Tailor
    * Resume, even when their section is unlocked.
    * @param sectionType
    * @param entryId
@@ -396,7 +396,7 @@ export const useResumeStore = defineStore('resume', () => {
     if (sections.value.find((s) => s.sectionId === sectionId)?.locked) return true
 
     // Locked entries (or locked bullet sub-items) keep their current
-    // visibility regardless of keyword matches (RES-97).
+    // visibility regardless of keyword matches.
     if (isEntryLockedAt(sectionId, entryIndex)) return true
     if (isBulletEntryLocked(sectionId, entryIndex, bulletIndex)) return true
 
@@ -423,7 +423,7 @@ export const useResumeStore = defineStore('resume', () => {
 
     const lowerName = skillName.toLowerCase().trim()
 
-    // Locked skill entries keep their visibility regardless of matches (RES-97).
+    // Locked skill entries keep their visibility regardless of matches.
     const section = sections.value.find((s) => s.sectionId === sectionId)
     const lockedEntry = section?.entries.find(
       (e) =>
@@ -449,7 +449,7 @@ export const useResumeStore = defineStore('resume', () => {
   /**
    * Get the count of visible bullets for a section when filtered.
    * Returns an object: { visible: number, total: number }
-   * Bullets belonging to locked entries are always counted as visible (RES-97).
+   * Bullets belonging to locked entries are always counted as visible.
    * @param sectionId
    */
   function getFilteredBulletCount(sectionId: string): { visible: number; total: number } {

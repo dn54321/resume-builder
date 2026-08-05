@@ -45,7 +45,7 @@ const error = ref('')
 const showConfirmModal = ref(false)
 const resumeToDelete = ref<ResumeSummary | null>(null)
 
-// ── Preview state (RES-87 two-pane layout) ────────────────────────
+// ── Preview state (two-pane layout) ───────────────────────────────
 
 const selectedResumeId = ref<string | null>(null)
 const previewResume = ref<ResumeFull | null>(null)
@@ -88,7 +88,7 @@ const previewScale = computed(() => {
  * explicit dimensions the unscaled box would overflow narrow preview panes
  * (horizontal scrollbar + flexbox centering clips the left edge). Wrapping
  * the paper in a box sized to the scaled dimensions keeps it fully visible
- * and unscrollable (RES-87).
+ * and unscrollable.
  */
 const scaledPaperWidth = computed(() => Math.round(PAPER_WIDTH_PX * previewScale.value))
 const scaledPaperHeight = computed(() => Math.round(PAPER_HEIGHT_PX * previewScale.value))
@@ -98,7 +98,7 @@ let resizeObserver: ResizeObserver | null = null
 onMounted(() => {
   const el = previewPaneRef.value
   if (el && 'ResizeObserver' in window) {
-    // Read initial width, then keep tracking on pane resize (RES-87).
+    // Read initial width, then keep tracking on pane resize.
     containerWidth.value = el.clientWidth
     resizeObserver = new ResizeObserver((entries) => {
       const entry = entries[0]
@@ -179,7 +179,7 @@ async function handleCreateResume(): Promise<void> {
 
 /**
  * Select a resume card: fetch the full resume and render its preview in
- * the right pane. Replaces the old navigate-to-builder card click (RES-87).
+ * the right pane. Replaces the old navigate-to-builder card click.
  * @param {ResumeSummary} resume - The clicked resume
  */
 async function selectResume(resume: ResumeSummary): Promise<void> {

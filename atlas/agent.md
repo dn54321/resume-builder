@@ -3,6 +3,35 @@
 Warnings for coding agents (pi sessions, Atlas workers, the boss) operating in
 this repo. These rules exist because past agents caused real damage. Read them.
 
+## ⚠️ WARNING — do NOT put ticket references (RES-XX) in code comments
+
+Ticket IDs in code comments rot: a comment written for RES-42 says nothing to
+the next developer six months later, the ticket is closed, and the reference
+becomes noise that obscures the actual explanation. Keep comments about WHAT
+the code does and WHY it is shaped this way — never about WHICH ticket added
+it.
+
+**Allowed exceptions (keep the ticket ID):**
+
+- **Critical bug alerts / discovery notes** — when the comment exists to warn
+  that something is broken, dangerous, or non-obvious in a way that cost real
+  time (e.g. a warning block about a broken API contract, a corrupting git
+  hook, a DB constraint trap). These are "do not repeat this mistake" markers
+  where the ticket ID anchors a documented incident.
+- **Code that exists ONLY because of a specific ticket's requirement** and
+  whose purpose would be incomprehensible without that anchor (rare).
+
+**Remove ticket IDs from:**
+
+- Routine feature attribution ("added in RES-81", "built for RES-86") — the
+  feature comment should stand on its own.
+- Section headers, breadcrumbs, or comments that merely tag a ticket.
+- Anything where the reference is decorative rather than instructive.
+
+**When in doubt, remove it.** A comment that needs a ticket ID to make sense
+is either a warning (keep it) or a comment that should explain itself better
+(rewrite it without the ID).
+
 ## ⚠️ WARNING — NEVER type into tmux panes with `tmux send-keys`
 
 Do **NOT** use `tmux send-keys` to interact with panes for diagnosis or any

@@ -24,7 +24,7 @@
           class="flex-1 px-2 py-1.5 border border-border rounded-sm text-[0.8125rem] font-[inherit] text-foreground bg-surface focus:outline-hidden focus:border-primary focus:ring-1 focus:ring-primary"
           placeholder="e.g. Photography"
         />
-        <!-- Entry lock toggle: protect this hobby from Tailor edits (RES-97) -->
+        <!-- Entry lock toggle: protect this hobby from Tailor edits -->
         <button
           type="button"
           class="w-6 h-6 flex items-center justify-center border-none bg-transparent rounded-sm text-xs shrink-0 transition-colors hover:bg-muted/50 hover:text-foreground"

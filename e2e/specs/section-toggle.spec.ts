@@ -2,9 +2,8 @@
  * Section toggle flow — critical path: core builder feature for controlling
  * what appears on the resume. Broken toggle means wrong content on export.
  *
- * RES-91: the old checkbox/switch toggle was replaced with an eye icon
- * (visibility) per section row.
- * RES-97: the Tailor-protect lock moved OFF the section rows and onto the
+ * The old checkbox/switch toggle was replaced with an eye icon
+ * (visibility) per section row. The Tailor-protect lock lives on the
  * individual sub-items (entries) inside the editors — the eye stays on
  * sections, the lock lives on entries.
  *
@@ -55,7 +54,7 @@ test.describe('Section toggle', () => {
     for (let i = 0; i < 10; i++) {
       const row = rows.nth(i)
       await expect(row.locator('[data-testid="section-eye-toggle"]')).toBeVisible()
-      // The lock toggle no longer exists on section rows (RES-97).
+      // The lock toggle no longer exists on section rows.
       await expect(row.locator('[data-testid="section-lock-toggle"]')).toHaveCount(0)
       await expect(row.locator('svg.lucide-lock, svg.lucide-lock-open')).toHaveCount(0)
     }

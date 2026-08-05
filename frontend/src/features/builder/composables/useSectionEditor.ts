@@ -221,7 +221,7 @@ export function useSectionEditor(sectionType: SectionType) {
   }
 
   /**
-   * Toggle the Tailor-protect lock on an entry (RES-97).
+   * Toggle the Tailor-protect lock on an entry.
    * @param entryId
    */
   function toggleEntryLock(entryId: string): void {
