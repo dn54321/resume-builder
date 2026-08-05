@@ -52,8 +52,14 @@ function passthroughEntry(
  * Create a tailor request with given JD and section entries.
  * @param jd
  * @param entries
+ * @param options - Optional section overrides (e.g. locked: true)
+ * @param options.locked
  */
-function makeRequest(jd: string, entries: SectionEntryDto[]): TailorRequest {
+function makeRequest(
+  jd: string,
+  entries: SectionEntryDto[],
+  options: { locked?: boolean } = {},
+): TailorRequest {
   return {
     jobDescription: jd,
     resume: {
@@ -61,6 +67,7 @@ function makeRequest(jd: string, entries: SectionEntryDto[]): TailorRequest {
         {
           sectionId: 'experience',
           order: 0,
+          locked: options.locked,
           entries,
         },
       ],
@@ -277,6 +284,116 @@ describe('KeywordEngine', () => {
     expect(result.sections).toHaveLength(2);
     expect(result.sections[0].sectionId).toBe('experience');
     expect(result.sections[1].sectionId).toBe('skills');
+  });
+
+  // ── Locked sections ────────────────────────────────────────
+
+  it('returns all entries unchanged for a locked section', async () => {
+    const jd = 'React developer with TypeScript experience';
+    const entries = [
+      bulletEntry(0, 'Built React applications'),
+      bulletEntry(1, 'Managed coffee supply chain'),
+      bulletEntry(2, 'Wrote TypeScript type definitions'),
+    ];
+
+    const result = await engine.match(
+      makeRequest(jd, entries, { locked: true }),
+    );
+
+    // Locked sections are skipped: every entry passes through unfiltered,
+    // even ones with zero JD token overlap.
+    expect(result.sections).toHaveLength(1);
+    expect(result.sections[0].entries).toHaveLength(3);
+    expect(result.sections[0].entries.map((e) => e.order)).toEqual([0, 1, 2]);
+    expect(result.sections[0].entries.map((e) => e.fields[0].value)).toEqual([
+      'Built React applications',
+      'Managed coffee supply chain',
+      'Wrote TypeScript type definitions',
+    ]);
+  });
+
+  it('leaves a locked section untouched while still filtering unlocked ones', async () => {
+    const request: TailorRequest = {
+      jobDescription: 'React developer',
+      resume: {
+        sections: [
+          {
+            sectionId: 'experience',
+            order: 0,
+            locked: true,
+            entries: [
+              bulletEntry(0, 'Built React apps'),
+              bulletEntry(1, 'Managed coffee supply'),
+            ],
+          },
+          {
+            sectionId: 'projects',
+            order: 1,
+            entries: [
+              bulletEntry(0, 'React dashboard'),
+              bulletEntry(1, 'React state management'),
+              bulletEntry(2, 'React hooks library'),
+              bulletEntry(3, 'Python ETL pipeline'),
+              bulletEntry(4, 'Django REST backend'),
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = await engine.match(request);
+
+    expect(result.sections).toHaveLength(2);
+
+    // Locked section: both bullets survive regardless of JD match.
+    const lockedSection = result.sections.find(
+      (s) => s.sectionId === 'experience',
+    )!;
+    expect(lockedSection.entries).toHaveLength(2);
+    expect(lockedSection.entries.map((e) => e.fields[0].value)).toEqual([
+      'Built React apps',
+      'Managed coffee supply',
+    ]);
+
+    // Unlocked section: bullet filtering still applies as before (cap=3
+    // drops the two non-matching bullets).
+    const unlockedSection = result.sections.find(
+      (s) => s.sectionId === 'projects',
+    )!;
+    const unlockedValues = unlockedSection.entries.map(
+      (e) => e.fields[0].value,
+    );
+    expect(unlockedValues).toHaveLength(3);
+    expect(unlockedValues).toContain('React dashboard');
+    expect(unlockedValues).not.toContain('Python ETL pipeline');
+    expect(unlockedValues).not.toContain('Django REST backend');
+  });
+
+  it('returns all entries unchanged for a locked section with an empty JD', async () => {
+    const entries = [
+      bulletEntry(0, 'Built React apps'),
+      skillEntry(1, 'React'),
+    ];
+
+    const result = await engine.match(
+      makeRequest('', entries, { locked: true }),
+    );
+
+    expect(result.sections[0].entries).toHaveLength(2);
+  });
+
+  it('treats sections without a locked flag as unlocked', async () => {
+    const jd = 'React developer';
+    const entries = [
+      bulletEntry(0, 'Built React apps'),
+      bulletEntry(1, 'Managed coffee supply'),
+    ];
+
+    const result = await engine.match(makeRequest(jd, entries));
+
+    // No `locked` field -> unlocked -> filtering applies (cap is 3, both stay,
+    // but the engine still processes the section normally).
+    expect(result.sections[0].entries).toHaveLength(2);
   });
 
   // ── Edge cases ─────────────────────────────────────────────

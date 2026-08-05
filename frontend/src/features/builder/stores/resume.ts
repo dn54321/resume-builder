@@ -264,13 +264,38 @@ export const useResumeStore = defineStore('resume', () => {
 
   /**
    * Apply the tailor response filter to the resume store.
+   *
+   * Locked sections are skipped entirely: their filter indices/skills are not
+   * recorded, so every item inside them keeps its current visibility
+   * regardless of keyword matches. Lock state itself is never changed by
+   * filtering — it only affects what the filter is allowed to touch.
    * @param response
    */
   function applyTailorFilter(response: TailorResponse): void {
     isFiltered.value = true
-    filteredBulletIndices.value = response.filteredBulletIndices
-    filteredHardSkills.value = response.filteredHardSkills
-    filteredSoftSkills.value = response.filteredSoftSkills
+
+    const isLocked = (sectionId: string): boolean =>
+      sections.value.find((s) => s.sectionId === sectionId)?.locked ?? false
+
+    // Skip locked sections — don't record indices that would hide their items.
+    const filteredIndices: Record<string, EntryBulletIndices[]> = {}
+    for (const [sectionId, indices] of Object.entries(
+      response.filteredBulletIndices ?? {},
+    )) {
+      if (!isLocked(sectionId)) {
+        filteredIndices[sectionId] = indices
+      }
+    }
+    filteredBulletIndices.value = filteredIndices
+
+    // Locked skill sections keep every skill visible. (The empty list is safe
+    // because isSkillRelevant short-circuits to true for locked sections.)
+    filteredHardSkills.value = isLocked('hard_skills')
+      ? []
+      : response.filteredHardSkills
+    filteredSoftSkills.value = isLocked('soft_skills')
+      ? []
+      : response.filteredSoftSkills
   }
 
   /**
@@ -297,6 +322,9 @@ export const useResumeStore = defineStore('resume', () => {
   ): boolean {
     if (!isFiltered.value) return true
 
+    // Locked sections keep their current visibility regardless of matches.
+    if (sections.value.find((s) => s.sectionId === sectionId)?.locked) return true
+
     const entryIndices = filteredBulletIndices.value[sectionId]
     if (!entryIndices) return true
 
@@ -314,6 +342,9 @@ export const useResumeStore = defineStore('resume', () => {
    */
   function isSkillRelevant(sectionId: string, skillName: string): boolean {
     if (!isFiltered.value) return true
+
+    // Locked sections keep their current visibility regardless of matches.
+    if (sections.value.find((s) => s.sectionId === sectionId)?.locked) return true
 
     const lowerName = skillName.toLowerCase().trim()
     if (sectionId === 'hard_skills') {

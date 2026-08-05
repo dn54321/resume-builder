@@ -33,7 +33,7 @@ export interface ResumeSectionState {
   column: 'left' | 'right'
   order: number
   enabled: boolean
-  /** Protects the section from Tailor edits (RES-91). */
+  /** Whether the section is locked (tailor/automation must not change its visibility). */
   locked: boolean
   entries: SectionEntryState[]
 }

@@ -46,6 +46,9 @@ export function useTailor() {
         '/api/v1/resumes/tailor',
         payload,
       )
+      // applyTailorFilter skips locked sections (they keep their current
+      // visibility regardless of keyword matches) and never touches the
+      // `locked` flag itself — it persists across tailor and reset.
       store.applyTailorFilter(response)
     } catch (err: unknown) {
       if (err instanceof ApiRequestError) {

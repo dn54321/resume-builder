@@ -237,6 +237,84 @@ describe('LlmEngine', () => {
     expect(result.sections[1].sectionId).toBe('skills');
   });
 
+  // ── Locked sections ────────────────────────────────────────
+
+  it('skips locked sections without calling the LLM API', async () => {
+    const request: TailorRequest = {
+      jobDescription: 'React developer',
+      resume: {
+        sections: [
+          {
+            sectionId: 'experience',
+            order: 0,
+            locked: true,
+            entries: [
+              bulletEntry(0, 'Built React apps'),
+              bulletEntry(1, 'Managed coffee supply'),
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = await engine.match(request);
+
+    // Locked section -> no LLM call, all entries pass through unchanged.
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(result.sections).toHaveLength(1);
+    expect(result.sections[0].entries).toHaveLength(2);
+    expect(result.sections[0].entries.map((e) => e.fields[0].value)).toEqual([
+      'Built React apps',
+      'Managed coffee supply',
+    ]);
+  });
+
+  it('still calls the LLM for unlocked sections next to locked ones', async () => {
+    mockFetch.mockResolvedValueOnce(
+      makeMockResponse('{"bulletIndices": [0], "skillIndices": []}'),
+    );
+
+    const request: TailorRequest = {
+      jobDescription: 'React developer',
+      resume: {
+        sections: [
+          {
+            sectionId: 'experience',
+            order: 0,
+            locked: true,
+            entries: [bulletEntry(0, 'Managed coffee supply')],
+          },
+          {
+            sectionId: 'projects',
+            order: 1,
+            entries: [
+              bulletEntry(0, 'Built React apps'),
+              bulletEntry(1, 'Managed coffee supply'),
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = await engine.match(request);
+
+    // Only the unlocked section triggers an LLM call.
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    const lockedSection = result.sections.find(
+      (s) => s.sectionId === 'experience',
+    )!;
+    const unlockedSection = result.sections.find(
+      (s) => s.sectionId === 'projects',
+    )!;
+
+    // Locked section keeps both entries; unlocked section is filtered to the
+    // entry the LLM selected.
+    expect(lockedSection.entries).toHaveLength(1);
+    expect(unlockedSection.entries).toHaveLength(1);
+    expect(unlockedSection.entries[0].fields[0].value).toBe('Built React apps');
+  });
+
   // ── LLM error handling ─────────────────────────────────────
 
   it('throws when LLM API returns a non-200 status', async () => {

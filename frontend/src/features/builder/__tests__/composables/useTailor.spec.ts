@@ -144,6 +144,113 @@ describe('useTailor', () => {
       expect(store.filteredHardSkills).toEqual(['react'])
     })
 
+    it('keeps locked sections fully visible while filtering unlocked ones', async () => {
+      const { tailorResume } = useTailor()
+      const store = useResumeStore()
+      store.initializeDefaults()
+
+      // Lock the experience section; leave projects unlocked.
+      const exp = store.sections.find((s) => s.sectionType === 'experience')!
+      exp.locked = true
+
+      const mockResponse: TailorResponse = {
+        filteredBulletIndices: {
+          // Response says only bullet [0] of entry 0 survives — must be ignored
+          // for the locked experience section.
+          experience: [{ entryOrder: 0, bulletIndices: [0] }],
+          projects: [{ entryOrder: 0, bulletIndices: [0] }],
+        },
+        filteredHardSkills: ['react'],
+        filteredSoftSkills: [],
+      }
+
+      mockApiPost.mockResolvedValue(mockResponse)
+
+      await tailorResume('React developer')
+
+      // Locked section: every bullet stays visible, regardless of matches.
+      expect(store.isBulletRelevant('experience', 0, 1)).toBe(true)
+      expect(store.isBulletRelevant('experience', 5, 2)).toBe(true)
+      expect(store.filteredBulletIndices['experience']).toBeUndefined()
+
+      // Unlocked section: filter still applies as before.
+      expect(store.isBulletRelevant('projects', 0, 0)).toBe(true)
+      expect(store.isBulletRelevant('projects', 0, 1)).toBe(false)
+
+      // Lock flag itself survives the tailor run.
+      expect(exp.locked).toBe(true)
+    })
+
+    it('keeps locked skill sections fully visible after tailoring', async () => {
+      const { tailorResume } = useTailor()
+      const store = useResumeStore()
+      store.initializeDefaults()
+
+      const hard = store.sections.find((s) => s.sectionType === 'hard_skills')!
+      hard.locked = true
+
+      const mockResponse: TailorResponse = {
+        filteredBulletIndices: {},
+        filteredHardSkills: ['react'],
+        filteredSoftSkills: [],
+      }
+
+      mockApiPost.mockResolvedValue(mockResponse)
+
+      await tailorResume('React developer')
+
+      expect(store.isFiltered).toBe(true)
+      expect(store.filteredHardSkills).toEqual([])
+      expect(store.isSkillRelevant('hard_skills', 'Python')).toBe(true)
+    })
+
+    it('keeps lock state after resetFilter', async () => {
+      const { tailorResume, resetFilter } = useTailor()
+      const store = useResumeStore()
+      store.initializeDefaults()
+
+      const exp = store.sections.find((s) => s.sectionType === 'experience')!
+      exp.locked = true
+
+      mockApiPost.mockResolvedValue({
+        filteredBulletIndices: {},
+        filteredHardSkills: ['react'],
+        filteredSoftSkills: [],
+      })
+
+      await tailorResume('React developer')
+      resetFilter()
+
+      // Reset clears the filter but does NOT unlock sections.
+      expect(store.isFiltered).toBe(false)
+      expect(exp.locked).toBe(true)
+    })
+
+    it('sends the locked flag in the tailor request payload', async () => {
+      const { tailorResume } = useTailor()
+      const store = useResumeStore()
+      store.initializeDefaults()
+
+      const exp = store.sections.find((s) => s.sectionType === 'experience')!
+      exp.locked = true
+
+      mockApiPost.mockResolvedValue({
+        filteredBulletIndices: {},
+        filteredHardSkills: [],
+        filteredSoftSkills: [],
+      })
+
+      await tailorResume('React developer')
+
+      // The payload sent to the backend must carry the lock state so the
+      // keyword engine can skip locked sections server-side.
+      const sentPayload = mockApiPost.mock.calls[0]![1] as { resume: { sections: { sectionId: string; locked?: boolean }[] } }
+      const sentExp = sentPayload.resume.sections.find(
+        (s) => s.sectionId === 'experience',
+      )!
+      expect(sentExp.locked).toBe(true)
+    })
+
     it('sets error on API failure', async () => {
       const { tailorResume, tailorError } = useTailor()
       const store = useResumeStore()

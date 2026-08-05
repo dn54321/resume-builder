@@ -372,6 +372,25 @@ describe('useResumeStore', () => {
       expect(store.lockedSections).toEqual(['experience', 'education'])
     })
 
+    it('defaults to unlocked when payload omits locked', () => {
+      const store = useResumeStore()
+
+      store.loadFromPayload({
+        layout: 'standard' as const,
+        sections: [
+          {
+            sectionId: 'experience',
+            column: 'right',
+            order: 0,
+            entries: [],
+          },
+        ],
+      })
+
+      const exp = store.sections.find((s) => s.sectionType === 'experience')!
+      expect(exp.locked).toBe(false)
+    })
+
     it('defaults locked to false when a payload omits the field (backward compat)', () => {
       const store = useResumeStore()
 

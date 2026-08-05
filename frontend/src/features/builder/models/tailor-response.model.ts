@@ -37,6 +37,7 @@ export interface ResumeSectionPayload {
   sectionId: string;
   column: 'left' | 'right';
   order: number;
+  locked?: boolean;
   entries: ResumeEntryPayload[];
 }
 

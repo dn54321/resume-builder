@@ -180,6 +180,15 @@ export class KeywordEngine implements MatchingEngine {
     section: TailorRequest['resume']['sections'][number],
     jdTokens: Set<string>,
   ): TailorResponse['sections'][number] {
+    // Locked sections are skipped entirely — every entry passes through
+    // unchanged so their visibility is left exactly as the user set it.
+    if (section.locked === true) {
+      return {
+        sectionId: section.sectionId,
+        entries: section.entries,
+      };
+    }
+
     if (jdTokens.size === 0) {
       // Empty JD: return all entries unfiltered
       return {

@@ -71,6 +71,102 @@ describe('useResumeStore - filter', () => {
     })
   })
 
+  describe('locked sections', () => {
+    it('skips bullet indices for a locked section when applying filter', () => {
+      store.initializeDefaults()
+      const exp = store.sections.find((s) => s.sectionType === 'experience')!
+      exp.locked = true
+
+      store.applyTailorFilter(createMockTailorResponse())
+
+      // Locked section must not appear in the filtered indices, so all its
+      // bullets stay visible.
+      expect(store.filteredBulletIndices['experience']).toBeUndefined()
+      // Unlocked sections are still filtered.
+      expect(store.filteredBulletIndices['projects']).toHaveLength(1)
+    })
+
+    it('clears filtered hard skills when hard_skills is locked', () => {
+      store.initializeDefaults()
+      const hard = store.sections.find((s) => s.sectionType === 'hard_skills')!
+      hard.locked = true
+
+      store.applyTailorFilter(createMockTailorResponse())
+
+      expect(store.filteredHardSkills).toEqual([])
+    })
+
+    it('clears filtered soft skills when soft_skills is locked', () => {
+      store.initializeDefaults()
+      const soft = store.sections.find((s) => s.sectionType === 'soft_skills')!
+      soft.locked = true
+
+      store.applyTailorFilter(createMockTailorResponse())
+
+      expect(store.filteredSoftSkills).toEqual([])
+    })
+
+    it('keeps every bullet of a locked section relevant', () => {
+      store.initializeDefaults()
+      const exp = store.sections.find((s) => s.sectionType === 'experience')!
+      exp.locked = true
+
+      store.applyTailorFilter(createMockTailorResponse())
+
+      // Even though the response filters experience bullets to [0,2] and [0],
+      // the locked section ignores the filter entirely.
+      expect(store.isBulletRelevant('experience', 0, 1)).toBe(true)
+      expect(store.isBulletRelevant('experience', 1, 0)).toBe(true)
+      expect(store.isBulletRelevant('experience', 5, 0)).toBe(true)
+    })
+
+    it('keeps every skill of a locked skill section relevant', () => {
+      store.initializeDefaults()
+      const hard = store.sections.find((s) => s.sectionType === 'hard_skills')!
+      hard.locked = true
+
+      store.applyTailorFilter(createMockTailorResponse())
+
+      expect(store.isSkillRelevant('hard_skills', 'Python')).toBe(true)
+      expect(store.isSkillRelevant('hard_skills', 'anything')).toBe(true)
+    })
+
+    it('reports all bullets visible for a locked section', () => {
+      store.initializeDefaults()
+      const expSection = store.sections.find((s) => s.sectionType === 'experience')!
+      expSection.locked = true
+      const entryId = crypto.randomUUID()
+      expSection.entries.push({ id: entryId, order: 0, parentId: null, fields: [] })
+      for (let i = 0; i < 3; i++) {
+        expSection.entries.push({
+          id: crypto.randomUUID(),
+          order: i,
+          parentId: entryId,
+          fields: [{ key: 'text', value: `Bullet ${i}`, order: 0 }],
+        })
+      }
+
+      store.applyTailorFilter(createMockTailorResponse())
+
+      const count = store.getFilteredBulletCount('experience')
+      expect(count.total).toBe(3)
+      expect(count.visible).toBe(3)
+    })
+
+    it('resetTailorFilter does not unlock sections', () => {
+      store.initializeDefaults()
+      const exp = store.sections.find((s) => s.sectionType === 'experience')!
+      exp.locked = true
+
+      store.applyTailorFilter(createMockTailorResponse())
+      store.resetTailorFilter()
+
+      // Lock state persists after reset — only the filter state is cleared.
+      expect(store.isFiltered).toBe(false)
+      expect(exp.locked).toBe(true)
+    })
+  })
+
   describe('resetTailorFilter', () => {
     it('sets isFiltered to false', () => {
       store.applyTailorFilter(createMockTailorResponse())
