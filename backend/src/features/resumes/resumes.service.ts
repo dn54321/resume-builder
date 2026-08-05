@@ -78,35 +78,6 @@ export class ResumesService {
   }
 
   /**
-   * Create a copy of an existing resume named `Copy of <original>`.
-   *
-   * Loads the full (decrypted) tree via `findOne` (which also enforces
-   * ownership), maps it back into a `CreateResumeDto`, and runs it through
-   * `create()` — so every field value of the copy is re-encrypted with a
-   * fresh key/IV/authTag.
-   * @param {string} id - The source resume id
-   * @param {string} userId - The authenticated user id
-   * @returns {Promise<ResumeTree>} The newly created copy (decrypted)
-   */
-  async duplicate(id: string, userId: string): Promise<ResumeTree> {
-    const existing = await this.findOne(id, userId);
-
-    const dto: CreateResumeDto = {
-      name: existing.name ? `Copy of ${existing.name}` : 'Copy of Untitled',
-      layout: existing.layout,
-      sections: existing.sections.map((section) => ({
-        sectionId: section.sectionId,
-        column: section.column,
-        order: section.order,
-        locked: section.locked,
-        entries: this.toEntryDtos(section.entries),
-      })),
-    };
-
-    return this.create(userId, dto);
-  }
-
-  /**
    * Map decrypted tree entries into `SectionEntryDto` shape (nested children
    * included) so `create()` can re-persist them.
    * @param {SectionEntry[]} entries - Decrypted entries from the source tree

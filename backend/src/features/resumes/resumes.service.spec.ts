@@ -1251,6 +1251,8 @@ describe('ResumesService', () => {
         userId,
         name: 'My Resume',
         layout: 'standard',
+        createdAt: new Date(),
+        updatedAt: new Date(),
         sections: [
           {
             id: 'rs-1',
@@ -1265,6 +1267,7 @@ describe('ResumesService', () => {
                 fields: [
                   {
                     id: 'f-1',
+                    sectionEntryId: 'entry-1',
                     key: 'title',
                     value: 'Software Engineer',
                     iv: 'iv',
