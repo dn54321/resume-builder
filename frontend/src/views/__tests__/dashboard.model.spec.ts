@@ -19,6 +19,7 @@ describe('toPreviewSections', () => {
             id: 'entry-1',
             order: 0,
             parentId: null,
+            locked: false,
             fields: [{ key: 'fullName', value: 'John Doe', order: 0 }],
           },
         ],
@@ -40,6 +41,7 @@ describe('toPreviewSections', () => {
       id: 'entry-1',
       order: 0,
       parentId: null,
+      locked: false,
       fields: [{ key: 'fullName', value: 'John Doe', order: 0 }],
     })
   })
@@ -57,7 +59,7 @@ describe('toPreviewSections', () => {
             id: 'entry-2',
             order: 1,
             parentId: 'parent-1',
-            // field order omitted — must default to 0
+            // entry locked omitted — must default to false (RES-97)
             fields: [{ key: 'company', value: 'Acme' }],
           },
         ],
@@ -76,6 +78,7 @@ describe('toPreviewSections', () => {
       id: 'entry-2',
       order: 1,
       parentId: 'parent-1',
+      locked: false,
       fields: [{ key: 'company', value: 'Acme', order: 0 }],
     })
   })

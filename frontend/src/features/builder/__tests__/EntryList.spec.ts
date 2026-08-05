@@ -176,4 +176,67 @@ describe('EntryList', () => {
     // Verify it's the add button by checking text starts with '+'
     expect(addBtn.text()).toContain('+')
   })
+
+  // ── Entry lock toggle (RES-97) ───────────────────────────────────
+
+  it('renders a lock button per entry (open icon when unlocked)', () => {
+    const entries = createEntries(2)
+    const wrapper = mount(EntryList, {
+      props: { entries, addLabel: 'Add Item', entryTitle },
+    })
+
+    const lockButtons = wrapper.findAll('[data-testid="entry-lock-toggle"]')
+    expect(lockButtons).toHaveLength(2)
+    expect(wrapper.findAll('svg.lucide-lock-open')).toHaveLength(2)
+    expect(wrapper.findAll('svg.lucide-lock')).toHaveLength(0)
+  })
+
+  it('shows a closed Lock icon for locked entries', () => {
+    const entries = [
+      { id: 'entry-1', order: 0, locked: true },
+      { id: 'entry-2', order: 1 },
+    ]
+    const wrapper = mount(EntryList, {
+      props: { entries, addLabel: 'Add Item', entryTitle },
+    })
+
+    expect(wrapper.findAll('svg.lucide-lock')).toHaveLength(1)
+    expect(wrapper.findAll('svg.lucide-lock-open')).toHaveLength(1)
+
+    const panels = wrapper.findAll('[data-entry-panel]')
+    const firstLock = panels[0]!.find('[data-testid="entry-lock-toggle"]')
+    expect(firstLock.classes()).toContain('text-muted-foreground/50')
+    const secondLock = panels[1]!.find('[data-testid="entry-lock-toggle"]')
+    expect(secondLock.classes()).not.toContain('text-muted-foreground/50')
+  })
+
+  it('emits toggleLock with the entry id when the lock button is clicked', async () => {
+    window.confirm = vi.fn<() => boolean>(() => false)
+    const entries = createEntries(1)
+    const wrapper = mount(EntryList, {
+      props: { entries, addLabel: 'Add Item', entryTitle },
+    })
+
+    const lockBtn = wrapper.find('[data-testid="entry-lock-toggle"]')
+    await lockBtn.trigger('click')
+
+    expect(wrapper.emitted('toggleLock')).toHaveLength(1)
+    expect(wrapper.emitted('toggleLock')![0]).toEqual(['entry-1'])
+    // Lock toggle must NOT trigger the remove confirmation.
+    expect(window.confirm).not.toHaveBeenCalled()
+  })
+
+  it('does not expand/collapse the entry when the lock button is clicked', async () => {
+    const entries = createEntries(1)
+    const wrapper = mount(EntryList, {
+      props: { entries, addLabel: 'Add Item', entryTitle },
+    })
+
+    expect(wrapper.findAll('.p-3.border-t')).toHaveLength(0)
+    const lockBtn = wrapper.find('[data-testid="entry-lock-toggle"]')
+    await lockBtn.trigger('click')
+
+    // Header click would have expanded it; lock click must not.
+    expect(wrapper.findAll('.p-3.border-t')).toHaveLength(0)
+  })
 })

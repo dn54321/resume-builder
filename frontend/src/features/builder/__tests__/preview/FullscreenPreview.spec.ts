@@ -42,6 +42,7 @@ function setupStore() {
           {
             order: 0,
             parentId: null,
+            locked: false,
             fields: [{ key: 'fullName', value: 'John Doe', order: 0 }],
           },
         ],
@@ -67,6 +68,7 @@ function setupTwoColumnStore() {
           {
             order: 0,
             parentId: null,
+            locked: false,
             fields: [{ key: 'fullName', value: 'Jane Doe', order: 0 }],
           },
         ],
@@ -79,6 +81,7 @@ function setupTwoColumnStore() {
           {
             order: 0,
             parentId: null,
+            locked: false,
             fields: [{ key: 'text', value: 'A summary', order: 0 }],
           },
         ],

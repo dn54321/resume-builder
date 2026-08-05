@@ -396,6 +396,146 @@ describe('KeywordEngine', () => {
     expect(result.sections[0].entries).toHaveLength(2);
   });
 
+  // ── Locked entries (RES-97) ───────────────────────────────
+
+  it('keeps a locked bullet entry even with zero JD overlap', async () => {
+    const jd = 'React developer with TypeScript experience';
+    const entries = [
+      bulletEntry(0, 'Built React applications'),
+      { ...bulletEntry(1, 'Managed coffee supply chain'), locked: true },
+      bulletEntry(2, 'Wrote TypeScript type definitions'),
+    ];
+
+    const result = await engine.match(makeRequest(jd, entries));
+
+    // The locked entry passes through unchanged even though "Managed coffee
+    // supply chain" has no JD token overlap — Tailor must not touch it.
+    const values = result.sections[0].entries.map((e) => e.fields[0].value);
+    expect(values).toContain('Managed coffee supply chain');
+    expect(values).toContain('Built React applications');
+    expect(values).toContain('Wrote TypeScript type definitions');
+  });
+
+  it('locked entries do not count toward the bullet cap', async () => {
+    const jd = 'React developer needed';
+    const entries = [
+      bulletEntry(0, 'Built React apps'),
+      bulletEntry(1, 'React Native mobile development'),
+      bulletEntry(2, 'React component library'),
+      bulletEntry(3, 'React state management'),
+      bulletEntry(4, 'Non-React backend work'),
+      // Locked entry is always kept, on top of the cap of 3.
+      { ...bulletEntry(5, 'Legacy COBOL maintenance'), locked: true },
+    ];
+
+    const result = await engine.match(makeRequest(jd, entries));
+
+    // 3 capped bullets + 1 locked entry that bypasses the cap
+    expect(result.sections[0].entries).toHaveLength(4);
+    expect(result.sections[0].entries.map((e) => e.fields[0].value)).toContain(
+      'Legacy COBOL maintenance',
+    );
+  });
+
+  it('keeps a locked skill entry even with zero JD overlap', async () => {
+    const jd = 'Looking for React, TypeScript, and Docker skills';
+    const entries = [
+      skillEntry(0, 'React'),
+      skillEntry(1, 'Excel'),
+      skillEntry(2, 'TypeScript'),
+      skillEntry(3, 'Docker'),
+      skillEntry(4, 'PowerPoint'),
+      { ...skillEntry(5, 'Legacy COBOL'), locked: true },
+    ];
+
+    const result = await engine.match(makeRequest(jd, entries));
+
+    // Cap is 3, but the locked skill is preserved on top.
+    expect(result.sections[0].entries).toHaveLength(4);
+    expect(result.sections[0].entries.map((e) => e.fields[0].value)).toContain(
+      'Legacy COBOL',
+    );
+  });
+
+  it('keeps a locked entry while still filtering the unlocked ones in the same section', async () => {
+    const request: TailorRequest = {
+      jobDescription: 'React developer',
+      resume: {
+        sections: [
+          {
+            sectionId: 'experience',
+            order: 0,
+            entries: [
+              { ...bulletEntry(0, 'Built React apps'), locked: true },
+              bulletEntry(1, 'Managed coffee supply'),
+              bulletEntry(2, 'React dashboard'),
+              bulletEntry(3, 'Python ETL pipeline'),
+              bulletEntry(4, 'Django REST backend'),
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = await engine.match(request);
+
+    const values = result.sections[0].entries.map((e) => e.fields[0].value);
+    // Locked entry always present.
+    expect(values).toContain('Built React apps');
+    // The unlocked bullets still go through the cap of 3 (the locked one is
+    // extra). With 4 unlocked bullets the single lowest-order zero-scorer
+    // ('Django REST backend') is dropped; the locked entry survives.
+    expect(values).toHaveLength(4);
+    expect(values).toContain('Python ETL pipeline');
+    expect(values).not.toContain('Django REST backend');
+  });
+
+  it('keeps locked entries when the section itself is not flagged locked', async () => {
+    const entries = [
+      { ...bulletEntry(0, 'React apps'), locked: true },
+      bulletEntry(1, 'Coffee supply'),
+    ];
+
+    const result = await engine.match(makeRequest('React developer', entries));
+
+    expect(result.sections[0].entries).toHaveLength(2);
+    expect(result.sections[0].entries.map((e) => e.fields[0].value)).toEqual([
+      'React apps',
+      'Coffee supply',
+    ]);
+  });
+
+  it('treats entries without a locked flag as unlocked', async () => {
+    const jd = 'React developer';
+    const entries = [
+      bulletEntry(0, 'Built React apps'),
+      bulletEntry(1, 'Managed coffee supply'),
+    ];
+
+    const result = await engine.match(makeRequest(jd, entries));
+
+    // No `locked` field on entries -> all are subject to normal filtering.
+    expect(result.sections[0].entries).toHaveLength(2);
+  });
+
+  it('preserves entry order when locked entries are mixed in', async () => {
+    const jd = 'React developer';
+    const entries = [
+      { ...bulletEntry(0, 'Non-matching but locked'), locked: true },
+      bulletEntry(1, 'Built React apps'),
+      { ...bulletEntry(2, 'Non-matching but locked too'), locked: true },
+      bulletEntry(3, 'React Native work'),
+    ];
+
+    const result = await engine.match(makeRequest(jd, entries));
+
+    // All 4 entries present (locked ones bypass the cap) and sorted by order.
+    expect(result.sections[0].entries).toHaveLength(4);
+    expect(result.sections[0].entries.map((e) => e.order)).toEqual([
+      0, 1, 2, 3,
+    ]);
+  });
+
   // ── Edge cases ─────────────────────────────────────────────
 
   it('handles entries with no matching field keys as pass-through', async () => {

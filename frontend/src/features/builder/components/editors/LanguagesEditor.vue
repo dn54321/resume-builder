@@ -38,6 +38,20 @@
           <option value="Native">Native</option>
           <option value="Bilingual">Bilingual</option>
         </select>
+        <!-- Entry lock toggle: protect this language from Tailor edits (RES-97) -->
+        <button
+          type="button"
+          class="w-6 h-6 flex items-center justify-center border-none bg-transparent rounded-sm text-xs shrink-0 transition-colors hover:bg-muted/50 hover:text-foreground"
+          :class="entry.locked ? 'text-muted-foreground/50' : 'text-foreground'"
+          :title="entry.locked ? 'Unlock language (Tailor may edit it)' : 'Lock language (protect from Tailor)'"
+          :aria-label="`${entry.locked ? 'Unlock' : 'Lock'} language`"
+          :aria-pressed="entry.locked"
+          data-testid="entry-lock-toggle"
+          @click="onToggleLock(entry.id)"
+        >
+          <Lock v-if="entry.locked" class="w-3.5 h-3.5" />
+          <LockOpen v-else class="w-3.5 h-3.5" />
+        </button>
         <button
           class="w-6 h-6 flex items-center justify-center border-none bg-transparent text-muted-foreground/70 cursor-pointer rounded-sm text-lg leading-none shrink-0 hover:bg-destructive/10 hover:text-destructive"
           @click="onRemove(entry.id)"
@@ -54,6 +68,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { Lock, LockOpen } from '@lucide/vue'
 import { useSectionEditor } from '@/features/builder/composables/useSectionEditor'
 
 const editor = useSectionEditor('languages')
@@ -63,6 +78,7 @@ interface LanguageRow {
   id: string
   name: string
   proficiency: string
+  locked: boolean
 }
 
 const languageEntries = computed<LanguageRow[]>(() =>
@@ -73,6 +89,7 @@ const languageEntries = computed<LanguageRow[]>(() =>
       id: e.id,
       name: editor.getFieldValue(e.id, 'name'),
       proficiency: editor.getFieldValue(e.id, 'proficiency'),
+      locked: e.locked,
     })),
 )
 
@@ -102,6 +119,14 @@ function onNameUpdate(id: string, value: string) {
  */
 function onProficiencyUpdate(id: string, value: string) {
   editor.updateField(id, 'proficiency', value)
+}
+
+/**
+ *
+ * @param id
+ */
+function onToggleLock(id: string) {
+  editor.toggleEntryLock(id)
 }
 
 /**

@@ -16,6 +16,8 @@ export interface SectionEntry {
   id: string;
   order: number;
   parentId?: string | null;
+  /** Whether the entry is locked (Tailor must not modify/remove it, RES-97). */
+  locked: boolean;
   fields: SectionField[];
   children?: SectionEntry[];
 }

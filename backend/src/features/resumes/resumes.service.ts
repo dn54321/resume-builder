@@ -88,6 +88,7 @@ export class ResumesService {
   ): CreateResumeDto['sections'][number]['entries'] {
     return entries.map((entry) => ({
       order: entry.order,
+      locked: entry.locked ?? false,
       fields: entry.fields.map((field) => ({
         key: field.key,
         value: field.value,
@@ -182,6 +183,7 @@ export class ResumesService {
   ): CreateResumeDto['sections'][number]['entries'][number] {
     return {
       order: entry.order,
+      locked: entry.locked ?? false,
       fields: entry.fields.map((field) => ({
         key: field.key,
         value: field.value,
@@ -268,6 +270,7 @@ export class ResumesService {
           resumeSectionId,
           order: entryDto.order,
           parentId: parentId ?? null,
+          locked: entryDto.locked ?? false,
         },
       });
 

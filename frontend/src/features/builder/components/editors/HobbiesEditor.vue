@@ -24,6 +24,20 @@
           class="flex-1 px-2 py-1.5 border border-border rounded-sm text-[0.8125rem] font-[inherit] text-foreground bg-surface focus:outline-hidden focus:border-primary focus:ring-1 focus:ring-primary"
           placeholder="e.g. Photography"
         />
+        <!-- Entry lock toggle: protect this hobby from Tailor edits (RES-97) -->
+        <button
+          type="button"
+          class="w-6 h-6 flex items-center justify-center border-none bg-transparent rounded-sm text-xs shrink-0 transition-colors hover:bg-muted/50 hover:text-foreground"
+          :class="entry.locked ? 'text-muted-foreground/50' : 'text-foreground'"
+          :title="entry.locked ? 'Unlock hobby (Tailor may edit it)' : 'Lock hobby (protect from Tailor)'"
+          :aria-label="`${entry.locked ? 'Unlock' : 'Lock'} hobby`"
+          :aria-pressed="entry.locked"
+          data-testid="entry-lock-toggle"
+          @click="onToggleLock(entry.id)"
+        >
+          <Lock v-if="entry.locked" class="w-3.5 h-3.5" />
+          <LockOpen v-else class="w-3.5 h-3.5" />
+        </button>
         <button
           class="w-6 h-6 flex items-center justify-center border-none bg-transparent text-muted-foreground/70 cursor-pointer rounded-sm text-lg leading-none shrink-0 hover:bg-destructive/10 hover:text-destructive"
           @click="onRemove(entry.id)"
@@ -40,6 +54,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { Lock, LockOpen } from '@lucide/vue'
 import { useSectionEditor } from '@/features/builder/composables/useSectionEditor'
 
 const editor = useSectionEditor('hobbies')
@@ -48,6 +63,7 @@ const dragIndex = ref<number | null>(null)
 interface HobbyRow {
   id: string
   value: string
+  locked: boolean
 }
 
 const hobbyEntries = computed<HobbyRow[]>(() =>
@@ -57,6 +73,7 @@ const hobbyEntries = computed<HobbyRow[]>(() =>
     .map((e) => ({
       id: e.id,
       value: editor.getFieldValue(e.id, 'name'),
+      locked: e.locked,
     })),
 )
 
@@ -74,6 +91,14 @@ function addHobby() {
  */
 function onUpdate(id: string, value: string) {
   editor.updateField(id, 'name', value)
+}
+
+/**
+ *
+ * @param id
+ */
+function onToggleLock(id: string) {
+  editor.toggleEntryLock(id)
 }
 
 /**

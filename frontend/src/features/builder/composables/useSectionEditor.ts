@@ -77,6 +77,7 @@ export function useSectionEditor(sectionType: SectionType) {
       id: entryId,
       order: section.value.entries.length,
       parentId: null,
+      locked: false,
       fields,
     }
     section.value.entries.push(newEntry)
@@ -172,6 +173,7 @@ export function useSectionEditor(sectionType: SectionType) {
       id: bulletId,
       order: getChildren(parentId).length,
       parentId,
+      locked: false,
       fields: [{ key: 'text', value: '', order: 0 }],
     }
     section.value.entries.push(bulletEntry)
@@ -219,6 +221,14 @@ export function useSectionEditor(sectionType: SectionType) {
   }
 
   /**
+   * Toggle the Tailor-protect lock on an entry (RES-97).
+   * @param entryId
+   */
+  function toggleEntryLock(entryId: string): void {
+    store.toggleEntryLock(sectionType, entryId)
+  }
+
+  /**
    *
    * @param parentId
    * @param fromIndex
@@ -258,6 +268,7 @@ export function useSectionEditor(sectionType: SectionType) {
     removeBullet,
     updateBullet,
     reorderBullets,
+    toggleEntryLock,
     generateId,
   }
 }

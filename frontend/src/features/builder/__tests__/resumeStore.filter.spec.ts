@@ -136,12 +136,13 @@ describe('useResumeStore - filter', () => {
       const expSection = store.sections.find((s) => s.sectionType === 'experience')!
       expSection.locked = true
       const entryId = crypto.randomUUID()
-      expSection.entries.push({ id: entryId, order: 0, parentId: null, fields: [] })
+      expSection.entries.push({ id: entryId, order: 0, parentId: null, locked: false, fields: [] })
       for (let i = 0; i < 3; i++) {
         expSection.entries.push({
           id: crypto.randomUUID(),
           order: i,
           parentId: entryId,
+          locked: false,
           fields: [{ key: 'text', value: `Bullet ${i}`, order: 0 }],
         })
       }
@@ -164,6 +165,127 @@ describe('useResumeStore - filter', () => {
       // Lock state persists after reset — only the filter state is cleared.
       expect(store.isFiltered).toBe(false)
       expect(exp.locked).toBe(true)
+    })
+  })
+
+  describe('locked entries (RES-97)', () => {
+    /**
+     * Build an experience section with two entries, each with 3 bullets.
+     * @returns {{ expSection: ReturnType<typeof useResumeStore>['sections'][number], entryA: string, entryB: string }}
+     */
+    function seedExperience() {
+      store.initializeDefaults()
+      const expSection = store.sections.find((s) => s.sectionType === 'experience')!
+      const entryA = crypto.randomUUID()
+      const entryB = crypto.randomUUID()
+      expSection.entries.push(
+        { id: entryA, order: 0, parentId: null, locked: false, fields: [] },
+        { id: entryB, order: 1, parentId: null, locked: false, fields: [] },
+      )
+      for (let i = 0; i < 3; i++) {
+        expSection.entries.push({
+          id: crypto.randomUUID(),
+          order: i,
+          parentId: entryA,
+          locked: false,
+          fields: [{ key: 'text', value: `A${i}`, order: 0 }],
+        })
+        expSection.entries.push({
+          id: crypto.randomUUID(),
+          order: i,
+          parentId: entryB,
+          locked: false,
+          fields: [{ key: 'text', value: `B${i}`, order: 0 }],
+        })
+      }
+      return { expSection, entryA, entryB }
+    }
+
+    it('keeps every bullet of a locked parent entry relevant', () => {
+      const { expSection, entryA } = seedExperience()
+      expSection.entries.find((e) => e.id === entryA)!.locked = true
+
+      store.applyTailorFilter(createMockTailorResponse())
+
+      // Entry A is locked → all its bullets stay visible even though the
+      // filter only kept bulletIndices [0, 2] for entry 0.
+      expect(store.isBulletRelevant('experience', 0, 0)).toBe(true)
+      expect(store.isBulletRelevant('experience', 0, 1)).toBe(true)
+      expect(store.isBulletRelevant('experience', 0, 2)).toBe(true)
+      // Unlocked entry B (index 1) is still filtered normally.
+      expect(store.isBulletRelevant('experience', 1, 0)).toBe(true)
+      expect(store.isBulletRelevant('experience', 1, 1)).toBe(false)
+      expect(store.isBulletRelevant('experience', 1, 2)).toBe(false)
+    })
+
+    it('keeps a locked bullet child relevant inside an unlocked entry', () => {
+      const { expSection, entryA } = seedExperience()
+      const bulletsA = expSection.entries.filter((e) => e.parentId === entryA)
+      bulletsA[1]!.locked = true
+
+      store.applyTailorFilter(createMockTailorResponse())
+
+      // The locked bullet stays visible even though index 1 is filtered out.
+      expect(store.isBulletRelevant('experience', 0, 1)).toBe(true)
+      // Sibling bullets still follow the filter.
+      expect(store.isBulletRelevant('experience', 0, 0)).toBe(true)
+      expect(store.isBulletRelevant('experience', 0, 2)).toBe(true)
+      expect(store.isBulletRelevant('experience', 1, 1)).toBe(false)
+    })
+
+    it('keeps a locked skill entry relevant', () => {
+      store.initializeDefaults()
+      const soft = store.sections.find((s) => s.sectionType === 'soft_skills')!
+      soft.entries.push(
+        {
+          id: crypto.randomUUID(),
+          order: 0,
+          parentId: null,
+          locked: true,
+          fields: [{ key: 'name', value: 'Leadership', order: 0 }],
+        },
+        {
+          id: crypto.randomUUID(),
+          order: 1,
+          parentId: null,
+          locked: false,
+          fields: [{ key: 'name', value: 'Communication', order: 0 }],
+        },
+      )
+
+      store.applyTailorFilter(createMockTailorResponse())
+
+      // Locked skill stays relevant even though it's not in the filtered list.
+      expect(store.isSkillRelevant('soft_skills', 'Leadership')).toBe(true)
+      expect(store.isSkillRelevant('soft_skills', 'leadership')).toBe(true)
+      // Unlocked non-matching skill is still filtered out.
+      expect(store.isSkillRelevant('soft_skills', 'Communication')).toBe(false)
+      // Matching unlocked skill stays relevant.
+      expect(store.isSkillRelevant('soft_skills', 'Team Leadership')).toBe(true)
+    })
+
+    it('counts locked entry bullets as visible in getFilteredBulletCount', () => {
+      const { expSection, entryA } = seedExperience()
+      expSection.entries.find((e) => e.id === entryA)!.locked = true
+
+      store.applyTailorFilter(createMockTailorResponse())
+
+      // 6 bullets total: entry A (3, locked, always visible) + entry B (3,
+      // filtered to bulletIndices [0] → 1 visible).
+      const count = store.getFilteredBulletCount('experience')
+      expect(count.total).toBe(6)
+      expect(count.visible).toBe(4)
+    })
+
+    it('resetTailorFilter does not unlock entries', () => {
+      const { expSection, entryA } = seedExperience()
+      expSection.entries.find((e) => e.id === entryA)!.locked = true
+
+      store.applyTailorFilter(createMockTailorResponse())
+      store.resetTailorFilter()
+
+      expect(store.isFiltered).toBe(false)
+      expect(expSection.entries.find((e) => e.id === entryA)!.locked).toBe(true)
     })
   })
 
@@ -305,6 +427,7 @@ describe('useResumeStore - filter', () => {
           id: entryId,
           order: 0,
           parentId: null,
+          locked: false,
           fields: [],
         })
         // Add 3 bullet children
@@ -313,6 +436,7 @@ describe('useResumeStore - filter', () => {
             id: crypto.randomUUID(),
             order: i,
             parentId: entryId,
+            locked: false,
             fields: [{ key: 'text', value: `Bullet ${i}`, order: 0 }],
           })
         }

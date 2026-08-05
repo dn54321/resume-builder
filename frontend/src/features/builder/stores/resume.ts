@@ -5,6 +5,7 @@ import {
   type ResumeSectionState,
   type ResumePayload,
   type LayoutType,
+  type SectionEntryState,
   SECTION_TYPES,
 } from '@/features/builder/types/resume'
 import type { TailorResponse, EntryBulletIndices } from '@/features/builder/models/tailor-response.model'
@@ -114,12 +115,31 @@ export const useResumeStore = defineStore('resume', () => {
 
   /**
    * Toggle the `locked` flag — protects the section from Tailor edits.
+   * Kept for backward compatibility: the section-level lock remains a
+   * fast-path in the Tailor engine (RES-92) even though the UI lock now
+   * lives on individual entries (RES-97).
    * @param sectionType
    */
   function toggleLock(sectionType: SectionType) {
     const existing = sections.value.find((s) => s.sectionType === sectionType)
     if (existing) {
       existing.locked = !existing.locked
+    }
+  }
+
+  /**
+   * Toggle the `locked` flag on an individual sub-item (entry) within a
+   * section (RES-97). Locked entries are never modified/removed by Tailor
+   * Resume, even when their section is unlocked.
+   * @param sectionType
+   * @param entryId
+   */
+  function toggleEntryLock(sectionType: SectionType, entryId: string) {
+    const section = sections.value.find((s) => s.sectionType === sectionType)
+    if (!section) return
+    const entry = section.entries.find((e) => e.id === entryId)
+    if (entry) {
+      entry.locked = !entry.locked
     }
   }
 
@@ -212,6 +232,7 @@ export const useResumeStore = defineStore('resume', () => {
             id: generateId(),
             order: e.order,
             parentId: e.parentId,
+            locked: (e as { locked?: boolean }).locked ?? false,
             fields: e.fields.map((f) => ({
               key: f.key,
               value: f.value,
@@ -250,6 +271,7 @@ export const useResumeStore = defineStore('resume', () => {
         entries: s.entries.map((e) => ({
           order: e.order,
           parentId: e.parentId,
+          locked: e.locked,
           fields: e.fields.map((f) => ({
             key: f.key,
             value: f.value,
@@ -309,6 +331,53 @@ export const useResumeStore = defineStore('resume', () => {
   }
 
   /**
+   * Get the top-level entries of a section in display order.
+   * @param sectionId
+   */
+  function topLevelEntries(sectionId: string): SectionEntryState[] {
+    const section = sections.value.find((s) => s.sectionId === sectionId)
+    if (!section) return []
+    return section.entries
+      .filter((e) => !e.parentId)
+      .sort((a, b) => a.order - b.order)
+  }
+
+  /**
+   * Check whether the entry at the given top-level index is locked.
+   * @param sectionId
+   * @param entryIndex
+   */
+  function isEntryLockedAt(sectionId: string, entryIndex: number): boolean {
+    const topLevel = topLevelEntries(sectionId)
+    return entryIndex >= 0 && entryIndex < topLevel.length
+      ? topLevel[entryIndex]!.locked
+      : false
+  }
+
+  /**
+   * Check whether a specific bullet (child entry) is locked.
+   * @param sectionId
+   * @param entryIndex - index of the parent entry within top-level entries
+   * @param bulletIndex - index of the bullet within that entry's children
+   */
+  function isBulletEntryLocked(
+    sectionId: string,
+    entryIndex: number,
+    bulletIndex: number,
+  ): boolean {
+    const topLevel = topLevelEntries(sectionId)
+    const parent = topLevel[entryIndex]
+    if (!parent) return false
+    const children = sections.value
+      .find((s) => s.sectionId === sectionId)!
+      .entries.filter((e) => e.parentId === parent.id)
+      .sort((a, b) => a.order - b.order)
+    return bulletIndex >= 0 && bulletIndex < children.length
+      ? children[bulletIndex]!.locked
+      : false
+  }
+
+  /**
    * Check if a bullet point is relevant according to the current filter.
    * @param sectionId
    * @param entryIndex - index of the parent entry within top-level entries of the section
@@ -324,6 +393,11 @@ export const useResumeStore = defineStore('resume', () => {
 
     // Locked sections keep their current visibility regardless of matches.
     if (sections.value.find((s) => s.sectionId === sectionId)?.locked) return true
+
+    // Locked entries (or locked bullet sub-items) keep their current
+    // visibility regardless of keyword matches (RES-97).
+    if (isEntryLockedAt(sectionId, entryIndex)) return true
+    if (isBulletEntryLocked(sectionId, entryIndex, bulletIndex)) return true
 
     const entryIndices = filteredBulletIndices.value[sectionId]
     if (!entryIndices) return true
@@ -347,6 +421,21 @@ export const useResumeStore = defineStore('resume', () => {
     if (sections.value.find((s) => s.sectionId === sectionId)?.locked) return true
 
     const lowerName = skillName.toLowerCase().trim()
+
+    // Locked skill entries keep their visibility regardless of matches (RES-97).
+    const section = sections.value.find((s) => s.sectionId === sectionId)
+    const lockedEntry = section?.entries.find(
+      (e) =>
+        !e.parentId &&
+        e.locked &&
+        e.fields.some(
+          (f) =>
+            f.key === 'name' &&
+            f.value.toLowerCase().trim() === lowerName,
+        ),
+    )
+    if (lockedEntry) return true
+
     if (sectionId === 'hard_skills') {
       return filteredHardSkills.value.includes(lowerName)
     }
@@ -359,6 +448,7 @@ export const useResumeStore = defineStore('resume', () => {
   /**
    * Get the count of visible bullets for a section when filtered.
    * Returns an object: { visible: number, total: number }
+   * Bullets belonging to locked entries are always counted as visible (RES-97).
    * @param sectionId
    */
   function getFilteredBulletCount(sectionId: string): { visible: number; total: number } {
@@ -366,6 +456,7 @@ export const useResumeStore = defineStore('resume', () => {
     if (!section) return { visible: 0, total: 0 }
 
     let total = 0
+    let lockedVisible = 0
     const topLevel = section.entries
       .filter((e) => !e.parentId)
       .sort((a, b) => a.order - b.order)
@@ -373,6 +464,13 @@ export const useResumeStore = defineStore('resume', () => {
     for (const entry of topLevel) {
       const children = section.entries.filter((e) => e.parentId === entry.id)
       total += children.length
+      // Locked parent entries keep ALL their bullets visible.
+      if (entry.locked) {
+        lockedVisible += children.length
+      } else {
+        // A locked bullet child is individually visible.
+        lockedVisible += children.filter((c) => c.locked).length
+      }
     }
 
     if (!isFiltered.value) return { visible: total, total }
@@ -380,11 +478,20 @@ export const useResumeStore = defineStore('resume', () => {
     const entryIndices = filteredBulletIndices.value[sectionId]
     if (!entryIndices) return { visible: total, total }
 
-    let visible = 0
+    let visible = lockedVisible
     for (const ei of entryIndices) {
-      visible += ei.bulletIndices.length
+      // Locked entries were already counted in full — don't double count.
+      const entry = topLevel[ei.entryOrder]
+      if (entry?.locked) continue
+      // Locked bullet children are already counted — don't count them again
+      // from the filter indices.
+      const lockedChildren = entry
+        ? section.entries.filter((e) => e.parentId === entry.id && e.locked)
+            .length
+        : 0
+      visible += Math.max(0, ei.bulletIndices.length - lockedChildren)
     }
-    return { visible, total }
+    return { visible: Math.min(visible, total), total }
   }
 
   return {
@@ -408,6 +515,7 @@ export const useResumeStore = defineStore('resume', () => {
     setLayout,
     toggleSection,
     toggleLock,
+    toggleEntryLock,
     setSectionColumn,
     reorderSections,
     isSectionEnabled,

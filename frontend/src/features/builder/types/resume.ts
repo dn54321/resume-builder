@@ -24,6 +24,8 @@ export interface SectionEntryState {
   id: string
   order: number
   parentId: string | null
+  /** Whether the entry is locked — Tailor must not modify/remove it (RES-97). */
+  locked: boolean
   fields: SectionFieldState[]
 }
 
@@ -50,6 +52,7 @@ export interface ResumePayload {
     entries: {
       order: number
       parentId: string | null
+      locked?: boolean
       fields: {
         key: string
         value: string

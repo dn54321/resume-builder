@@ -44,6 +44,8 @@ export interface ResumeSectionPayload {
 export interface ResumeEntryPayload {
   order: number;
   parentId: string | null;
+  /** Whether the entry is locked — Tailor must not modify/remove it (RES-97). */
+  locked?: boolean;
   fields: ResumeFieldPayload[];
   children?: ResumeEntryPayload[];
 }

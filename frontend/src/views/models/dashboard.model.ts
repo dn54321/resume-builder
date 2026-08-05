@@ -54,6 +54,8 @@ export interface ResumeFullEntry {
   id: string
   order: number
   parentId: string | null
+  /** Whether the entry is locked — Tailor must not modify/remove it (RES-97). */
+  locked?: boolean
   fields: ResumeFullField[]
   children?: ResumeFullEntry[]
 }
@@ -87,6 +89,7 @@ export function toPreviewSections(
       id: entry.id,
       order: entry.order,
       parentId: entry.parentId ?? null,
+      locked: entry.locked ?? false,
       fields: entry.fields.map((field) => ({
         key: field.key,
         value: field.value,

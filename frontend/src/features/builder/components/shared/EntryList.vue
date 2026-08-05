@@ -28,6 +28,20 @@
           aria-label="Drag to reorder entry"
         >&#x2630;</span>
         <span class="flex-1 text-[0.8125rem] font-medium text-foreground overflow-hidden text-ellipsis whitespace-nowrap">{{ entryTitle(entry, index) }}</span>
+        <!-- Entry lock toggle: protect this sub-item from Tailor edits (RES-97) -->
+        <button
+          type="button"
+          class="w-6 h-6 flex items-center justify-center border-none bg-transparent rounded-sm text-xs shrink-0 transition-colors hover:bg-muted/50 hover:text-foreground"
+          :class="entry.locked ? 'text-muted-foreground/50' : 'text-foreground'"
+          :title="entry.locked ? 'Unlock entry (Tailor may edit it)' : 'Lock entry (protect from Tailor)'"
+          :aria-label="`${entry.locked ? 'Unlock' : 'Lock'} entry`"
+          :aria-pressed="entry.locked"
+          data-testid="entry-lock-toggle"
+          @click.stop="$emit('toggleLock', entry.id)"
+        >
+          <Lock v-if="entry.locked" class="w-3.5 h-3.5" />
+          <LockOpen v-else class="w-3.5 h-3.5" />
+        </button>
         <button
           class="w-6 h-6 flex items-center justify-center border-none bg-transparent text-muted-foreground/70 cursor-pointer rounded-sm text-lg leading-none shrink-0 hover:bg-destructive/10 hover:text-destructive"
           @click.stop="onRemove(entry.id)"
@@ -48,10 +62,12 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { Lock, LockOpen } from '@lucide/vue'
 
 interface EntryLike {
   id: string
   order: number
+  locked?: boolean
 }
 
 const props = defineProps<{
@@ -63,6 +79,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   add: []
   remove: [id: string]
+  toggleLock: [id: string]
   reorder: [fromIndex: number, toIndex: number]
 }>()
 

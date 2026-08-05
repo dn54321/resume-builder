@@ -173,6 +173,13 @@ export class KeywordEngine implements MatchingEngine {
   /**
    * Process a section: score bullet/skill entries, filter to top N,
    * pass non-bullet/non-skill entries through unchanged.
+   *
+   * Locking is honoured at TWO levels (RES-97):
+   *  - Section locked (RES-92): every entry in the section passes through
+   *    unchanged — a fast-path that skips the whole section.
+   *  - Entry locked (RES-97): the individual sub-item passes through
+   *    unchanged even inside an otherwise unlocked section — it is never
+   *    removed or re-ranked, regardless of JD keyword overlap.
    * @param section
    * @param jdTokens
    */
@@ -200,9 +207,14 @@ export class KeywordEngine implements MatchingEngine {
     const scoredBullets: ScoredEntry[] = [];
     const scoredSkills: ScoredEntry[] = [];
     const passThrough: SectionEntryDto[] = [];
+    // Locked sub-items (RES-97) always pass through unfiltered — they are
+    // never removed or re-ranked, even when they score zero against the JD.
+    const lockedPassThrough: SectionEntryDto[] = [];
 
     for (const entry of section.entries) {
-      if (this.isBulletEntry(entry)) {
+      if (entry.locked === true) {
+        lockedPassThrough.push(entry);
+      } else if (this.isBulletEntry(entry)) {
         const text = this.getBulletText(entry) ?? '';
         scoredBullets.push({ entry, score: this.scoreText(text, jdTokens) });
       } else if (this.isSkillEntry(entry)) {
@@ -223,8 +235,15 @@ export class KeywordEngine implements MatchingEngine {
       .map((s) => s.entry);
     const topSkills = scoredSkills.slice(0, this.bulletCap).map((s) => s.entry);
 
-    // Combine: pass-through + top bullets + top skills, sorted by original order
-    const allEntries = [...passThrough, ...topBullets, ...topSkills];
+    // Combine: locked pass-through + pass-through + top bullets + top
+    // skills, sorted by original order. Locked entries are included
+    // unconditionally; everything else is subject to the cap/ranking.
+    const allEntries = [
+      ...lockedPassThrough,
+      ...passThrough,
+      ...topBullets,
+      ...topSkills,
+    ];
     allEntries.sort((a, b) => a.order - b.order);
 
     return {

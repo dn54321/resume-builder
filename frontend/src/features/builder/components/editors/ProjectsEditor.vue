@@ -15,6 +15,7 @@
       :entry-title="entryTitle"
       @add="addProject"
       @remove="onRemoveProject"
+      @toggle-lock="editor.toggleEntryLock"
       @reorder="editor.reorderEntries"
     >
       <template #fields="{ entry, index: entryIndex }">

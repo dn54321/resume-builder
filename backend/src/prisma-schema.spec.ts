@@ -67,6 +67,15 @@ describe('Prisma Schema and Seed', () => {
       const dflt = result.rows.find((row) => row[1] === 'locked')?.[4];
       expect(dflt === 'false' || dflt === '0' || dflt === 0).toBe(true);
     });
+
+    it('has locked column on SectionEntry defaulting to false (RES-97)', async () => {
+      const result = await client.execute('PRAGMA table_info(SectionEntry)');
+      const columns = result.rows.map((row) => row[1] as string);
+      expect(columns).toContain('locked');
+
+      const dflt = result.rows.find((row) => row[1] === 'locked')?.[4];
+      expect(dflt === 'false' || dflt === '0' || dflt === 0).toBe(true);
+    });
   });
 
   describe('Section seed', () => {
