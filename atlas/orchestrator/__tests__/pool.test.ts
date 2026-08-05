@@ -211,7 +211,11 @@ describe('AgentPool — tmux pane wiring', () => {
       expect(joined).toContain('export PATH=');
       expect(joined).toContain(path.dirname(process.execPath));
       // Non-interactive one-shot: -p + --system-prompt, then exit
-      expect(joined).toContain('pi -p --system-prompt "@');
+      expect(joined).toContain('pi -p -e');
+      // stream-output extension loaded explicitly (worktree .pi lacks it)
+      expect(joined).toContain('stream-output');
+      expect(joined).toContain('--stream=all');
+      expect(joined).toContain('--system-prompt "@');
       // The message arg is REQUIRED — without it pi -p exits immediately
       expect(joined).toContain('Begin work on your assigned TASK now');
       expect(joined).toContain('exit');
@@ -290,12 +294,13 @@ describe('AgentPool — tmux pane wiring', () => {
       expect(prompt).toContain('RES-99');
       expect(prompt).toContain('spawned non-interactively');
 
-      // spawn must launch pi in -p (non-interactive) mode
+      // spawn must launch pi in -p (non-interactive) mode with streaming
       const sent = vi
         .mocked(cp.execSync)
         .mock.calls.map((c) => String(c[0]))
         .filter((c) => c.includes('tmux send-keys'));
-      expect(sent.join('\n')).toContain('pi -p --system-prompt');
+      expect(sent.join('\n')).toContain('pi -p -e');
+      expect(sent.join('\n')).toContain('--stream=all');
     });
   });
 

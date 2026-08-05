@@ -205,8 +205,14 @@ export class AgentPool {
 
     this.runLifecycleScript(agentDef.pre_script, name, type, port ?? 0, worktreePath);
 
-    // Build prompt (includes the TASK block when node is given)
-    const promptContent = this.buildPrompt(type, name, port ?? 0, worktreePath, node);
+    // Build prompt (includes the TASK block when node is given). The uuid
+    // must be generated FIRST and shared: the TASK block's uuid is what the
+    // worker echoes back in its IDLE message, and the orchestrator matches
+    // it against agent.id. If they differ (two generateUUID() calls), the
+    // worker's completion message never matches and the ticket stays
+    // in_progress forever.
+    const uuid = this.generateUUID();
+    const promptContent = this.buildPrompt(type, name, port ?? 0, worktreePath, node, uuid);
 
     // Launch pi inside a tmux worker pane (created by the pane manager by
     // splitting the banner). The pane gives the worker a real TTY and lets
@@ -214,10 +220,6 @@ export class AgentPool {
     // non-interactive `-p` mode: it processes the embedded TASK, reports
     // completion via intercom, and exits. `; exit` makes the pane die with
     // pi so healthCheck removes the agent and frees the slot.
-    const uuid = this.generateUUID();
-
-    // The pane is created unassigned if no ticket yet; otherwise it shows
-    // the ticket it was spawned for.
     const paneId = this.paneManager.createWorkerPane(name, currentTask ?? '');
     if (!paneId) {
       console.error(`[Pool] ${name} failed to create tmux pane — spawn aborted`);
@@ -272,8 +274,21 @@ export class AgentPool {
     // message, `pi -p --system-prompt @file` processes nothing and exits
     // immediately (verified empirically). `; exit` kills the pane's bash
     // with pi so the pane goes dead and the pool slot frees up.
+    //
+    // --stream=all + -e stream-output: the worker's worktree carries a
+    // committed .pi (with only the linear extension), so project-local
+    // auto-discovery would MISS the stream-output extension — it must be
+    // loaded explicitly from the main repo. Streamed output (thinking/text/
+    // tools) goes to stderr, visible live in the worker's tmux pane.
+    const streamExt = path.join(
+      getRepoRoot(),
+      '.pi',
+      'extensions',
+      'stream-output',
+      'index.ts',
+    );
     sendKeys(
-      `${PI_BIN} -p --system-prompt "@${promptContent}" "Begin work on your assigned TASK now. Implement it fully, then report completion and exit."; exit`,
+      `${PI_BIN} -p -e "${streamExt}" --stream=all --system-prompt "@${promptContent}" "Begin work on your assigned TASK now. Implement it fully, then report completion and exit."; exit`,
     );
 
     // Worker output is now visible live in the tmux pane (capture with
@@ -502,6 +517,7 @@ export class AgentPool {
     port: number,
     worktreePath: string,
     node?: GraphNode,
+    agentUuid?: string,
   ): string {
     const config = getConfig();
     const agentDef = config.agents[type];
@@ -527,10 +543,12 @@ export class AgentPool {
       .replace(/\{\{ORCHESTRATOR_NAME\}\}/g, `orchestrator-${process.pid}`);
 
     // One-shot worker: append the task so pi -p has everything it needs
-    // without an interactive intercom TASK handoff.
+    // without an interactive intercom TASK handoff. The uuid MUST be the
+    // agent's own id (passed from spawn) — the worker echoes it in its
+    // IDLE message and the orchestrator matches against agent.id.
     if (node && type === 'worker') {
       const task = {
-        uuid: this.generateUUID(),
+        uuid: agentUuid ?? this.generateUUID(),
         ticket: node.ticket,
         worktreePath,
         strategy,
