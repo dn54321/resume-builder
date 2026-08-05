@@ -174,4 +174,21 @@ describe('Strategist — merge throw resilience', () => {
     expect(result.error).toContain('Merge threw');
     expect(result.error).toContain('Not in a git repository');
   });
+
+  it('returns a retryable error when mergeToBranch returns a bare-repo GitResult failure', async () => {
+    // Since the git-layer hardening (RES-99), mergeToBranch no longer
+    // throws for a core.bare=true transient — it RETURNS a clean error.
+    // executeDirect must surface that as a retryable failure, not crash.
+    vi.mocked(mergeToBranch).mockReturnValue({
+      exitCode: 1,
+      stdout: '',
+      stderr: 'Merge aborted — cannot resolve the main repo: Repository is bare (core.bare=true) — cannot resolve the work tree root. Recover with: git config core.bare false',
+    });
+
+    const node = makeNode();
+    const result = await executeStrategy(node);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('bare');
+  });
 });

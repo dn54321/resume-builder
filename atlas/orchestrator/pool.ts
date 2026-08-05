@@ -286,7 +286,13 @@ export class AgentPool {
     // with the orchestrator and their ticket re-queues.
     if (node && type === 'worker') {
       node.state.agentId = uuid;
-      if (paneId) node.state.paneId = paneId;
+      // ⚠️ ALWAYS set paneId, even when headless: a stale paneId from a
+      // previous spawn (or an earlier restart) persisting through a
+      // headless spawn made the dashboard/state claim the worker had a
+      // pane it doesn't (observed: workers 2/3/4 showed paneIds %23/%19/%18
+      // that don't exist in tmux — only %20/%24 do; the headless flag was
+      // right in the pool but state disagreed). Headless = paneId null.
+      node.state.paneId = paneId ?? null;
     }
 
     // cwd must exist or the pane shell errors on cd.

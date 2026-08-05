@@ -211,10 +211,14 @@ async function addEpic(ticketId: string): Promise<void> {
   epicGraphs.set(ticketId, { nodes, rootId: ticketId });
   log(`Added epic ${ticketId} — ${nodes.size} tickets. Total epics: ${epicGraphs.size}`);
 
-  // Persist epic roots
+  // Persist epic roots — ⚠️ MERGE with existing, never replace. Replacing
+  // with [...epicGraphs.keys()] after every addEpic meant a crash mid-load
+  // (observed: CLOSE RES-99 crashed at epic #7 of 24) persisted a PARTIAL
+  // list; the next restart resumed only those 7 epics and silently dropped
+  // the other 17 from management.
   const ex = loadState();
   if (ex) {
-    ex.epicRoots = [...epicGraphs.keys()];
+    ex.epicRoots = [...new Set([...(ex.epicRoots ?? []), ...epicGraphs.keys()])];
     saveState(ex);
   }
 
@@ -360,6 +364,10 @@ async function onWorkerComplete(
         node.state.status = 'done';
         node.state.finishedAt = new Date().toISOString();
         node.state.pid = null;
+        // Clear the worker's pane/agent identity on completion so state
+        // doesn't retain a dead paneId for re-adoption attempts.
+        node.state.paneId = null;
+        node.state.agentId = null;
         if (result.prUrl) node.state.prUrl = result.prUrl;
 
         // A completed ticket proves the worker pipeline is healthy — reset
@@ -476,6 +484,20 @@ function pruneWorktree(node: GraphNode): void {
 // ─── Boss Command Handling ──────────────────────────────────────────
 
 async function handleBossCommand(text: string): Promise<void> {
+  try {
+    await handleBossCommandInner(text);
+  } catch (err: any) {
+    // ⚠️ NEVER let a boss command crash the orchestrator. Any throw here
+    // (Linear API errors, git faults, unexpected input) previously killed
+    // the whole process — observed: CLOSE RES-99 → fetchWorkflowStates
+    // GraphQL validation error → orchestrator died, board dead until
+    // manual restart. Log + notify the boss instead.
+    log(`boss command failed: ${text.slice(0, 60)} → ${err?.message ?? err}`);
+    try { await tellBoss(`❌ command failed: ${err?.message ?? err}`); } catch { /* best effort */ }
+  }
+}
+
+async function handleBossCommandInner(text: string): Promise<void> {
   const trimmed = text.trim();
 
   if (trimmed.startsWith('EPIC ') || trimmed.startsWith('epic ')) {
