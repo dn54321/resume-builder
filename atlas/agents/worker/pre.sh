@@ -80,6 +80,29 @@ else
   echo "[pre.sh] WARNING: no backend/.env in main repo — DB-backed tests will fail"
 fi
 
+# ─── Copy the generated Prisma client into the worktree ────────────
+# backend/src/generated/prisma is GITIGNORED (Prisma 7 output), so fresh
+# worktrees never get it — prisma-schema.spec.ts and every DB-backed test
+# throw missing-client errors until the worker figures out to run
+# `pnpm prisma:generate` (which ALSO runs scripts/patch-prisma-client.js to
+# fix Prisma 7's ESM import.meta.url — bare `npx prisma generate` crashes
+# NestJS at runtime). Copying the already-patched client means workers can
+# run tests immediately, and re-generating later is still safe (the patch
+# is idempotent). Only 540K — cheap.
+GEN_CLIENT_SRC="${MAIN_REPO_ROOT}/backend/src/generated/prisma"
+GEN_CLIENT_DST="${ATLAS_WORKTREE}/backend/src/generated/prisma"
+if [ -d "$GEN_CLIENT_SRC" ]; then
+  if [ ! -d "$GEN_CLIENT_DST" ]; then
+    mkdir -p "$(dirname "$GEN_CLIENT_DST")"
+    cp -r "$GEN_CLIENT_SRC" "$GEN_CLIENT_DST"
+    echo "[pre.sh] Copied generated Prisma client → worktree (540K, pre-patched)"
+  else
+    echo "[pre.sh] generated Prisma client already present in worktree"
+  fi
+else
+  echo "[pre.sh] WARNING: no generated Prisma client in main repo — run pnpm prisma:generate"
+fi
+
 # ─── Verify key tools ───────────────────────────────────────────────
 
 if ! command -v pi &>/dev/null; then

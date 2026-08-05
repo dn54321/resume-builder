@@ -158,6 +158,34 @@ export function mergeToBranch(
 ): GitResult {
   const mainRepo = getRepoRoot();
 
+  // ⚠️ GUARD: refuse to merge when the main repo working tree is DIRTY.
+  // Workers merge in the MAIN repo (checkout master + merge + push), which
+  // is the SAME tree the boss uses to stage its atlas fixes. If the boss has
+  // uncommitted/staged changes when a worker merge runs, a conflict + abort
+  // wipes them (observed twice tonight: `git merge --abort` after a frontend
+  // conflict destroyed the boss's staged boss-relay/server.ts changes).
+  //
+  // Instead of failing immediately (which burns a strategy retry), WAIT up
+  // to 45s for the tree to become clean (the boss's commit/push typically
+  // lands within seconds), then proceed. If it stays dirty, return a clean
+  // error so the strategy layer retries later. ATLAS_MERGE_DIRTY_TIMEOUT_MS
+  // overrides the wait (tests use a short value).
+  const timeoutMs = Number(process.env.ATLAS_MERGE_DIRTY_TIMEOUT_MS ?? 45_000);
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const dirty = execGit(['status', '--porcelain'], mainRepo);
+    if (dirty.stdout.trim().length === 0) break;
+    cp.spawnSync('sleep', ['1'], { stdio: 'ignore' });
+  }
+  const stillDirty = execGit(['status', '--porcelain'], mainRepo);
+  if (stillDirty.stdout.trim().length > 0) {
+    return {
+      stdout: '',
+      stderr: `Main repo working tree stayed dirty for ${Math.round(timeoutMs / 1000)}s (${stillDirty.stdout.trim().split('\n').length} files) — deferring merge to avoid clobbering uncommitted work. Will retry.`,
+      exitCode: 1,
+    };
+  }
+
   // Fetch latest
   const fetchResult = execGit(['fetch', 'origin'], mainRepo);
   if (fetchResult.exitCode !== 0) return fetchResult;
