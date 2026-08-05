@@ -61,6 +61,27 @@ export class PaneManager {
   }
 
   /**
+   * Ensure we know a live banner pane id. Re-runs detection when the banner
+   * was never resolved or has since died.
+   *
+   * WHY: PaneManager.init() → detectBannerPane() runs while the orchestrator
+   * is still booting — BEFORE atlas.sh creates the tmux layout (atlas.sh
+   * waits for state/ready, which the orchestrator writes after init()). On a
+   * fresh ./agent.sh start the tmux session does not exist yet, so detection
+   * finds nothing and bannerPaneId stays null forever — every worker spawn
+   * then fails with "No banner pane". Restarting preserved the live session,
+   * which masked this; a fresh start always hits it. Re-detecting lazily at
+   * spawn/health time fixes it.
+   */
+  ensureBannerPane(): boolean {
+    if (this.bannerPaneId && this.paneAlive(this.bannerPaneId, false)) {
+      return true;
+    }
+    this.detectBannerPane();
+    return !!this.bannerPaneId && this.paneAlive(this.bannerPaneId, false);
+  }
+
+  /**
    * Create a worker pane by splitting the banner vertically.
    *
    * The pane runs a plain `bash` shell (NOT worker-pane.sh) so the AgentPool
@@ -71,7 +92,7 @@ export class PaneManager {
    * Returns the tmux pane id (e.g. "%1") or null on failure.
    */
   createWorkerPane(agentName: string, ticketId: string): string | null {
-    if (!this.bannerPaneId) {
+    if (!this.ensureBannerPane()) {
       console.error('[PaneManager] No banner pane — cannot create worker pane');
       return null;
     }
@@ -151,8 +172,8 @@ export class PaneManager {
    * Verify the banner pane is still alive. If not, we're in trouble.
    */
   healthCheck(): boolean {
-    if (!this.bannerPaneId) return false;
-    return this.paneAlive(this.bannerPaneId, /* warnOnDead */ true);
+    if (!this.ensureBannerPane()) return false;
+    return this.paneAlive(this.bannerPaneId!, /* warnOnDead */ true);
   }
 
   /**

@@ -76,12 +76,45 @@ describe('PaneManager', () => {
     });
 
     it('returns null without a banner pane', () => {
+      // No saved banner.pane, no banner.sh pane to auto-detect
+      fs.rmSync(path.join(tmpDir, 'panes', 'banner.pane'), { force: true });
       const fresh = new PaneManager({
         sessionName: 'atlas-test',
         stateDir: tmpDir,
         maxWorkers: 3,
       });
       expect(fresh.createWorkerPane('worker-1', 'RES-99')).toBeNull();
+    });
+
+    it('lazily re-detects the banner when init ran before the tmux layout existed', () => {
+      // Simulate a FRESH ./agent.sh start: PaneManager.init() runs before
+      // atlas.sh creates the tmux session (orchestrator writes state/ready
+      // first, atlas.sh creates the layout after). Detection finds no
+      // session → bannerPaneId stays null. The first spawn must re-detect
+      // instead of failing forever.
+      const fresh = new PaneManager({
+        sessionName: 'atlas-test',
+        stateDir: tmpDir,
+        maxWorkers: 3,
+      });
+      sessionAlive = false; // no tmux session yet at init() time
+      fresh.init();
+      expect(fresh.healthCheck()).toBe(false); // banner unresolved
+
+      // atlas.sh creates the session + banner pane now
+      sessionAlive = true;
+      displayOk = true;
+      // banner.pane is written by atlas.sh AFTER the layout exists
+      fs.writeFileSync(path.join(tmpDir, 'panes', 'banner.pane'), '%1\n', 'utf-8');
+
+      // First spawn re-detects the banner and succeeds
+      const paneId = fresh.createWorkerPane('worker-1', 'RES-99');
+      expect(paneId).toBe('%3');
+      const splitCall = vi
+        .mocked(cp.execSync)
+        .mock.calls.find((c) => String(c[0]).includes('split-window'));
+      expect(splitCall).toBeDefined();
+      expect(String(splitCall![0])).toContain('-t "%1"');
     });
 
     it('returns null when the tmux session is gone', () => {
