@@ -29,8 +29,8 @@ test.describe('Login flow', () => {
   }) => {
     // 1. Visit login page
     await page.goto('/login')
-    // The CardTitle renders as an <h3> (RES-82 era markup)
-    await expect(page.locator('h1, h2, h3').first()).toContainText('Log')
+    // Auth views render CardTitle as an h3 (not h1/h2) — target the heading by role
+    await expect(page.getByRole('heading', { name: 'Log in' })).toBeVisible()
 
     // 2. Fill credentials
     await page.fill('#login-email', email)
@@ -43,17 +43,21 @@ test.describe('Login flow', () => {
     await page.waitForURL('**/dashboard', { timeout: 15_000 })
     await expect(page.locator('h1').first()).toContainText('My Resumes')
 
-    // 5. Verify authenticated nav state — profile icon shown instead of email
-    await expect(page.locator('header button svg.lucide-user')).toBeVisible()
+    // 5. Verify authenticated nav state — profile icon shown instead of email.
+    //    Scope to the App navbar (role=banner) — the dashboard view also
+    //    renders its own <header>, so a bare 'header' locator is ambiguous.
+    await expect(
+      page.getByRole('banner').locator('svg.lucide-user'),
+    ).toBeVisible()
     await expect(page.getByRole('banner')).not.toContainText(email)
 
-    // 6. Verify the httpOnly session cookie was set for the API origin
-    // (auth is cookie-based — localStorage.auth_token is a legacy leftover)
-    const cookies = await page.context().cookies(`http://localhost:${BACKEND_PORT}`)
+    // 6. Verify the session cookie (auth is cookie-based, HttpOnly
+    //    'session_token' — NOT a localStorage token)
+    const cookies = await page.context().cookies()
     const sessionCookie = cookies.find((c) => c.name === 'session_token')
     expect(sessionCookie).toBeTruthy()
 
-    // 7. Verify /api/v1/auth/me returns user (cookie is sent automatically)
+    // 7. Verify /api/v1/auth/me returns user (cookie sent automatically)
     const meRes = await page.request.get(`${API_BASE}/auth/me`)
     expect(meRes.status()).toBe(200)
     const meBody = await meRes.json()
@@ -86,8 +90,9 @@ test.describe('Login flow', () => {
   test('login: redirects to requested page after auth', async ({ page }) => {
     // Try to visit dashboard without auth — should redirect to login
     await page.goto('/dashboard')
-    // Vue Router serializes the redirect query un-encoded (redirect=/dashboard)
-    await page.waitForURL('**/login?redirect=/dashboard', { timeout: 15_000 })
+    // The redirect query is unencoded (?redirect=/dashboard) — use a regex
+    // because the glob '?' wildcard and %2F encoding are both fragile here.
+    await page.waitForURL(/\/login\?redirect=\/dashboard/)
 
     // Now login
     await page.fill('#login-email', email)

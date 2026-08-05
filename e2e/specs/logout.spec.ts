@@ -32,8 +32,12 @@ test.describe('Logout', () => {
     await page.waitForURL('**/dashboard', { timeout: 15_000 })
     await expect(page.locator('h1').first()).toContainText('My Resumes')
 
-    // 2. Open user dropdown (profile icon trigger)
-    const userBtn = page.locator('header button', { has: page.locator('svg.lucide-user') })
+    // 2. Open user dropdown (profile icon trigger) — scope to the App navbar
+    //    (role=banner): the dashboard/builder views render their own <header>
+    //    too, so a bare 'header' locator is ambiguous in strict mode.
+    const userBtn = page
+      .getByRole('banner')
+      .locator('button', { has: page.locator('svg.lucide-user') })
     await userBtn.click()
 
     // 3. Click Log out
@@ -42,16 +46,14 @@ test.describe('Logout', () => {
     // 4. Verify redirect to /
     await page.waitForURL('**/', { timeout: 10_000 })
 
-    // 5. Verify login/signup buttons are visible
+    // 5. Verify login/signup buttons are visible (scope to the App navbar)
     await expect(page.getByRole('banner')).toContainText('Log in')
     await expect(page.getByRole('banner')).toContainText('Sign up')
 
-    // 6. Verify /api/v1/auth/me returns null user
-    const token = await page.evaluate(() =>
-      localStorage.getItem('auth_token'),
-    )
-    // Token should be cleared from localStorage
-    expect(token).toBeNull()
+    // 6. Verify the session cookie is gone (cookie-based auth — there is
+    //    no localStorage auth_token)
+    const cookies = await page.context().cookies()
+    expect(cookies.find((c) => c.name === 'session_token')).toBeUndefined()
 
     // 7. Try to visit /dashboard — should redirect to /login
     await page.goto('/dashboard')
@@ -66,13 +68,21 @@ test.describe('Logout', () => {
     await page.click('button[type="submit"]')
     await page.waitForURL('**/dashboard', { timeout: 15_000 })
 
-    // 2. Create a resume and go to builder
-    await page.getByRole('button', { name: 'Create New Resume' }).first().click()
+    // 2. Create a resume and go to builder — dashboard renders two
+    //    'Create New Resume' buttons (header + empty state); .first()
+    //    avoids a strict-mode violation.
+    await page
+      .getByRole('button', { name: 'Create New Resume' })
+      .first()
+      .click()
     await page.waitForURL('**/builder/**', { timeout: 15_000 })
     await expect(page.locator('input[aria-label="Resume name"]')).toBeVisible()
 
-    // 3. Logout from builder
-    const userBtn = page.locator('header button', { has: page.locator('svg.lucide-user') })
+    // 3. Logout from builder — scope to the App navbar (role=banner): the
+    //    builder toolbar also renders a <header>.
+    const userBtn = page
+      .getByRole('banner')
+      .locator('button', { has: page.locator('svg.lucide-user') })
     await userBtn.click()
     await page.locator('[role="menuitem"]', { hasText: 'Log out' }).click()
 

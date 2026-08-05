@@ -45,6 +45,16 @@ let bossRelay: BossRelay | null = null;
 // dashboard and to the boss within minutes instead of buried log lines.
 let requeueTracker: RequeueTracker | null = null;
 const epicGraphs = new Map<string, { nodes: Map<string, GraphNode>; rootId: string }>();
+// Tickets currently being spawned across launchReady() calls. A ticket can
+// be a child of SEVERAL epics, each holding its OWN GraphNode instance with
+// independent state — marking one epic's node in_progress does NOT mark the
+// others. launchReady() is invoked from many sites (addEpic, scheduler,
+// intercom, reconcile), so without this global guard each call sees the same
+// ticket still 'pending' in a different epic's node and spawns another
+// worker (observed: 3 workers on RES-91, colliding in one worktree).
+// Ticket id is added BEFORE the async spawn and removed after, closing the
+// await-gap race between concurrent launchReady calls.
+const spawningTickets = new Set<string>();
 let webhookServer: http.Server | null = null;
 
 // ─── Logging ────────────────────────────────────────────────────────
@@ -244,6 +254,20 @@ function areAllEpicsDone(): boolean {
 
 // ─── Worker Launch ──────────────────────────────────────────────────
 
+/**
+ * True when ANY epic graph holds an in_progress node for this ticket.
+ * A ticket is a child of several epics, so it has multiple GraphNode
+ * instances — marking one in_progress leaves the others pending, which
+ * lets launchReady spawn one worker per epic for the same ticket.
+ */
+function isTicketInProgress(ticketId: string): boolean {
+  for (const [, epic] of epicGraphs) {
+    const node = epic.nodes.get(ticketId);
+    if (node && node.state.status === 'in_progress') return true;
+  }
+  return false;
+}
+
 async function launchReady(): Promise<void> {
   if (areAllEpicsDone()) return;
 
@@ -256,7 +280,12 @@ async function launchReady(): Promise<void> {
       // spawns ONE WORKER PER EPIC for the same ticket → 3-5 workers
       // colliding on the same worktree (git races: 'something committed my
       // staged changes') and test DB ('database is locked'). Spawn once.
+      // isTicketInProgress() is the GLOBAL guard: the same ticket may still
+      // be 'pending' in another epic's node after this epic's node was set
+      // in_progress — a fresh launchReady call would otherwise spawn again.
       if (seen.has(node.ticket.id)) continue;
+      if (isTicketInProgress(node.ticket.id)) continue;
+      if (spawningTickets.has(node.ticket.id)) continue;
       seen.add(node.ticket.id);
       allReady.push(node);
     }
@@ -270,7 +299,17 @@ async function launchReady(): Promise<void> {
   const maxWorkers = config.agents.worker.max_instances;
   for (const node of allReady) {
     if (pool.getByType('worker').length >= maxWorkers) return;
-    const agent = await pool.spawn('worker', node);
+    // Re-check under the global guard: a concurrent launchReady call may
+    // have claimed this ticket while we awaited pool.spawn() of an earlier
+    // node (spawn is async — the await gap is the race window).
+    if (isTicketInProgress(node.ticket.id) || spawningTickets.has(node.ticket.id)) continue;
+    spawningTickets.add(node.ticket.id);
+    let agent;
+    try {
+      agent = await pool.spawn('worker', node);
+    } finally {
+      spawningTickets.delete(node.ticket.id);
+    }
     if (!agent) continue;
     log(`Spawned one-shot worker for ${node.ticket.identifier}`);
     writeDashboard();

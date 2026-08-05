@@ -15,30 +15,30 @@ const E2E_DB_PATH = process.env.E2E_DB_PATH
   : path.resolve(__dirname, '../../backend/prisma/test-e2e.db')
 
 /**
- * The 10 canonical resume section types — a static lookup table seeded by
- * `backend/prisma/seed.ts` for the dev database. The e2e harness creates
- * test-e2e.db with `prisma db push` (no seed), so `resetE2eDatabase` must
- * re-insert these rows itself: `ResumeSection.sectionId` has an FK to
- * `Section.id`, and any authenticated save (autosave PUT /resumes,
- * POST /resumes with sections) fails with SQLITE_CONSTRAINT when the
- * table is empty.
+ * Reference data for the Section catalog (id → label). These rows are
+ * REQUIRED by ResumeSection.sectionId's foreign key: the backend's
+ * upsert/create flow re-creates ResumeSection rows that reference this
+ * catalog, so if the catalog is empty every resume save fails with
+ * SQLITE_CONSTRAINT: FOREIGN KEY (RES-95). The catalog is static
+ * reference data (mirrors backend/prisma/seed.ts) — never treat it as
+ * test data to wipe.
  */
-const SECTION_ROWS: ReadonlyArray<readonly [string, string]> = [
-  ['name_contact', 'Name & Contact'],
-  ['summary', 'Summary'],
-  ['experience', 'Experience'],
-  ['education', 'Education'],
-  ['hard_skills', 'Hard Skills'],
-  ['soft_skills', 'Soft Skills'],
-  ['certifications', 'Certifications'],
-  ['projects', 'Projects'],
-  ['languages', 'Languages'],
-  ['hobbies', 'Hobbies'],
+const SECTION_CATALOG: ReadonlyArray<{ id: string; label: string }> = [
+  { id: 'name_contact', label: 'Name & Contact' },
+  { id: 'summary', label: 'Summary' },
+  { id: 'experience', label: 'Experience' },
+  { id: 'education', label: 'Education' },
+  { id: 'hard_skills', label: 'Hard Skills' },
+  { id: 'soft_skills', label: 'Soft Skills' },
+  { id: 'certifications', label: 'Certifications' },
+  { id: 'projects', label: 'Projects' },
+  { id: 'languages', label: 'Languages' },
+  { id: 'hobbies', label: 'Hobbies' },
 ]
 
 /**
  * Reset the e2e test database to a clean state by deleting all rows
- * from every table, then restoring the static Section lookup rows.
+ * from every table, then re-seed the Section catalog (reference data).
  * Tables are deleted in foreign-key-safe order (children before parents).
  *
  * Uses sqlite3 CLI which handles the WAL journal mode automatically.
@@ -55,9 +55,9 @@ export function resetE2eDatabase(): void {
   ]
 
   const stmts = tables.map((t) => `DELETE FROM "${t}";`).join('\n')
-  const sectionInserts = SECTION_ROWS.map(
-    ([id, label]) =>
-      `INSERT INTO "Section" ("id", "label") VALUES ('${id}', '${label}');`,
+  const seedStmts = SECTION_CATALOG.map(
+    (s) =>
+      `INSERT OR REPLACE INTO "Section" ("id", "label") VALUES ('${s.id}', '${s.label}');`,
   ).join('\n')
 
   // The webServer (playwright.config.ts) creates test-e2e.db with
@@ -71,7 +71,7 @@ export function resetE2eDatabase(): void {
   let lastError: unknown = null
   for (let attempt = 0; attempt < 10; attempt++) {
     try {
-      execSync(`sqlite3 "${E2E_DB_PATH}" "${stmts}${sectionInserts}"`, {
+      execSync(`sqlite3 "${E2E_DB_PATH}" "${stmts} ${seedStmts}"`, {
         stdio: 'pipe',
         timeout: 5_000,
       })

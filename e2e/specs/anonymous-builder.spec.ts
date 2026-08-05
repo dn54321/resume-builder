@@ -68,7 +68,9 @@ test.describe('Anonymous resume builder', () => {
   }) => {
     await page.goto('/builder')
 
-    // Header should show Log in and Sign up
+    // Scope to the App navbar (role=banner) — the builder toolbar also
+    // renders a <header>, so a bare 'header' locator is ambiguous and
+    // fails in strict mode.
     await expect(page.getByRole('banner')).toContainText('Log in')
     await expect(page.getByRole('banner')).toContainText('Sign up')
   })

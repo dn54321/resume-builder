@@ -30,8 +30,12 @@ test.describe('Unsaved changes guard', () => {
     await page.click('button[type="submit"]')
     await page.waitForURL('**/dashboard', { timeout: 15_000 })
 
-    // Create a resume
-    await page.getByRole('button', { name: 'Create New Resume' }).first().click()
+    // Create a resume — dashboard renders two 'Create New Resume' buttons
+    // (header + empty state); .first() avoids a strict-mode violation.
+    await page
+      .getByRole('button', { name: 'Create New Resume' })
+      .first()
+      .click()
     await page.waitForURL('**/builder/**', { timeout: 15_000 })
 
     // Set resume name — blur commits the name and triggers the autosave
@@ -56,7 +60,8 @@ test.describe('Unsaved changes guard', () => {
     // Try to navigate away by clicking a nav link
     await page.getByRole('link', { name: 'My Resumes' }).click()
 
-    // Unsaved changes modal should appear
+    // Unsaved changes modal should appear. ConfirmModal renders a reka-ui
+    // dialog — it does not forward data-testid, so target it by role/name.
     const modal = page.getByRole('dialog', { name: 'Unsaved Changes' })
     await expect(modal).toBeVisible({ timeout: 5000 })
     await expect(modal).toContainText('Unsaved Changes')

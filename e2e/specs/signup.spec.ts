@@ -6,6 +6,7 @@
 import { test, expect } from '@playwright/test'
 
 const BACKEND_PORT = parseInt(process.env.AGENT_PORT || '3000', 10)
+const API_BASE = `http://localhost:${BACKEND_PORT}/api/v1`
 
 test.describe('Sign Up flow', () => {
   const email = `signup-e2e-${Date.now()}@test.com`
@@ -16,8 +17,8 @@ test.describe('Sign Up flow', () => {
   }) => {
     // 1. Visit signup page
     await page.goto('/signup')
-    // The CardTitle renders as an <h3>
-    await expect(page.locator('h1, h2, h3').first()).toContainText('Sign')
+    // Auth views render CardTitle as an h3 (not h1/h2) — target the heading by role
+    await expect(page.getByRole('heading', { name: 'Sign up' })).toBeVisible()
 
     // 2. Fill the form
     await page.fill('#signup-email', email)
@@ -32,8 +33,12 @@ test.describe('Sign Up flow', () => {
     await page.waitForURL('**/dashboard', { timeout: 15_000 })
     await expect(page.locator('h1').first()).toContainText('My Resumes')
 
-    // 5. Verify authenticated nav state — profile icon shown instead of email
-    await expect(page.locator('header button svg.lucide-user')).toBeVisible()
+    // 5. Verify authenticated nav state — profile icon shown instead of email.
+    //    Scope to the App navbar (role=banner) — the dashboard view also
+    //    renders its own <header>, so a bare 'header' locator is ambiguous.
+    await expect(
+      page.getByRole('banner').locator('svg.lucide-user'),
+    ).toBeVisible()
     await expect(page.getByRole('banner')).not.toContainText(email)
 
     // 6. Verify Log in / Sign up buttons are gone
@@ -45,15 +50,7 @@ test.describe('Sign Up flow', () => {
     await expect(page.locator('h1').first()).toContainText('My Resumes')
 
     // 8. Verify /api/v1/auth/me returns the user (cookie-based session)
-    const cookies = await page
-      .context()
-      .cookies(`http://localhost:${BACKEND_PORT}`)
-    const sessionCookie = cookies.find((c) => c.name === 'session_token')
-    expect(sessionCookie).toBeTruthy()
-
-    const meRes = await page.request.get(
-      `http://localhost:${BACKEND_PORT}/api/v1/auth/me`,
-    )
+    const meRes = await page.request.get(`${API_BASE}/auth/me`)
     expect(meRes.status()).toBe(200)
     const meBody = await meRes.json()
     expect(meBody.user).toBeTruthy()

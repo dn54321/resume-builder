@@ -385,3 +385,54 @@ test.describe('Section eye/lock round-trips (RES-91 / RES-92)', () => {
     }).toPass({ timeout: 15_000 })
   })
 })
+
+test.describe('Mobile fullscreen FAB (RES-81)', () => {
+  const email = `fab-${Date.now()}@test.com`
+
+  test.beforeAll(async ({ request }) => {
+    resetE2eDatabase()
+    const res = await request.post(`${API_BASE}/auth/signup`, {
+      data: { email, password: PASSWORD },
+    })
+    expect(res.status()).toBe(201)
+  })
+
+  test('builder: mobile FAB opens the fullscreen preview (hidden on desktop)', async ({
+    page,
+  }) => {
+    // Mobile viewport (RES-81: the FAB is shown only below 1024px).
+    await page.setViewportSize({ width: 390, height: 844 })
+
+    // Login and create a fresh resume
+    await page.goto('/login')
+    await page.fill('#login-email', email)
+    await page.fill('#login-password', PASSWORD)
+    await page.click('button[type="submit"]')
+    await page.waitForURL('**/dashboard', { timeout: 15_000 })
+    await page
+      .getByRole('button', { name: 'Create New Resume' })
+      .first()
+      .click()
+    await page.waitForURL(/\/builder\/[0-9a-f-]{36}/, { timeout: 15_000 })
+
+    // FAB is visible once the resume has loaded (sections populated).
+    const fab = page.getByTestId('fullscreen-fab')
+    await expect(fab).toBeVisible({ timeout: 10_000 })
+
+    // Click → the fullscreen preview dialog opens and renders the resume.
+    await fab.click()
+    const closeBtn = page.getByRole('button', {
+      name: 'Close full screen preview',
+    })
+    await expect(closeBtn).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator('.fullscreen-preview__paper')).toBeVisible()
+
+    // Close the dialog (Escape — the reka-ui dialog's standard dismissal).
+    await page.keyboard.press('Escape')
+    await expect(closeBtn).toHaveCount(0)
+
+    // Back on a desktop viewport the FAB disappears (reactive matchMedia).
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await expect(fab).toHaveCount(0)
+  })
+})

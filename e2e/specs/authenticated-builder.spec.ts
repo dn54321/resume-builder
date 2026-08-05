@@ -43,8 +43,13 @@ test.describe('Authenticated resume builder', () => {
     await signupAndLogin(page)
     await expect(page.locator('h1').first()).toContainText('My Resumes')
 
-    // 2. Create a new resume
-    await page.getByRole('button', { name: 'Create New Resume' }).first().click()
+    // 2. Create a new resume — the dashboard renders TWO 'Create New Resume'
+    //    buttons (header + empty state), so use .first() to avoid a strict-
+    //    mode violation.
+    await page
+      .getByRole('button', { name: 'Create New Resume' })
+      .first()
+      .click()
 
     // 3. Verify redirected to builder with an ID
     await page.waitForURL('**/builder/**', { timeout: 15_000 })
@@ -91,8 +96,12 @@ test.describe('Authenticated resume builder', () => {
   test('dashboard shows created resume', async ({ page }) => {
     await signupAndLogin(page)
 
-    // Create a resume first
-    await page.getByRole('button', { name: 'Create New Resume' }).first().click()
+    // Create a resume first — dashboard renders two 'Create New Resume'
+    // buttons (header + empty state); .first() avoids strict-mode violation.
+    await page
+      .getByRole('button', { name: 'Create New Resume' })
+      .first()
+      .click()
     await page.waitForURL('**/builder/**', { timeout: 15_000 })
 
     const nameInput = page.locator('input[aria-label="Resume name"]')
@@ -108,8 +117,13 @@ test.describe('Authenticated resume builder', () => {
     await page.waitForURL('**/dashboard')
     await expect(page.locator('h1').first()).toContainText('My Resumes')
 
-    // Should see the created resume in the grid
-    // The resume name appears in a card
-    await expect(page.locator('.resume-card')).toHaveCount(1)
+    // Should see the created resume in the grid.
+    // NOTE: test 1 in this describe block already created a resume for the
+    // same user, so the dashboard shows more than one card — assert the
+    // newly created one specifically rather than a global card count.
+    const card = page
+      .locator('.resume-card')
+      .filter({ hasText: 'Dashboard Test Resume' })
+    await expect(card).toBeVisible()
   })
 })
