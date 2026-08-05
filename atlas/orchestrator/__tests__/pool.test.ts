@@ -204,6 +204,11 @@ describe('AgentPool — tmux pane wiring', () => {
       expect(joined).toContain('ATLAS_AGENT_PORT=');
       expect(joined).toContain('ATLAS_WORKTREE=');
       expect(joined).toContain('ATLAS_STATE_DIR=');
+      // The pane's node must be the orchestrator's node (pi's shebang uses
+      // `env node`; conda base in tmux panes ships an old node that crashes
+      // pi with webidl.util.markAsUncloneable).
+      expect(joined).toContain('export PATH=');
+      expect(joined).toContain(path.dirname(process.execPath));
       expect(joined).toContain('--system-prompt "@');
       expect(joined).toContain('/name worker-1');
       expect(joined).toContain('REGISTER');

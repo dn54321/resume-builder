@@ -231,6 +231,13 @@ export class AgentPool {
     sendKeys('unset PI_INTERCOM_SESSION_ID PI_SESSION_ID PI_SESSION_FILE');
     sendKeys(`cd '${spawnCwd}'`);
     sendKeys(`export ${envAssignments}`);
+    // pi's shebang is `#!/usr/bin/env node` — it resolves `node` from the
+    // pane's PATH. Tmux panes inherit the launcher shell's env (often conda
+    // base with an old node), while pi's bundled undici needs the same node
+    // the orchestrator runs under. Prepend the orchestrator's node bin dir
+    // so pi boots; without this it crashes with
+    // `webidl.util.markAsUncloneable is not a function`.
+    sendKeys(`export PATH='${path.dirname(process.execPath)}':$PATH`);
     sendKeys(`${PI_BIN} --system-prompt "@${promptContent}"`);
     sendKeys(`/name ${name}`);
     sendKeys(
