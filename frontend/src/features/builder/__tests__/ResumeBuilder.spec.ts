@@ -121,6 +121,19 @@ vi.mock('@/features/builder/components/LivePreview.vue', () => ({
   },
 }))
 
+vi.mock('@/features/builder/components/FullscreenPreview.vue', () => ({
+  default: {
+    name: 'FullscreenPreview',
+    props: ['open'],
+    emits: ['update:open'],
+    template: `
+      <div v-if="open" data-testid="fullscreen-preview-modal">
+        <button data-testid="fullscreen-preview-close-stub" @click="$emit('update:open', false)">Close</button>
+      </div>
+    `,
+  },
+}))
+
 vi.mock('@/features/builder/components/PdfExportButton.vue', () => ({
   default: {
     name: 'PdfExportButton',
@@ -158,6 +171,50 @@ describe('ResumeBuilder', () => {
     })
   }
 
+  /**
+   * Stub window.matchMedia so the FAB's reactive viewport detection works in
+   * jsdom (which has no matchMedia). Returns a simulateChange() helper that
+   * fires registered 'change' listeners, mirroring real matchMedia behavior
+   * across the 1024px breakpoint.
+   * @param {boolean} initialMatches - whether (max-width: 1023px) initially matches
+   * @returns {{ mql: object; simulateChange: (matches: boolean) => void }}
+   */
+  function stubMatchMedia(initialMatches: boolean) {
+    const listeners: Array<(event: { matches: boolean }) => void> = []
+    const mql = {
+      matches: initialMatches,
+      media: '(max-width: 1023px)',
+      onchange: null,
+      addEventListener: vi.fn<
+        (_type: string, listener: (event: { matches: boolean }) => void) => void
+      >((_type, listener) => {
+        listeners.push(listener)
+      }),
+      removeEventListener: vi.fn<
+        (_type: string, listener: (event: { matches: boolean }) => void) => void
+      >((_type, listener) => {
+        const idx = listeners.indexOf(listener)
+        if (idx !== -1) listeners.splice(idx, 1)
+      }),
+      addListener: vi.fn<() => void>(),
+      removeListener: vi.fn<() => void>(),
+      dispatchEvent: vi.fn<() => boolean>(),
+    }
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => mql),
+    )
+    return {
+      mql,
+      simulateChange(matches: boolean) {
+        mql.matches = matches
+        for (const listener of listeners) {
+          listener({ matches } as MediaQueryListEvent)
+        }
+      },
+    }
+  }
+
   beforeEach(() => {
     pinia = createPinia()
     setActivePinia(pinia)
@@ -171,6 +228,9 @@ describe('ResumeBuilder', () => {
     mockIsAuthenticated.value = false
     mockDirty.value = false
     mockIsSaving.value = false
+    // jsdom does not implement matchMedia — default to no stub so the FAB
+    // degrades to hidden (desktop) unless a test stubs a mobile viewport.
+    vi.stubGlobal('matchMedia', undefined)
   })
 
   it('renders the toolbar with Job Description button', () => {
@@ -186,28 +246,42 @@ describe('ResumeBuilder', () => {
     mockRoute.query = {}
     const wrapper = mountBuilder()
 
-    expect(wrapper.find('[data-testid="layout-picker"]').attributes('data-show-two-column')).toBe('false')
-    expect(wrapper.find('[data-testid="section-toggles"]').attributes('data-show-two-column')).toBe('false')
+    expect(wrapper.find('[data-testid="layout-picker"]').attributes('data-show-two-column')).toBe(
+      'false',
+    )
+    expect(wrapper.find('[data-testid="section-toggles"]').attributes('data-show-two-column')).toBe(
+      'false',
+    )
   })
 
   it('passes showTwoColumn=true when ?layout=True is in the URL', () => {
     mockRoute.query = { layout: 'True' }
     const wrapper = mountBuilder()
 
-    expect(wrapper.find('[data-testid="layout-picker"]').attributes('data-show-two-column')).toBe('true')
-    expect(wrapper.find('[data-testid="section-toggles"]').attributes('data-show-two-column')).toBe('true')
+    expect(wrapper.find('[data-testid="layout-picker"]').attributes('data-show-two-column')).toBe(
+      'true',
+    )
+    expect(wrapper.find('[data-testid="section-toggles"]').attributes('data-show-two-column')).toBe(
+      'true',
+    )
   })
 
   it('keeps showTwoColumn=false for other layout query values (exact case match)', () => {
     mockRoute.query = { layout: 'true' }
     const wrapper = mountBuilder()
 
-    expect(wrapper.find('[data-testid="layout-picker"]').attributes('data-show-two-column')).toBe('false')
-    expect(wrapper.find('[data-testid="section-toggles"]').attributes('data-show-two-column')).toBe('false')
+    expect(wrapper.find('[data-testid="layout-picker"]').attributes('data-show-two-column')).toBe(
+      'false',
+    )
+    expect(wrapper.find('[data-testid="section-toggles"]').attributes('data-show-two-column')).toBe(
+      'false',
+    )
 
     mockRoute.query = { layout: '1' }
     const wrapper2 = mountBuilder()
-    expect(wrapper2.find('[data-testid="layout-picker"]').attributes('data-show-two-column')).toBe('false')
+    expect(wrapper2.find('[data-testid="layout-picker"]').attributes('data-show-two-column')).toBe(
+      'false',
+    )
   })
 
   it('renders the Tailor Resume button in toolbar', () => {
@@ -689,6 +763,38 @@ describe('ResumeBuilder', () => {
     expect(handle.classes()).toContain('resize-handle')
   })
 
+  it('gives the editor ≥400px and the preview ≥200px in the mobile stacked layout (≤1024px)', () => {
+    // Mounting injects the component's scoped <style> into jsdom — the
+    // media rule below is then readable via document.styleSheets.
+    mountBuilder()
+
+    // Scoped SFC styles are injected as <style> tags in jsdom — find the
+    // (max-width: 1024px) media rule targeting .builder-grid.
+    let mediaCss = ''
+    for (const sheet of Array.from(document.styleSheets)) {
+      let rules: CSSRule[] = []
+      try {
+        rules = Array.from(sheet.cssRules ?? [])
+      } catch {
+        continue // cross-origin stylesheet — skip
+      }
+      for (const rule of rules) {
+        if (rule instanceof CSSMediaRule && rule.conditionText.includes('max-width: 1024px')) {
+          const css = Array.from(rule.cssRules)
+            .map((r) => r.cssText)
+            .join('\n')
+          if (css.includes('builder-grid')) {
+            mediaCss += css
+          }
+        }
+      }
+    }
+
+    expect(mediaCss).toContain('grid-template-columns: 1fr')
+    expect(mediaCss).toContain('minmax(400px, 1fr)')
+    expect(mediaCss).toContain('minmax(200px, auto)')
+  })
+
   it('uses dynamic grid template with default 2fr preview', () => {
     const wrapper = mountBuilder()
     const grid = wrapper.find('.builder-grid')
@@ -1005,5 +1111,129 @@ describe('ResumeBuilder', () => {
 
     // saveResume should not be called since name didn't change
     expect(mockSaveResume).not.toHaveBeenCalled()
+  })
+
+  // ─── Mobile fullscreen FAB tests (RES-81) ────────────────────────
+
+  it('renders the fullscreen FAB on mobile (<1024px) once a resume is loaded', async () => {
+    stubMatchMedia(true) // (max-width: 1023px) matches → mobile
+    const store = useResumeStore()
+    store.initializeDefaults() // simulate a loaded resume
+
+    const wrapper = mountBuilder()
+    await nextTick()
+
+    const fab = wrapper.find('[data-testid="fullscreen-fab"]')
+    expect(fab.exists()).toBe(true)
+    expect(fab.attributes('aria-label')).toBe('Open full screen preview')
+    expect(fab.attributes('title')).toBe('Full screen preview')
+  })
+
+  it('hides the fullscreen FAB on desktop (>=1024px)', async () => {
+    stubMatchMedia(false) // (max-width: 1023px) does not match → desktop
+    const store = useResumeStore()
+    store.initializeDefaults()
+
+    const wrapper = mountBuilder()
+    await nextTick()
+
+    expect(wrapper.find('[data-testid="fullscreen-fab"]').exists()).toBe(false)
+  })
+
+  it('hides the fullscreen FAB while the resume is still loading', async () => {
+    stubMatchMedia(true) // mobile viewport, but no resume loaded yet
+    // store.sections stays empty (loadResume mock resolves to nothing)
+
+    const wrapper = mountBuilder()
+    await nextTick()
+
+    expect(wrapper.find('[data-testid="fullscreen-fab"]').exists()).toBe(false)
+  })
+
+  it('shows/hides the FAB reactively when the viewport crosses 1024px', async () => {
+    const { simulateChange } = stubMatchMedia(true) // start mobile
+    const store = useResumeStore()
+    store.initializeDefaults()
+
+    const wrapper = mountBuilder()
+    await nextTick()
+    expect(wrapper.find('[data-testid="fullscreen-fab"]').exists()).toBe(true)
+
+    // Resize to desktop → FAB disappears
+    simulateChange(false)
+    await nextTick()
+    expect(wrapper.find('[data-testid="fullscreen-fab"]').exists()).toBe(false)
+
+    // Resize back to mobile → FAB reappears
+    simulateChange(true)
+    await nextTick()
+    expect(wrapper.find('[data-testid="fullscreen-fab"]').exists()).toBe(true)
+  })
+
+  it('styles the FAB with fixed positioning, 48px size, and z-40 (above content, below modals)', async () => {
+    stubMatchMedia(true)
+    const store = useResumeStore()
+    store.initializeDefaults()
+
+    const wrapper = mountBuilder()
+    await nextTick()
+
+    const fab = wrapper.find('[data-testid="fullscreen-fab"]')
+    expect(fab.classes()).toContain('fixed')
+    expect(fab.classes()).toContain('bottom-4')
+    expect(fab.classes()).toContain('right-4')
+    expect(fab.classes()).toContain('size-12') // 48px circular button
+    expect(fab.classes()).toContain('rounded-full')
+    expect(fab.classes()).toContain('shadow-lg')
+    expect(fab.classes()).toContain('z-40')
+  })
+
+  it('opens the FullscreenPreview modal when the FAB is tapped', async () => {
+    stubMatchMedia(true)
+    const store = useResumeStore()
+    store.initializeDefaults()
+
+    const wrapper = mountBuilder()
+    await nextTick()
+
+    expect(wrapper.find('[data-testid="fullscreen-preview-modal"]').exists()).toBe(false)
+
+    await wrapper.find('[data-testid="fullscreen-fab"]').trigger('click')
+    await nextTick()
+
+    expect(wrapper.find('[data-testid="fullscreen-preview-modal"]').exists()).toBe(true)
+  })
+
+  it('closes the FullscreenPreview modal and returns to the builder view', async () => {
+    stubMatchMedia(true)
+    const store = useResumeStore()
+    store.initializeDefaults()
+
+    const wrapper = mountBuilder()
+    await nextTick()
+
+    // Open via FAB
+    await wrapper.find('[data-testid="fullscreen-fab"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-testid="fullscreen-preview-modal"]').exists()).toBe(true)
+
+    // Close via the modal's update:open(false) emission
+    await wrapper.find('[data-testid="fullscreen-preview-close-stub"]').trigger('click')
+    await nextTick()
+
+    expect(wrapper.find('[data-testid="fullscreen-preview-modal"]').exists()).toBe(false)
+    // Builder view is still there
+    expect(wrapper.find('[data-testid="section-editor"]').exists()).toBe(true)
+  })
+
+  it('removes the matchMedia listener on unmount', () => {
+    const { mql } = stubMatchMedia(true)
+    const store = useResumeStore()
+    store.initializeDefaults()
+
+    const wrapper = mountBuilder()
+    wrapper.unmount()
+
+    expect(mql.removeEventListener).toHaveBeenCalled()
   })
 })

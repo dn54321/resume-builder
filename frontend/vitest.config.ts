@@ -27,6 +27,10 @@ export default mergeConfig(
   defineConfig({
     test: {
       environment: 'jsdom',
+      // RES-81: process SFC <style> blocks and inject them into jsdom so
+      // responsive CSS (@media rules) can be asserted via document.styleSheets
+      // (e.g. the mobile stacked builder layout min-height test).
+      css: true,
       exclude: [...configDefaults.exclude, 'integration/**'],
       root: fileURLToPath(new URL('./', import.meta.url)),
       env: {
