@@ -1,3 +1,23 @@
+/*
+ * ⚠️ WARNING — intermittent `EnvironmentTeardownError` flake in the full suite.
+ *
+ * When `pnpm test:cov` / `pnpm test:unit` runs the whole suite, Vitest
+ * occasionally reports up to ~22 unhandled rejections of the form
+ * "Cannot load '/src/features/builder/components/shared/BulletList.vue'
+ * imported from .../ExperienceEditor.vue after the environment was torn
+ * down", originating in SectionEditor.spec.ts. All tests still PASS; the
+ * run just exits 1 and fails CI with no failing assertions.
+ *
+ * This is a pre-existing Vitest worker/module-loading race (parallel
+ * workers, static SFC import chain BulletList ← ExperienceEditor ←
+ * SectionEditor), NOT a regression — it reproduces on a clean checkout
+ * with identical frequency (verified 2026-08-05, RES-90).
+ *
+ * Proper fix (dedicated infra ticket, not bundled into feature work):
+ * set `pool: 'forks'` (or poolOptions.singleFork) in the test config and
+ * re-run the suite several times to confirm the race is gone. Do NOT
+ * silence it with retry hacks or threshold changes.
+ */
 import { fileURLToPath } from 'node:url'
 import { mergeConfig, defineConfig, configDefaults } from 'vitest/config'
 import viteConfig from './vite.config'

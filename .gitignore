@@ -13,3 +13,4 @@ atlas/.pi/
 atlas/node_modules/
 atlas/coverage/
 playwright-report/
+test-results/

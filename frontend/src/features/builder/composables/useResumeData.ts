@@ -1,3 +1,31 @@
+/*
+ * ⚠️ WARNING — authenticated save/load contract is broken against the real backend.
+ *
+ * Verified 2026-08-05 (RES-90) with curl against a fresh backend:
+ *
+ *   1. saveResume() calls PUT /api/v1/resumes (no :id), but the backend only
+ *      exposes PUT /resumes/:id → always 404.
+ *   2. The 404 fallback POSTs the payload, which the whitelisted
+ *      ResumeSectionDto rejects because the frontend's toPayload() sends an
+ *      `enabled` property per section: "sections.0.property enabled should
+ *      not exist" → 400.
+ *   3. loadResume() GETs /api/v1/resumes, which returns ResumeSummary[] (a
+ *      LIST), but the code expects a single object with `.sections` — so a
+ *      saved authenticated resume is never loaded either.
+ *
+ * Net effect: for authenticated users, autosave ALWAYS fails (error lands in
+ * the console only) and the "✓ Saved" indicator never appears; the session-
+ * storage safety net is the only thing preserving edits. Introduced in the
+ * RES-66/RES-67 era and never caught because the repo-root e2e suite
+ * (e2e/) is not wired into CI and the backend has no integration tests for
+ * these endpoints.
+ *
+ * This is a PRE-EXISTING bug, out of scope for the RES-90 frontend-only
+ * ticket. Fix in a dedicated ticket: align the API contract (PUT
+ * /resumes/:id with the resume id, drop `enabled` from the payload or add
+ * it to ResumeSectionDto, and GET /resumes/:id for load). Do NOT paper
+ * over it in the frontend with hardcoded ids or by stripping fields.
+ */
 import { ref, watch } from 'vue'
 import { useResumeStore } from '@/features/builder/stores/resume'
 import { useAuth } from '@/features/auth/composables/useAuth'
@@ -96,11 +124,13 @@ export function useResumeData() {
   let initialLoadComplete = false
 
   /**
-   * Guard flag: true while a save operation is in progress.
-   * Prevents the dirty watcher from re-asserting dirty=true
-   * after saveResume() has already cleared the dirty flag.
+   * Reactive flag: true while a save operation is in progress.
+   * Exposed so the builder can render a "Saving…" indicator while
+   * the debounced autosave (or an explicit save) is in flight.
+   * Also doubles as a guard that prevents the dirty watcher from
+   * re-asserting dirty=true after saveResume() has cleared it.
    */
-  let isSaving = false
+  const isSaving = ref(false)
 
   // Watch for store mutations — mark dirty on any change after initial load.
   // flush: 'sync' is required so the watcher fires synchronously while
@@ -110,7 +140,7 @@ export function useResumeData() {
   watch(
     () => store.toPayload(),
     () => {
-      if (initialLoadComplete && !isSaving) {
+      if (initialLoadComplete && !isSaving.value) {
         dirty.value = true
       }
     },
@@ -197,7 +227,7 @@ export function useResumeData() {
    * the save completes and clears the dirty flag.
    */
   async function saveResume() {
-    isSaving = true
+    isSaving.value = true
     try {
       const payload = store.toPayload()
 
@@ -221,7 +251,7 @@ export function useResumeData() {
       // Clear dirty flag on successful save
       dirty.value = false
     } finally {
-      isSaving = false
+      isSaving.value = false
     }
   }
 
@@ -281,6 +311,7 @@ export function useResumeData() {
     setupAutoSave,
     teardownAutoSave,
     dirty,
+    isSaving,
   }
 }
 

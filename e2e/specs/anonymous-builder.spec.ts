@@ -48,19 +48,15 @@ test.describe('Anonymous resume builder', () => {
     await expect(nameInput).toHaveValue('My Anonymous Resume')
   })
 
-  test('no save button for anonymous users (or save prompts signup)', async ({
+  test('no save button for anonymous users — autosave is the only save mechanism', async ({
     page,
   }) => {
     await page.goto('/builder')
 
-    // Anonymous users should NOT see a "Save" button in the toolbar
+    // The manual "Save" button has been removed entirely — autosave is the
+    // sole save mechanism, so there is nothing to hide for anonymous users.
     const saveBtn = page.locator('[data-testid="toolbar-save-btn"]')
-    // Should not exist OR should be for authenticated only
-    const count = await saveBtn.count()
-    // If save button exists, it should be hidden or disabled for anon users
-    // The template shows: v-if="isAuthenticated || dirty"
-    // Since there's no data, dirty should be false initially
-    expect(count).toBeLessThanOrEqual(1)
+    expect(await saveBtn.count()).toBe(0)
   })
 
   test('login and signup links available for anonymous users', async ({

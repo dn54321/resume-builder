@@ -52,9 +52,9 @@ test.describe('Authenticated resume builder', () => {
     const nameInput = page.locator('input[aria-label="Resume name"]')
     await nameInput.fill('My Test Resume')
 
-    // 5. Click Save
-    const saveBtn = page.locator('[data-testid="toolbar-save-btn"]')
-    await saveBtn.click()
+    // 5. Blur the input — the name commits to the store on blur and the
+    //    autosave (the sole save mechanism now) persists it immediately
+    await nameInput.blur()
 
     // 6. Wait for "Saved" confirmation
     await expect(page.locator('[data-testid="toolbar-saved-msg"]')).toBeVisible({
@@ -96,13 +96,11 @@ test.describe('Authenticated resume builder', () => {
 
     const nameInput = page.locator('input[aria-label="Resume name"]')
     await nameInput.fill('Dashboard Test Resume')
-    const saveBtn = page.locator('[data-testid="toolbar-save-btn"]')
-    if (await saveBtn.isVisible()) {
-      await saveBtn.click()
-      await expect(
-        page.locator('[data-testid="toolbar-saved-msg"]'),
-      ).toBeVisible({ timeout: 10_000 })
-    }
+    // Autosave is the sole save mechanism — blur commits the name and saves
+    await nameInput.blur()
+    await expect(
+      page.locator('[data-testid="toolbar-saved-msg"]'),
+    ).toBeVisible({ timeout: 10_000 })
 
     // Go back to dashboard
     await page.goto('/dashboard')
