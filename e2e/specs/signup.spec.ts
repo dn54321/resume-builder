@@ -29,8 +29,9 @@ test.describe('Sign Up flow', () => {
     await page.waitForURL('**/dashboard', { timeout: 15_000 })
     await expect(page.locator('h1').first()).toContainText('My Resumes')
 
-    // 5. Verify authenticated nav state — user email visible in dropdown
-    await expect(page.locator('header')).toContainText(email)
+    // 5. Verify authenticated nav state — profile icon shown instead of email
+    await expect(page.locator('header button svg.lucide-user')).toBeVisible()
+    await expect(page.locator('header')).not.toContainText(email)
 
     // 6. Verify Log in / Sign up buttons are gone
     await expect(page.locator('header')).not.toContainText('Log in')

@@ -47,6 +47,20 @@ function makeRouter() {
 
 let pinia: ReturnType<typeof createPinia>
 
+/** Resolved wrapper type produced by mountApp. */
+type AppWrapper = Awaited<ReturnType<typeof mountApp>>
+
+/**
+ * Find the dropdown trigger button that renders the Lucide User profile icon.
+ * @param wrapper - mounted App wrapper
+ * @returns the user-menu trigger button wrapper, or undefined when absent
+ */
+function findUserTrigger(wrapper: AppWrapper) {
+  return wrapper
+    .findAll('button[data-slot="dropdown-menu-trigger"]')
+    .find((button) => button.find('svg.lucide-user').exists())
+}
+
 /**
  * Mount App with router initialized at '/'.
  * @param router - a vue-router instance
@@ -129,11 +143,11 @@ describe('App', () => {
       expect(wrapper.text()).not.toContain('My Resumes')
     })
 
-    it('does not show user email dropdown trigger', async () => {
+    it('does not render the user profile icon in guest state', async () => {
       const router = makeRouter()
       const wrapper = await mountApp(router)
-      // In guest state, no email text appears
-      expect(wrapper.text()).not.toContain('@')
+      // In guest state, no user menu (profile icon) appears
+      expect(wrapper.find('svg.lucide-user').exists()).toBe(false)
     })
   })
 
@@ -149,10 +163,14 @@ describe('App', () => {
       expect(wrapper.text()).toContain('My Resumes')
     })
 
-    it('shows user email as dropdown trigger text', async () => {
+    it('shows User profile icon as dropdown trigger', async () => {
       const router = makeRouter()
       const wrapper = await mountApp(router)
-      expect(wrapper.text()).toContain('test@example.com')
+      const trigger = findUserTrigger(wrapper)
+      // The trigger renders a Lucide User icon instead of the raw email text
+      expect(trigger).toBeDefined()
+      expect(trigger!.find('svg.size-4').exists()).toBe(true)
+      expect(wrapper.text()).not.toContain('test@example.com')
     })
 
     it('does not show Log in and Sign up buttons', async () => {
@@ -170,11 +188,12 @@ describe('App', () => {
       expect(dropdown.exists()).toBe(true)
     })
 
-    it('renders DropdownMenuTrigger with user email', async () => {
+    it('renders DropdownMenuTrigger in authenticated state', async () => {
       const router = makeRouter()
       const wrapper = await mountApp(router)
-      const trigger = wrapper.findComponent({ name: 'DropdownMenuTrigger' })
-      expect(trigger.exists()).toBe(true)
+      // User menu trigger (with the profile icon) is present alongside the theme toggle
+      expect(findUserTrigger(wrapper)).toBeDefined()
+      expect(wrapper.findAll('button[data-slot="dropdown-menu-trigger"]').length).toBe(2)
     })
   })
 
@@ -232,14 +251,17 @@ describe('App', () => {
       expect(container.classes()).toContain('lg:px-8')
     })
 
-    it('truncates user email on narrow screens', async () => {
+    it('sizes the profile icon to match the button style', async () => {
       mockIsAuthenticated = true
       mockUserValue = { id: '1', email: 'very-long-email-address@example.com' }
       const router = makeRouter()
       const wrapper = await mountApp(router)
-      const emailSpan = wrapper.find('.truncate')
-      expect(emailSpan.exists()).toBe(true)
-      expect(emailSpan.classes()).toContain('max-w-[160px]')
+      // The Lucide User icon is rendered at size-4 (16px) inside the trigger
+      const trigger = findUserTrigger(wrapper)
+      expect(trigger).toBeDefined()
+      expect(trigger!.find('svg.size-4').exists()).toBe(true)
+      // No raw email text leaks into the navbar
+      expect(wrapper.text()).not.toContain('very-long-email-address@example.com')
     })
 
     it('keeps navbar items in a flex row with gap', async () => {

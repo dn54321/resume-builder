@@ -97,7 +97,13 @@ describe('App auth flow — skeleton → resolved transition', () => {
     // 4. Skeleton gone, authenticated nav visible
     expect(wrapper.find('.animate-pulse').exists()).toBe(false)
     expect(wrapper.text()).toContain('My Resumes')
-    expect(wrapper.text()).toContain('test@example.com')
+    // Navbar shows a profile icon instead of the raw email text
+    const userTrigger = wrapper
+      .findAll('button[data-slot="dropdown-menu-trigger"]')
+      .find((button) => button.find('svg.lucide-user').exists())
+    expect(userTrigger).toBeDefined()
+    expect(userTrigger!.find('svg.size-4').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('test@example.com')
     expect(wrapper.text()).not.toContain('Log in')
     expect(wrapper.text()).not.toContain('Sign up')
   })
