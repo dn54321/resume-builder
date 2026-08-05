@@ -61,6 +61,25 @@ if [ -d "$PI_DIR_SRC" ] && [ ! -e "$PI_DIR_LINK" ]; then
   echo "[pre.sh] Symlinked .pi/ → $PI_DIR_SRC (intercom + extensions)"
 fi
 
+# ─── Copy backend .env into the worktree ─────────────────────────────
+# backend/.env is gitignored (holds DATABASE_URL + encryption keys), so
+# worktrees never get it. Without it, prisma-schema.spec.ts and other DB-
+# backed tests throw 'DATABASE_URL environment variable is required' and
+# the ENTIRE backend test suite fails for workers — which then conclude
+# the ticket failed and exit, causing a spawn/re-queue loop.
+BACKEND_ENV_SRC="${MAIN_REPO_ROOT}/backend/.env"
+BACKEND_ENV_DST="${ATLAS_WORKTREE}/backend/.env"
+if [ -f "$BACKEND_ENV_SRC" ]; then
+  if [ ! -f "$BACKEND_ENV_DST" ]; then
+    cp "$BACKEND_ENV_SRC" "$BACKEND_ENV_DST"
+    echo "[pre.sh] Copied backend/.env → worktree (DB config for tests)"
+  else
+    echo "[pre.sh] backend/.env already exists in worktree"
+  fi
+else
+  echo "[pre.sh] WARNING: no backend/.env in main repo — DB-backed tests will fail"
+fi
+
 # ─── Verify key tools ───────────────────────────────────────────────
 
 if ! command -v pi &>/dev/null; then

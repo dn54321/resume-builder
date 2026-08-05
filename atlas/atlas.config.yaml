@@ -39,7 +39,7 @@ agents:
   # ── Global Agent Pool Limit ──────────────────────────────────────────────
   # Maximum total agents across ALL types combined (workers + reviewers + ...)
   # The boss is NOT counted in this limit (boss is spawned by atlas.sh)
-  max_concurrent: 4
+  max_concurrent: 5
 
   # ── Boss Agent ──────────────────────────────────────────────────────────
   # The boss oversees the system, fixes bugs, and answers worker questions.
@@ -62,7 +62,7 @@ agents:
     pre_script: agents/worker/pre.sh
     post_script: agents/worker/post.sh
     spawn: on_demand               # Auto-spawned when pending tickets exist
-    max_instances: 3               # Up to 3 workers running concurrently
+    max_instances: 5               # Up to 5 workers running concurrently
     retry_limit: 2                 # Max retries per ticket before marking failed
     task_timeout_minutes: 30       # Kill worker if task takes longer than this
 

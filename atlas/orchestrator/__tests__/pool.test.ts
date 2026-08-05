@@ -8,7 +8,7 @@ import * as cp from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { AgentPool } from '../pool';
+import { AgentPool, __resetSpawnStateForTests } from '../pool';
 import { setStateDir } from '../state';
 import type { AgentInstance, AtlasConfig } from '../types';
 import type { PaneManager } from '../../tui/pane-manager';
@@ -145,6 +145,7 @@ describe('AgentPool — tmux pane wiring', () => {
   let intercom: { send: Mock<[], Promise<void>> };
 
   beforeEach(() => {
+    __resetSpawnStateForTests();
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'atlas-pool-test-'));
     setStateDir(tmpDir);
 

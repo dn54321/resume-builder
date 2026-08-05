@@ -83,7 +83,7 @@ const SPAWN_LIFETIME_COUNT = new Map<string, number>(); // agentType → total s
 const MAX_CONSECUTIVE_FAILURES = 5;
 const BASE_COOLDOWN_MS = 1000;  // 1 second base, doubles each failure
 const MAX_LIFETIME_SPAWNS: Record<string, number> = {
-  worker: 20,       // Hard cap: will not spawn more than 20 workers total per session
+  worker: 5,        // Hard cap: will not spawn more than 5 workers total per session
   reviewer: 5,
   pr_manager: 5,
 };
@@ -115,6 +115,17 @@ function recordSpawnFailure(type: string): void {
 function recordSpawnSuccess(type: string): void {
   SPAWN_FAILURES.delete(type);
   SPAWN_COOLDOWNS.delete(type);
+}
+
+/**
+ * Reset per-session spawn accounting. Tests only — the lifetime cap is
+ * intentionally process-lifetime in production, but test files spawn many
+ * agents across cases and would exhaust it otherwise.
+ */
+export function __resetSpawnStateForTests(): void {
+  SPAWN_COOLDOWNS.clear();
+  SPAWN_FAILURES.clear();
+  SPAWN_LIFETIME_COUNT.clear();
 }
 
 // ─── Agent Pool ─────────────────────────────────────────────────────

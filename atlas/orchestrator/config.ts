@@ -111,7 +111,7 @@ const DEFAULTS: AtlasConfig = {
       pre_script: 'agents/worker/pre.sh',
       post_script: 'agents/worker/post.sh',
       spawn: 'on_demand',
-      max_instances: 3,
+      max_instances: 5,
       retry_limit: 2,
       task_timeout_minutes: 30,
     },
