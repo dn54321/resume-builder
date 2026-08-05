@@ -9,6 +9,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { IntercomClient } from '../integrations/intercom/client';
 import { BossRelay } from './boss-relay';
+import { RequeueTracker } from './requeue-tracker';
 import { Scheduler } from './scheduler';
 import { AgentPool, recordCompletedWork } from './pool';
 import { PaneManager } from '../tui/pane-manager';
@@ -40,6 +41,9 @@ let intercom: IntercomClient;
 let scheduler: Scheduler;
 let pool: AgentPool;
 let bossRelay: BossRelay | null = null;
+// Tracks re-queue storms per ticket so worker crash-loops surface on the
+// dashboard and to the boss within minutes instead of buried log lines.
+let requeueTracker: RequeueTracker | null = null;
 const epicGraphs = new Map<string, { nodes: Map<string, GraphNode>; rootId: string }>();
 let webhookServer: http.Server | null = null;
 
@@ -96,9 +100,26 @@ function writeDashboard(): void {
   }
 
   lines.push(`══ Atlas Dashboard ${now.padStart(30)} ══`);
+  const active = pool.getActive();
+  const headlessCount = active.filter((a) => !a.paneId).length;
   lines.push(`${epicGraphs.size} epics · ${totalTickets} tickets · ${totalRunning} running · ${totalDone} done · ${totalFailed} failed`);
-  lines.push(`Pool: ${pool.count()} agents (${pool.getByType('worker').length} workers)`);
+  lines.push(`Pool: ${pool.count()} agents (${pool.getByType('worker').length} workers${headlessCount > 0 ? `, ${headlessCount} headless` : ''})`);
   lines.push(`Boss: ${bossRelay ? bossRelay.getState() : 'unregistered'}${bossRelay && bossRelay.queuedCount > 0 ? ` (${bossRelay.queuedCount} queued)` : ''}`);
+
+  // ⚠️ Worker pain-point detector: tickets with 2+ re-queues in the rolling
+  // window are churning. This surfaces crash-loops (worker dies instantly),
+  // already-merged tickets looping on re-push, and push-contention retries
+  // — the exact failure classes that cost 20+ minutes tonight before anyone
+  // noticed. 1 re-queue is normal; 2+ in the window is worth showing.
+  const requeues = requeueTracker?.snapshot() ?? [];
+  if (requeues.length > 0) {
+    lines.push('');
+    lines.push('── ⚠️ Worker pain (re-queues in window) ──');
+    for (const rq of requeues) {
+      lines.push(`  ⚠ ${rq.ticketId.padEnd(10)} ${rq.count}× in ${Math.round((Date.now() - rq.firstSeen) / 60000)}min${rq.lastReason ? ` — ${rq.lastReason.slice(0, 50)}` : ''}`);
+    }
+  }
+
   lines.push('');
 
   for (const [, epic] of epicGraphs) {
@@ -128,7 +149,11 @@ function writeDashboard(): void {
 
   lines.push('── Agents ──');
   for (const agent of pool.getActive()) {
-    lines.push(`  ◉ ${agent.name.padEnd(12)} → ${agent.currentTask || '?'} [${agent.type}]`);
+    // Mark headless agents (no tmux pane — spawned when the banner column
+    // ran out of space). They work identically but have no live pane and
+    // die with the orchestrator on restart.
+    const mode = agent.paneId ? '' : ' ⚙headless';
+    lines.push(`  ◉ ${agent.name.padEnd(12)} → ${(agent.currentTask || '?').padEnd(10)} [${agent.type}]${mode}`);
   }
   const idleWorkers = pool.getIdle('worker');
   for (const agent of idleWorkers) {
@@ -310,6 +335,7 @@ async function onWorkerComplete(
           node.state.pid = null;
           node.state.error = `${result.error || 'Strategy execution failed'} (retry ${node.state.retryCount}/${maxRetries})`;
           node.state.retryCount += 1;
+          requeueTracker?.record(identifier, result.error);
           await tellBoss(`🔄 ${identifier}: strategy retry ${node.state.retryCount}/${maxRetries} — ${result.error}`);
         } else {
           node.state.status = 'failed';
@@ -329,6 +355,7 @@ async function onWorkerComplete(
     node.state.status = 'pending';
     node.state.pid = null;
     node.state.error = `Worker killed (signal ${exitCode - 128}) — will resume`;
+    requeueTracker?.record(identifier, `worker killed (signal ${exitCode - 128})`);
   } else {
     // Non-zero exit
     const config = getConfig();
@@ -338,6 +365,7 @@ async function onWorkerComplete(
       node.state.pid = null;
       node.state.error = `Worker exited with code ${exitCode} (retry ${node.state.retryCount}/${maxRetries})`;
       node.state.retryCount += 1;
+      requeueTracker?.record(identifier, `worker exited (code ${exitCode})`);
     } else {
       node.state.status = 'failed';
       node.state.finishedAt = new Date().toISOString();
@@ -582,6 +610,7 @@ async function checkAgentHealth(): Promise<void> {
         !liveWorkers.has(node.state.workerName)
       ) {
         log(`Re-queuing ${node.ticket.identifier} (worker ${node.state.workerName} gone)`);
+        requeueTracker?.record(node.ticket.identifier, `worker ${node.state.workerName} gone`);
         node.state.status = 'pending';
         node.state.workerName = null;
         node.state.pid = null;
@@ -817,6 +846,10 @@ function killStaleOrchestrators(): void {
 export async function startOrchestrator(): Promise<void> {
   log('Atlas orchestrator starting...');
 
+  // Fresh re-queue tracking per process lifetime — counts don't survive
+  // restarts (the worker states that caused them may have been resolved).
+  requeueTracker?.reset();
+
   // Single-instance guard: kill any other orchestrator process before we
   // start. Restarts previously left zombie instances (SIGTERM cleanup waits
   // 5s×agents via pool.stopAll, and kill scripts sometimes matched the bash
@@ -864,6 +897,16 @@ export async function startOrchestrator(): Promise<void> {
   // Boss messaging with offline queue (see boss-relay.ts).
   bossRelay = new BossRelay({
     send: (to, text) => intercom.send(to, text),
+    log: (msg) => log(msg),
+  });
+  // Alert the boss the FIRST time a ticket crosses the re-queue anomaly
+  // threshold — catch crash-loops in minutes, not after 20+ minutes of
+  // churn (RES-88 re-queued 105× before anyone noticed).
+  requeueTracker = new RequeueTracker({
+    threshold: 5,
+    onAnomaly: async (ticketId, count, reason) => {
+      await tellBoss(`⚠️ ${ticketId} re-queued ${count}× — possible worker crash loop (${reason ?? 'unknown'}). Investigate now.`);
+    },
     log: (msg) => log(msg),
   });
   intercom.onReceipt((_session, receipt) => {
