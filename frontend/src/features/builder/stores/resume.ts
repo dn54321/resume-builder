@@ -28,6 +28,7 @@ function createDefaultSection(sectionType: SectionType, order: number): ResumeSe
     column: 'right',
     order,
     enabled: true,
+    locked: false,
     entries: [],
   }
 }
@@ -49,6 +50,11 @@ export const useResumeStore = defineStore('resume', () => {
   // Derived: enabled section types (visible in the resume)
   const enabledSections = computed(() =>
     sections.value.filter((s) => s.enabled).map((s) => s.sectionType),
+  )
+
+  // Derived: locked section types (protected from Tailor edits)
+  const lockedSections = computed(() =>
+    sections.value.filter((s) => s.locked).map((s) => s.sectionType),
   )
 
   // Derived: sections assigned to left column (only meaningful for 2:1 layout)
@@ -103,6 +109,17 @@ export const useResumeStore = defineStore('resume', () => {
     const existing = sections.value.find((s) => s.sectionType === sectionType)
     if (existing) {
       existing.enabled = !existing.enabled
+    }
+  }
+
+  /**
+   * Toggle the `locked` flag — protects the section from Tailor edits.
+   * @param sectionType
+   */
+  function toggleLock(sectionType: SectionType) {
+    const existing = sections.value.find((s) => s.sectionType === sectionType)
+    if (existing) {
+      existing.locked = !existing.locked
     }
   }
 
@@ -190,6 +207,7 @@ export const useResumeStore = defineStore('resume', () => {
           column: saved.column,
           order: saved.order,
           enabled: (saved as { enabled?: boolean }).enabled ?? true,
+          locked: (saved as { locked?: boolean }).locked ?? false,
           entries: saved.entries.map((e) => ({
             id: generateId(),
             order: e.order,
@@ -210,6 +228,7 @@ export const useResumeStore = defineStore('resume', () => {
         column: 'right',
         order: maxOrder + 1 + i,
         enabled: false,
+        locked: false,
         entries: [],
       }
     })
@@ -227,6 +246,7 @@ export const useResumeStore = defineStore('resume', () => {
         column: s.column,
         order: s.order,
         enabled: s.enabled,
+        locked: s.locked,
         entries: s.entries.map((e) => ({
           order: e.order,
           parentId: e.parentId,
@@ -342,6 +362,7 @@ export const useResumeStore = defineStore('resume', () => {
     layout,
     sections,
     enabledSections,
+    lockedSections,
     orderedSectionTypes,
     leftColumnSections,
     rightColumnSections,
@@ -355,6 +376,7 @@ export const useResumeStore = defineStore('resume', () => {
     initializeDefaults,
     setLayout,
     toggleSection,
+    toggleLock,
     setSectionColumn,
     reorderSections,
     isSectionEnabled,

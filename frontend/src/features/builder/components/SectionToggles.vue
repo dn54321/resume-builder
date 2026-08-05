@@ -20,25 +20,38 @@
         @drop="onDrop($event, section.type)"
         @dragend="onDragEnd"
       >
+        <!-- Eye toggle: section visibility (replaces the old toggle switch) -->
+        <button
+          type="button"
+          class="w-7 h-7 flex items-center justify-center border-none bg-transparent rounded-sm text-sm cursor-pointer transition-colors hover:bg-muted/50 hover:text-foreground"
+          :class="section.enabled ? 'text-foreground' : 'text-muted-foreground/50'"
+          :title="section.enabled ? 'Hide section' : 'Show section'"
+          :aria-label="`Toggle ${section.label} visibility`"
+          :aria-pressed="section.enabled"
+          data-testid="section-eye-toggle"
+          @click.stop="emit('toggle', section.type)"
+        >
+          <Eye v-if="section.enabled" class="w-4 h-4" />
+          <EyeOff v-else class="w-4 h-4" />
+        </button>
+
+        <!-- Lock toggle: protect section from Tailor edits -->
+        <button
+          type="button"
+          class="w-7 h-7 flex items-center justify-center border-none bg-transparent rounded-sm text-sm cursor-pointer transition-colors hover:bg-muted/50 hover:text-foreground"
+          :class="section.locked ? 'text-muted-foreground/50' : 'text-foreground'"
+          :title="section.locked ? 'Unlock section' : 'Lock section (protect from Tailor)'"
+          :aria-label="`${section.locked ? 'Unlock' : 'Lock'} ${section.label}`"
+          :aria-pressed="section.locked"
+          data-testid="section-lock-toggle"
+          @click.stop="emit('toggleLock', section.type)"
+        >
+          <Lock v-if="section.locked" class="w-4 h-4" />
+          <LockOpen v-else class="w-4 h-4" />
+        </button>
+
         <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions, vuejs-accessibility/click-events-have-key-events, vuejs-accessibility/label-has-for -->
         <label class="flex items-center gap-2 flex-1 cursor-pointer" @click.prevent="onLabelClick(section)">
-          <input
-            type="checkbox"
-            :checked="section.enabled"
-            @change.stop="emit('toggle', section.type)"
-            class="peer absolute opacity-0 w-0 h-0"
-          />
-          <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions, vuejs-accessibility/click-events-have-key-events -->
-          <span
-            class="relative w-9 h-5 bg-muted/50 rounded-[10px] shrink-0 transition-colors peer-checked:bg-primary after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:w-4 after:h-4 after:bg-white after:rounded-full after:transition-transform peer-checked:after:translate-x-4 cursor-pointer"
-            @click.prevent.stop="emit('toggle', section.type)"
-            role="switch"
-            :aria-checked="section.enabled"
-            :aria-label="`Toggle ${section.label}`"
-            tabindex="0"
-            @keydown.enter.prevent.stop="emit('toggle', section.type)"
-            @keydown.space.prevent.stop="emit('toggle', section.type)"
-          ></span>
           <span
             class="text-[0.8125rem] cursor-pointer"
             :class="section.type === selectedSectionId ? 'font-semibold text-primary' : section.enabled ? 'text-foreground' : 'text-muted-foreground/70'"
@@ -71,6 +84,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { Eye, EyeOff, Lock, LockOpen } from '@lucide/vue'
 import {
   SECTION_TYPES,
   SECTION_LABELS,
@@ -81,6 +95,8 @@ import {
 const props = withDefaults(defineProps<{
   layout: LayoutType
   enabledSections: SectionType[]
+  /** Sections protected from Tailor edits (RES-91). */
+  lockedSections?: SectionType[]
   /** Display order of enabled sections (from store, respects drag-and-drop reordering) */
   orderedSectionTypes?: SectionType[]
   columnAssignments: Record<SectionType, 'left' | 'right'>
@@ -88,11 +104,13 @@ const props = withDefaults(defineProps<{
   /** When false (default), the column assignment dropdowns are hidden behind the ?layout=True feature flag (RES-86). */
   showTwoColumn?: boolean
 }>(), {
+  lockedSections: () => [],
   showTwoColumn: false,
 })
 
 const emit = defineEmits<{
   toggle: [sectionType: SectionType]
+  toggleLock: [sectionType: SectionType]
   setColumn: [sectionType: SectionType, column: 'left' | 'right']
   reorder: [orderedTypes: SectionType[]]
   select: [sectionType: SectionType]
@@ -103,7 +121,7 @@ const dropIndicator = ref<{ type: SectionType; position: 'above' | 'below' } | n
 
 /**
  * Handle label click: select the section and scroll the editor to it.
- * Toggling is done via the checkbox, not the label.
+ * Visibility toggling is done via the eye icon button, not the label.
  * For disabled sections, also toggle them on first (enables + scrolls in one click).
  * @param section
  */
@@ -121,6 +139,7 @@ interface OrderedSection {
   type: SectionType
   label: string
   enabled: boolean
+  locked: boolean
   column: 'left' | 'right'
 }
 
@@ -131,6 +150,7 @@ const orderedSections = computed<OrderedSection[]>(() => {
     type,
     label: SECTION_LABELS[type],
     enabled: props.enabledSections.includes(type),
+    locked: props.lockedSections.includes(type),
     column: props.columnAssignments[type] ?? 'right',
   }))
 })

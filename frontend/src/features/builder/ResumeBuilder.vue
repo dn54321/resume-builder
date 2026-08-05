@@ -94,11 +94,13 @@
         <SectionToggles
           :layout="store.layout"
           :enabled-sections="store.enabledSections"
+          :locked-sections="store.lockedSections"
           :ordered-section-types="store.orderedSectionTypes"
           :column-assignments="columnAssignments"
           :selected-section-id="selectedSectionId"
           :show-two-column="showTwoColumn"
           @toggle="store.toggleSection"
+          @toggle-lock="store.toggleLock"
           @set-column="store.setSectionColumn"
           @reorder="store.reorderSections"
           @select="selectedSectionId = $event"

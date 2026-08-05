@@ -33,6 +33,8 @@ export interface ResumeSectionState {
   column: 'left' | 'right'
   order: number
   enabled: boolean
+  /** Protects the section from Tailor edits (RES-91). */
+  locked: boolean
   entries: SectionEntryState[]
 }
 
@@ -44,6 +46,7 @@ export interface ResumePayload {
     column: 'left' | 'right'
     order: number
     enabled?: boolean
+    locked?: boolean
     entries: {
       order: number
       parentId: string | null
