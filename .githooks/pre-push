@@ -4,6 +4,19 @@
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+# If we are inside a git worktree, --show-toplevel points at the WORKTREE
+# (e.g. atlas/state/worktrees/RES-85), which does NOT have node_modules
+# installed. The main repo is the first entry of `git worktree list` and is
+# where dependencies live. npm --prefix must target the MAIN repo, or every
+# check here fails with missing binaries (agents push from worktrees).
+if git rev-parse --git-common-dir >/dev/null 2>&1; then
+  MAIN_REPO="$(git worktree list --porcelain 2>/dev/null | head -1 | sed 's/^worktree //')"
+  if [ -n "$MAIN_REPO" ] && [ -d "$MAIN_REPO" ]; then
+    REPO_ROOT="$MAIN_REPO"
+  fi
+fi
+
 cd "$REPO_ROOT"
 
 # Colors
