@@ -14,26 +14,43 @@
 
         <textarea
           v-model="localJd"
-          class="w-full min-h-[150px] px-3 py-2.5 border border-border rounded-md text-[0.8125rem] font-[inherit] text-foreground bg-surface resize-y box-border transition-colors focus:outline-hidden focus:border-primary focus:ring-1 focus:ring-primary"
+          class="w-full min-h-[150px] px-3 py-2.5 border border-border rounded-md text-[0.8125rem] font-[inherit] text-foreground bg-surface resize-y box-border transition-colors focus:outline-hidden focus:border-primary focus:ring-1 focus:ring-primary disabled:bg-muted/30 disabled:text-muted-foreground/70"
+          :class="{ 'border-destructive!': error }"
           placeholder="Paste a job description here to find the most relevant experience and skills..."
+          :disabled="tailoring"
           rows="5"
           data-testid="jd-textarea"
         ></textarea>
 
+        <div
+          v-if="error"
+          class="mt-2 px-3 py-2 rounded-sm bg-destructive/10 text-destructive text-[0.8125rem] leading-relaxed"
+          data-testid="jd-modal-error"
+        >
+          {{ error }}
+        </div>
+
         <div class="mt-4 flex justify-end gap-2">
           <button
             class="px-4 py-2 rounded-md text-[0.8125rem] font-[inherit] font-medium cursor-pointer transition-colors border border-border bg-surface text-foreground hover:bg-muted"
+            :disabled="tailoring"
             @click="onCancel"
             data-testid="jd-modal-cancel"
           >
             Cancel
           </button>
           <button
-            class="px-4 py-2 rounded-md text-[0.8125rem] font-[inherit] font-medium cursor-pointer transition-colors border border-primary bg-primary text-primary-foreground hover:bg-primary/90"
-            @click="onSave"
-            data-testid="jd-modal-save"
+            class="px-4 py-2 rounded-md text-[0.8125rem] font-[inherit] font-medium cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-primary bg-primary text-primary-foreground hover:not-disabled:bg-primary/90 flex items-center gap-2"
+            :disabled="tailoring"
+            @click="onTailor"
+            data-testid="jd-modal-tailor"
           >
-            Save
+            <span
+              v-if="tailoring"
+              class="inline-block w-[14px] h-[14px] border-2 border-white/30 border-t-white rounded-full animate-spin"
+              aria-label="Loading"
+            ></span>
+            <span>{{ tailoring ? 'Tailoring…' : 'Tailor Resume' }}</span>
           </button>
         </div>
       </DialogContent>
@@ -55,22 +72,36 @@ import { useResumeStore } from '@/features/builder/stores/resume'
 
 const props = defineProps<{
   modelValue: boolean
+  /**
+   * Whether a tailor run is in flight (RES-98). The parent owns the tailor
+   * request (so the overlay animation and eye flips share one source of
+   * truth); the modal only reflects the state to disable its controls.
+   */
+  tailoring?: boolean
 }>()
 
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
+  /**
+   * Fired with the trimmed JD when the user clicks "Tailor Resume" (RES-98).
+   * The parent closes the modal and runs tailoring in one step.
+   */
+  tailor: [jobDescription: string]
 }>()
 
 const store = useResumeStore()
 const open = ref(props.modelValue)
 const localJd = ref(props.modelValue ? store.jdText : '')
+/** Inline validation error (empty JD) — API errors surface in the toolbar. */
+const error = ref<string | null>(null)
 
 // Two-way bind modelValue <-> open
 watch(() => props.modelValue, (val) => {
   open.value = val
   if (val) {
-    // Initialize localJd from store when modal opens
+    // Initialize localJd from store when modal opens and clear stale errors.
     localJd.value = store.jdText
+    error.value = null
   }
 })
 
@@ -79,11 +110,18 @@ watch(open, (val) => {
 })
 
 /**
- * Save JD text to store and close modal.
+ * One-step flow (RES-98): clicking "Tailor Resume" emits the JD so the
+ * parent can run tailoring directly — no separate save step. An empty JD
+ * keeps the modal open and shows an inline error instead.
  */
-function onSave() {
-  store.jdText = localJd.value
-  open.value = false
+function onTailor() {
+  const trimmed = localJd.value.trim()
+  if (!trimmed) {
+    error.value = 'Please enter a job description'
+    return
+  }
+  error.value = null
+  emit('tailor', trimmed)
 }
 
 /**

@@ -97,11 +97,12 @@ vi.mock('@/features/builder/components/SectionEditor.vue', () => ({
 vi.mock('@/features/builder/components/JdModal.vue', () => ({
   default: {
     name: 'JdModal',
-    props: ['modelValue'],
-    emits: ['update:modelValue'],
+    props: ['modelValue', 'tailoring'],
+    emits: ['update:modelValue', 'tailor'],
     template: `
-      <div v-if="modelValue" data-testid="jd-modal">
+      <div v-if="modelValue" data-testid="jd-modal" :data-tailoring="String(tailoring)">
         <button data-testid="jd-modal-close-stub" @click="$emit('update:modelValue', false)">Close</button>
+        <button data-testid="jd-modal-tailor-stub" @click="$emit('tailor', 'React developer')">Tailor Resume</button>
       </div>
     `,
   },
@@ -329,6 +330,42 @@ describe('ResumeBuilder', () => {
     expect(wrapper.find('[data-testid="jd-modal"]').exists()).toBe(true)
   })
 
+  it('runs tailoring in one step when the modal emits tailor (RES-98)', async () => {
+    mockTailorResume.mockResolvedValue(undefined)
+    const store = useResumeStore()
+    store.jdText = 'React developer'
+
+    const wrapper = mountBuilder()
+    await nextTick()
+
+    // Open the modal and click its Tailor Resume button
+    await wrapper.find('[data-testid="jd-toolbar-btn"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-testid="jd-modal"]').exists()).toBe(true)
+
+    await wrapper.find('[data-testid="jd-modal-tailor-stub"]').trigger('click')
+    await nextTick()
+
+    // The modal closes and tailoring runs with the emitted JD — one step.
+    expect(wrapper.find('[data-testid="jd-modal"]').exists()).toBe(false)
+    expect(mockTailorResume).toHaveBeenCalledWith('React developer')
+  })
+
+  it('passes isTailoring to the JD modal while tailoring (RES-98)', async () => {
+    mockIsTailoring.value = true
+    const store = useResumeStore()
+    store.jdText = 'Some JD'
+
+    const wrapper = mountBuilder()
+    await nextTick()
+
+    await wrapper.find('[data-testid="jd-toolbar-btn"]').trigger('click')
+    await nextTick()
+
+    const modal = wrapper.find('[data-testid="jd-modal"]')
+    expect(modal.attributes('data-tailoring')).toBe('true')
+  })
+
   it('does not render permanent JdInput footer', () => {
     const wrapper = mountBuilder()
     // The old footer should not exist
@@ -432,6 +469,68 @@ describe('ResumeBuilder', () => {
 
     const spinner = wrapper.find('span[aria-label="Loading"]')
     expect(spinner.exists()).toBe(true)
+  })
+
+  it('shows "Tailoring…" label in Tailor button while isTailoring', async () => {
+    mockIsTailoring.value = true
+    const store = useResumeStore()
+    store.jdText = 'Some JD'
+
+    const wrapper = mountBuilder()
+    await nextTick()
+
+    const tailorBtn = wrapper.find('[data-testid="toolbar-tailor-btn"]')
+    expect(tailorBtn.text()).toContain('Tailoring')
+  })
+
+  // ─── Tailoring overlay animation (RES-98) ───────────────────────
+
+  it('shows the tailoring overlay while isTailoring is true', async () => {
+    mockIsTailoring.value = true
+    const store = useResumeStore()
+    store.jdText = 'Some JD'
+
+    const wrapper = mountBuilder()
+    await nextTick()
+
+    const overlay = wrapper.find('[data-testid="tailoring-overlay"]')
+    expect(overlay.exists()).toBe(true)
+    expect(overlay.attributes('role')).toBe('status')
+    expect(overlay.attributes('aria-live')).toBe('polite')
+    expect(wrapper.find('[data-testid="tailoring-label"]').text()).toContain('Tailoring your resume')
+  })
+
+  it('hides the tailoring overlay when not tailoring', () => {
+    const wrapper = mountBuilder()
+    expect(wrapper.find('[data-testid="tailoring-overlay"]').exists()).toBe(false)
+  })
+
+  it('positions the tailoring overlay fixed over the viewport with top z-index', async () => {
+    mockIsTailoring.value = true
+    const store = useResumeStore()
+    store.jdText = 'Some JD'
+
+    const wrapper = mountBuilder()
+    await nextTick()
+
+    const overlay = wrapper.find('[data-testid="tailoring-overlay"]')
+    expect(overlay.classes()).toContain('fixed')
+    expect(overlay.classes()).toContain('inset-0')
+    expect(overlay.classes()).toContain('z-50')
+  })
+
+  it('hides the tailoring overlay when isTailoring turns false', async () => {
+    mockIsTailoring.value = true
+    const store = useResumeStore()
+    store.jdText = 'Some JD'
+
+    const wrapper = mountBuilder()
+    await nextTick()
+    expect(wrapper.find('[data-testid="tailoring-overlay"]').exists()).toBe(true)
+
+    mockIsTailoring.value = false
+    await nextTick()
+    expect(wrapper.find('[data-testid="tailoring-overlay"]').exists()).toBe(false)
   })
 
   it('calls tailorResume when Tailor button is clicked', async () => {

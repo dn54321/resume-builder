@@ -47,6 +47,14 @@ export const useResumeStore = defineStore('resume', () => {
   const filteredHardSkills = ref<string[]>([])
   const filteredSoftSkills = ref<string[]>([])
 
+  /**
+   * Eye (enabled) state of every section captured BEFORE the last tailor
+   * run. RES-98: tailoring flips the eye toggles to match the strategy
+   * result (relevant = visible); Reset Filter restores this snapshot so
+   * the user's original visibility choices come back.
+   */
+  const preTailorEnabled = ref<Record<string, boolean>>({})
+
   // Derived: enabled section types (visible in the resume)
   const enabledSections = computed(() =>
     sections.value.filter((s) => s.enabled).map((s) => s.sectionType),
@@ -84,6 +92,7 @@ export const useResumeStore = defineStore('resume', () => {
     name.value = ''
     layout.value = 'standard'
     sections.value = SECTION_TYPES.map((type, i) => createDefaultSection(type, i))
+    preTailorEnabled.value = {}
   }
 
   /**
@@ -109,6 +118,13 @@ export const useResumeStore = defineStore('resume', () => {
     const existing = sections.value.find((s) => s.sectionType === sectionType)
     if (existing) {
       existing.enabled = !existing.enabled
+      // A MANUAL eye flip during an active filter session becomes the new
+      // persistent value (RES-98): tailoring-induced flips are ephemeral
+      // session state (never serialized), but a deliberate user toggle is
+      // the user's new intent and must survive save/reload.
+      if (Object.prototype.hasOwnProperty.call(preTailorEnabled.value, existing.sectionId)) {
+        preTailorEnabled.value[existing.sectionId] = existing.enabled
+      }
     }
   }
 
@@ -189,6 +205,7 @@ export const useResumeStore = defineStore('resume', () => {
   function loadFromPayload(payload: ResumePayload) {
     name.value = payload.name ?? ''
     layout.value = payload.layout
+    preTailorEnabled.value = {}
 
     // Load saved sections, then fill in any new SECTION_TYPES that were
     // added after the resume was created (e.g. experience). Missing types
@@ -261,7 +278,14 @@ export const useResumeStore = defineStore('resume', () => {
         sectionId: s.sectionId,
         column: s.column,
         order: s.order,
-        enabled: s.enabled,
+        // RES-98: while a filter session is active, tailor-flipped eye
+        // states are EPHEMERAL — serialize the user's pre-tailor choice so
+        // save/reload never persists hidden sections with no Reset path.
+        // Manual eye flips during the session update the snapshot (see
+        // toggleSection), so deliberate changes still persist.
+        enabled: isFiltered.value
+          ? (preTailorEnabled.value[s.sectionId] ?? s.enabled)
+          : s.enabled,
         locked: s.locked,
         entries: s.entries.map((e) => ({
           id: e.id,
@@ -289,6 +313,19 @@ export const useResumeStore = defineStore('resume', () => {
    * @param response
    */
   function applyTailorFilter(response: TailorResponse): void {
+    // Snapshot the current eye state BEFORE flipping anything, so Reset
+    // Filter restores exactly what the user had before tailoring. Only the
+    // FIRST tailor run of a session captures the snapshot — re-running
+    // Tailor without Reset keeps the original, so Reset always returns to
+    // the true pre-tailor visibility.
+    if (!isFiltered.value) {
+      const before: Record<string, boolean> = {}
+      for (const s of sections.value) {
+        before[s.sectionId] = s.enabled
+      }
+      preTailorEnabled.value = before
+    }
+
     isFiltered.value = true
 
     const isLocked = (sectionId: string): boolean =>
@@ -313,12 +350,69 @@ export const useResumeStore = defineStore('resume', () => {
     filteredSoftSkills.value = isLocked('soft_skills')
       ? []
       : response.filteredSoftSkills
+
+    // RES-98 eye-toggle feedback: flip the eye toggles to mirror what the
+    // matching strategy decided — relevant sections/entries get shown
+    // (eye on), sections whose content is entirely non-relevant get hidden
+    // (eye off). Locked sections are never toggled (RES-92). Sections the
+    // filter carries no information about (empty sections, sections without
+    // bullet content) keep their current visibility.
+    for (const section of sections.value) {
+      if (section.locked) continue
+      const relevant = computeSectionRelevance(section)
+      if (relevant !== null) {
+        section.enabled = relevant
+      }
+    }
+  }
+
+  /**
+   * Decide whether a section is relevant to the JD based on the current
+   * filter state. Returns `null` when the filter carries no information for
+   * the section — the section keeps its current visibility in that case
+   * (matches isBulletRelevant/isSkillRelevant semantics).
+   * @param section
+   */
+  function computeSectionRelevance(section: ResumeSectionState): boolean | null {
+    // Skill sections: relevant when at least one skill survived. Empty
+    // skill sections have no filter info — leave them untouched.
+    if (
+      section.sectionType === 'hard_skills' ||
+      section.sectionType === 'soft_skills'
+    ) {
+      if (section.entries.length === 0) return null
+      const surviving =
+        section.sectionType === 'hard_skills'
+          ? filteredHardSkills.value
+          : filteredSoftSkills.value
+      return surviving.length > 0
+    }
+
+    // Sections without parented (bullet) content have no index info — the
+    // filter never touches them, so neither do we.
+    if (!section.entries.some((e) => e.parentId)) return null
+
+    const entryIndices = filteredBulletIndices.value[section.sectionId]
+    // Not in the map → nothing was filtered → keep visible (matches
+    // isBulletRelevant).
+    if (!entryIndices) return null
+    // Relevant when at least one bullet of any entry survived the match.
+    return entryIndices.some((e) => e.bulletIndices.length > 0)
   }
 
   /**
    * Clear all filter state and restore full visibility.
    */
   function resetTailorFilter(): void {
+    // Restore the eye states captured before the last tailor run (RES-98).
+    for (const section of sections.value) {
+      const enabledBefore = preTailorEnabled.value[section.sectionId]
+      if (enabledBefore !== undefined) {
+        section.enabled = enabledBefore
+      }
+    }
+    preTailorEnabled.value = {}
+
     isFiltered.value = false
     filteredBulletIndices.value = {}
     filteredHardSkills.value = []
