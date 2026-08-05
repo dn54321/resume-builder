@@ -282,7 +282,12 @@ export class PaneManager {
 
 
   /**
-   * Update the banner display.
+   * Update the banner display AND set each worker pane's title to show the
+   * agent + ticket (tmux 3.4 `select-pane -T`). Panes normally show the
+   * shell's own title ("DP-BATTLE-STATION"); re-titling on every banner
+   * update keeps the agent/ticket visible even after pi/bash emit their own
+   * title escape sequences. Best-effort — a pane that just died fails
+   * silently.
    */
   updateBanner(): void {
     const workersFifo = path.join(this.fifoDir, 'workers.fifo');
@@ -290,6 +295,16 @@ export class PaneManager {
     const assignments = [...this.workerPanes.values()]
       .map((p) => `${p.agentName}=${p.currentTicket ?? 'idle'}`)
       .join(',');
+
+    // Title every tracked worker pane: "<agent> → <ticket>"
+    for (const [, pane] of this.workerPanes) {
+      const title = `${pane.agentName} → ${pane.currentTicket ?? 'idle'}`.slice(0, 60);
+      try {
+        cp.execSync(`tmux select-pane -t "${pane.paneId}" -T "${title.replace(/"/g, '')}"`, {
+          timeout: 3000,
+        });
+      } catch { /* pane gone or tmux error — ignore */ }
+    }
 
     this.writeToFifo(workersFifo, `UPDATE:${count}:${assignments}`);
   }
