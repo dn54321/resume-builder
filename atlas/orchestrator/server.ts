@@ -360,6 +360,10 @@ async function onWorkerComplete(
         node.state.status = 'done';
         node.state.finishedAt = new Date().toISOString();
         node.state.pid = null;
+        // Clear the worker's pane/agent identity on completion so state
+        // doesn't retain a dead paneId for re-adoption attempts.
+        node.state.paneId = null;
+        node.state.agentId = null;
         if (result.prUrl) node.state.prUrl = result.prUrl;
 
         // A completed ticket proves the worker pipeline is healthy — reset
