@@ -172,6 +172,35 @@ describe('State — persistence', () => {
     expect(loaded!.tickets['RES-2']!.status).toBe('pending');
   });
 
+  it('spawnsPaused flag survives save/load (PAUSE_SPAWNS persistence)', () => {
+    // Boss sends PAUSE_SPAWNS → orchestrator sets ex.spawnsPaused = true and
+    // saves. A restart loads it back so worker spawning stays frozen until
+    // RESUME_SPAWNS — otherwise a restart mid-diagnosis silently resumes
+    // spawning and burns tokens on duplicate workers.
+    const initial: OrchestratorState = {
+      tickets: {},
+      startedAt: new Date().toISOString(),
+      teamId: '',
+      teamKey: 'RES',
+      usedPorts: [],
+      epicRoots: ['RES-1'],
+    };
+    saveState(initial);
+
+    // Simulate PAUSE_SPAWNS: flip the flag in the loaded state and save.
+    const paused = loadState();
+    expect(paused).not.toBeNull();
+    paused!.spawnsPaused = true;
+    saveState(paused!);
+    expect(loadState()!.spawnsPaused).toBe(true);
+
+    // Simulate RESUME_SPAWNS: clear and save.
+    const resumed = loadState();
+    resumed!.spawnsPaused = false;
+    saveState(resumed!);
+    expect(loadState()!.spawnsPaused).toBe(false);
+  });
+
   it('saveFullState without merge replaces all tickets', () => {
     // Save initial state
     const initial: OrchestratorState = {
