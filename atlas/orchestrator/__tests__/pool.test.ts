@@ -15,7 +15,7 @@ import type { PaneManager } from '../../tui/pane-manager';
 
 vi.mock('node:child_process', () => ({
   execSync: vi.fn(() => ''),
-  spawn: vi.fn(() => ({ unref: vi.fn() })),
+  spawn: vi.fn(() => ({ unref: vi.fn(), on: vi.fn(), pid: 4242 })),
   spawnSync: vi.fn(() => ({ status: 0 })),
 }));
 
@@ -226,17 +226,37 @@ describe('AgentPool — tmux pane wiring', () => {
       expect(joined).not.toContain('REGISTER');
     });
 
-    it('records a spawn failure and returns null when the pane cannot be created', async () => {
+    it('spawns HEADLESS when no tmux pane space exists (banner column full)', async () => {
+      // createWorkerPane returns null (e.g. "no space for new pane" after
+      // adopting many surviving workers on restart) — the worker must still
+      // spawn as a direct child process instead of aborting the ticket.
       paneManager.createWorkerPane.mockReturnValue(null);
       const agent = await pool.spawn('worker');
-      expect(agent).toBeNull();
-      // No send-keys should be attempted
-      expect(
-        vi.mocked(cp.execSync).mock.calls.filter((c) =>
-          String(c[0]).includes('tmux send-keys'),
-        ),
-      ).toHaveLength(0);
-      expect(pool.count()).toBe(0);
+      expect(agent).not.toBeNull();
+      expect(agent!.paneId).toBeNull();
+      expect(agent!.processPid).not.toBeNull();
+      expect(pool.count()).toBe(1);
+
+      // Headless spawn launches pi directly — no tmux send-keys
+      const spawnCall = vi
+        .mocked(cp.spawn)
+        .mock.calls.find((c) => String(c[0]).includes('pi'));
+      expect(spawnCall).toBeDefined();
+      const args = spawnCall![1] as string[];
+      expect(args).toContain('-p');
+      expect(args).toContain('--stream=all');
+
+      // Env mirrors the pane shell: node bin first on PATH, PI_* cleared
+      const env = spawnCall![2] as { env: NodeJS.ProcessEnv };
+      expect(env.env.PATH).toContain('node');
+      expect(env.env.ATLAS_AGENT_NAME).toBe('worker-1');
+      expect(env.env.PI_INTERCOM_SESSION_ID).toBeUndefined();
+      expect(env.env.PI_SESSION_ID).toBeUndefined();
+
+      // Log file records the headless launch
+      const logPath = path.join(tmpDir, 'logs', 'worker-1.log');
+      expect(fs.existsSync(logPath)).toBe(true);
+      expect(fs.readFileSync(logPath, 'utf-8')).toContain('HEADLESS');
     });
 
     it('does not spawn disabled agent types', async () => {

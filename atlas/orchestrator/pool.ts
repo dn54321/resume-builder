@@ -266,18 +266,27 @@ export class AgentPool {
     // non-interactive `-p` mode: it processes the embedded TASK, reports
     // completion via intercom, and exits. `; exit` makes the pane die with
     // pi so healthCheck removes the agent and frees the slot.
+    //
+    // If tmux has no room for another pane (banner column full — e.g. after
+    // adopting many surviving workers on restart), fall back to a HEADLESS
+    // spawn: pi runs as a direct child process with output piped to the
+    // agent log file. The worker behaves identically (same env, same IDLE
+    // completion protocol); only visibility differs. This keeps the board
+    // moving when the terminal runs out of vertical space instead of
+    // aborting the ticket and re-queuing it forever.
     const paneId = this.paneManager.createWorkerPane(name, currentTask ?? '');
-    if (!paneId) {
-      console.error(`[Pool] ${name} failed to create tmux pane — spawn aborted`);
-      recordSpawnFailure(type);
-      return null;
+    const headless = !paneId;
+    if (headless) {
+      console.log(`[Pool] No tmux pane space for ${name} — spawning HEADLESS (log-only)`);
     }
 
     // Persist agent identity so a restarted orchestrator can re-adopt this
     // live worker (its tmux pane survives the orchestrator process).
+    // Headless workers have no pane and cannot be re-adopted — they die
+    // with the orchestrator and their ticket re-queues.
     if (node && type === 'worker') {
       node.state.agentId = uuid;
-      node.state.paneId = paneId;
+      if (paneId) node.state.paneId = paneId;
     }
 
     // cwd must exist or the pane shell errors on cd.
@@ -294,66 +303,113 @@ export class AgentPool {
       ATLAS_CONFIG: path.join(process.cwd(), 'atlas.config.yaml'),
       ATLAS_STATE_DIR: getStateDir(),
     };
-    const envAssignments = Object.entries(workerEnv)
-      .map(([k, v]) => `${k}='${v}'`)
-      .join(' ');
-
-    // Type a command line into the pane's shell, then press Enter.
-    // sq() shell-quotes for the orchestrator's bash; tmux then types the
-    // literal characters into the pane's bash, which parses them itself.
-    const sendKeys = (keys: string): void => {
-      const sq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
-      try {
-        cp.execSync(`tmux send-keys -t ${sq(paneId)} ${sq(keys)} Enter`, {
-          timeout: 5000,
-        });
-      } catch (err: any) {
-        console.error(`[Pool] send-keys to ${paneId} failed: ${err.message}`);
-      }
-    };
-
-    sendKeys('unset PI_INTERCOM_SESSION_ID PI_SESSION_ID PI_SESSION_FILE');
-    sendKeys(`cd '${spawnCwd}'`);
-    sendKeys(`export ${envAssignments}`);
-    // pi's shebang is `#!/usr/bin/env node` — it resolves `node` from the
-    // pane's PATH. Tmux panes inherit the launcher shell's env (often conda
-    // base with an old node), while pi's bundled undici needs the same node
-    // the orchestrator runs under. Prepend the orchestrator's node bin dir
-    // so pi boots; without this it crashes with
-    // `webidl.util.markAsUncloneable is not a function`.
-    sendKeys(`export PATH='${path.dirname(process.execPath)}':$PATH`);
-    // Non-interactive one-shot: -p processes the prompt (which embeds the
-    // TASK) and exits when done. The message argument is REQUIRED — with no
-    // message, `pi -p --system-prompt @file` processes nothing and exits
-    // immediately (verified empirically). `; exit` kills the pane's bash
-    // with pi so the pane goes dead and the pool slot frees up.
-    //
-    // --stream=all: the stream-output extension is auto-discovered from the
-    // worktree's .pi/extensions (pre.sh symlinks the main repo .pi in). Do
-    // NOT also pass `-e <path>` — that loads the extension twice and pi
-    // exits with 'Flag "--stream" conflicts' (the worker dies and the
-    // ticket re-queues in a loop).
-    sendKeys(
-      `${PI_BIN} -p --stream=all --system-prompt "@${promptContent}" "Begin work on your assigned TASK now. Implement it fully, then report completion and exit."; exit`,
-    );
-
-    // Worker output is now visible live in the tmux pane (capture with
-    // `tmux capture-pane`). Keep a log file for API compatibility.
     const logPath = path.join(getStateDir(), 'logs', `${name}.log`);
     fs.mkdirSync(path.dirname(logPath), { recursive: true });
-    fs.writeFileSync(
-      logPath,
-      `[${new Date().toISOString()}] ${name} launched in pane ${paneId} (type=${type}, port=${port})\n`,
-      'utf-8',
-    );
 
+    let processPid: number | null = null;
+    let childProcess: import('node:child_process').ChildProcess | null = null;
+
+    if (headless) {
+      // Spawn pi directly as a child process — no tmux pane. Output is
+      // piped to the agent log file. Env mirrors what the pane shell would
+      // set: orchestrator's node bin FIRST on PATH (pi's bundled undici
+      // needs node ≥ v22; a bare shell would resolve conda's old node),
+      // ATLAS_* vars for the worker, and PI_* session vars cleared so the
+      // worker's intercom session doesn't clash with the boss's.
+      const headlessEnv: NodeJS.ProcessEnv = {
+        ...process.env,
+        PATH: `${path.dirname(process.execPath)}:${process.env.PATH ?? ''}`,
+        ...workerEnv,
+      };
+      delete headlessEnv.PI_INTERCOM_SESSION_ID;
+      delete headlessEnv.PI_SESSION_ID;
+      delete headlessEnv.PI_SESSION_FILE;
+
+      const logFd = fs.openSync(logPath, 'w');
+      fs.writeSync(
+        logFd,
+        `[${new Date().toISOString()}] ${name} launched HEADLESS (type=${type}, port=${port}) — no tmux pane\n`,
+      );
+      childProcess = cp.spawn(
+        PI_BIN,
+        [
+          '-p',
+          '--stream=all',
+          '--system-prompt',
+          `@${promptContent}`,
+          'Begin work on your assigned TASK now. Implement it fully, then report completion and exit.',
+        ],
+        {
+          cwd: spawnCwd,
+          env: headlessEnv,
+          stdio: ['ignore', logFd, logFd],
+          detached: false,
+        },
+      );
+      processPid = childProcess.pid ?? null;
+      childProcess.on('error', (err) => {
+        console.error(`[Pool] Headless ${name} failed to start: ${err.message}`);
+      });
+    } else {
+      // Type a command line into the pane's shell, then press Enter.
+      // sq() shell-quotes for the orchestrator's bash; tmux then types the
+      // literal characters into the pane's bash, which parses them itself.
+      const sendKeys = (keys: string): void => {
+        const sq = (s: string) => `'${s.replace(/'/g, `'\''`)}'`;
+        try {
+          cp.execSync(`tmux send-keys -t ${sq(paneId)} ${sq(keys)} Enter`, {
+            timeout: 5000,
+          });
+        } catch (err: any) {
+          console.error(`[Pool] send-keys to ${paneId} failed: ${err.message}`);
+        }
+      };
+
+      const envAssignments = Object.entries(workerEnv)
+        .map(([k, v]) => `${k}='${v}'`)
+        .join(' ');
+
+      sendKeys('unset PI_INTERCOM_SESSION_ID PI_SESSION_ID PI_SESSION_FILE');
+      sendKeys(`cd '${spawnCwd}'`);
+      sendKeys(`export ${envAssignments}`);
+      // pi's shebang is `#!/usr/bin/env node` — it resolves `node` from the
+      // pane's PATH. Tmux panes inherit the launcher shell's env (often conda
+      // base with an old node), while pi's bundled undici needs the same node
+      // the orchestrator runs under. Prepend the orchestrator's node bin dir
+      // so pi boots; without this it crashes with
+      // `webidl.util.markAsUncloneable is not a function`.
+      sendKeys(`export PATH='${path.dirname(process.execPath)}':$PATH`);
+      // Non-interactive one-shot: -p processes the prompt (which embeds the
+      // TASK) and exits when done. The message argument is REQUIRED — with no
+      // message, `pi -p --system-prompt @file` processes nothing and exits
+      // immediately (verified empirically). `; exit` kills the pane's bash
+      // with pi so the pane goes dead and the pool slot frees up.
+      //
+      // --stream=all: the stream-output extension is auto-discovered from the
+      // worktree's .pi/extensions (pre.sh symlinks the main repo .pi in). Do
+      // NOT also pass `-e <path>` — that loads the extension twice and pi
+      // exits with 'Flag "--stream" conflicts' (the worker dies and the
+      // ticket re-queues in a loop).
+      sendKeys(
+        `${PI_BIN} -p --stream=all --system-prompt "@${promptContent}" "Begin work on your assigned TASK now. Implement it fully, then report completion and exit."; exit`,
+      );
+
+      // Worker output is now visible live in the tmux pane (capture with
+      // `tmux capture-pane`). Keep a log file for API compatibility.
+      fs.writeFileSync(
+        logPath,
+        `[${new Date().toISOString()}] ${name} launched in pane ${paneId} (type=${type}, port=${port})\n`,
+        'utf-8',
+      );
+    }
     const instance: AgentInstance = {
       id: uuid,
       name,
       type,
-      // pi runs inside the tmux pane — there is no direct child process.
-      processPid: null,
-      process: null,
+      // Headless workers have a real child process (healthCheck checks it);
+      // pane-based workers run pi inside the tmux pane with no direct child.
+      processPid,
+      process: childProcess,
       status: node ? 'active' : 'spawning',
       currentTask,
       port: port ?? 0,
@@ -439,7 +495,11 @@ export class AgentPool {
 
     // Kill the worker's tmux pane — this terminates pi and closes the pane.
     // The banner pane is never touched (see PaneManager invariant).
+    // Headless workers have no pane — kill their direct child process.
     this.paneManager.killWorkerPane(agent.name);
+    if (agent.processPid && !agent.paneId) {
+      try { process.kill(agent.processPid, 'SIGKILL'); } catch { /* already dead */ }
+    }
 
     agent.status = 'stopping';
 
@@ -558,9 +618,12 @@ export class AgentPool {
     }
 
     // The pane will die on its own (pi exits after the task); killing it
-    // early is also fine since the work is done.
+    // early is also fine since the work is done. Headless workers have no
+    // pane — kill their direct child process instead.
     if (agent.paneId) {
       this.paneManager.killWorkerPane(agent.name);
+    } else if (agent.processPid) {
+      try { process.kill(agent.processPid, 'SIGKILL'); } catch { /* already dead */ }
     }
     this.agents.delete(id);
   }
