@@ -222,4 +222,72 @@ describe('toFilterResponse', () => {
       experience: [{ entryOrder: 0, bulletIndices: [0] }],
     });
   });
+
+  it('drops skill entries that have no name field (?? fallback)', () => {
+    const withName = skill(0, 'React');
+    // Surviving skill entry whose `name` field is missing entirely → the
+    // `?? ''` fallback yields '' and the entry is filtered out of the list.
+    const noName = {
+      order: 1,
+      fields: [{ key: 'level', value: 'Senior' }],
+      children: [],
+    };
+    const request = makeRequest([
+      { sectionId: 'hard_skills', order: 0, entries: [withName, noName] },
+    ]);
+
+    const engineResponse: TailorResponse = {
+      sections: [{ sectionId: 'hard_skills', entries: [withName, noName] }],
+    };
+
+    const result = toFilterResponse(request, engineResponse);
+
+    expect(result.filteredHardSkills).toEqual(['react']);
+    expect(result.filteredSoftSkills).toEqual([]);
+  });
+
+  it('skips a top-level entry that has no children (continue path)', () => {
+    const job1 = job(0, 'Acme', 'j1');
+    const bulletA = bullet(1, 'j1', 'Built React apps');
+    // A second top-level job with NO bullets — its children lookup is empty,
+    // so the adapter skips it instead of emitting an empty index record.
+    const job2 = job(10, 'Globex', 'j2');
+    const request = makeRequest([
+      {
+        sectionId: 'experience',
+        order: 0,
+        entries: [job1, bulletA, job2],
+      },
+    ]);
+
+    const engineResponse: TailorResponse = {
+      sections: [{ sectionId: 'experience', entries: [job1, bulletA, job2] }],
+    };
+
+    const result = toFilterResponse(request, engineResponse);
+
+    // Only the job WITH bullets gets an index record.
+    expect(result.filteredBulletIndices).toEqual({
+      experience: [{ entryOrder: 0, bulletIndices: [0] }],
+    });
+  });
+
+  it('omits a bullet section where every top-level entry has no children', () => {
+    // Both bullets reference a parent id that does not exist in the section,
+    // so no top-level entry matches them → indices stays empty → the section
+    // is left out of the map (frontend keeps everything visible).
+    const orphan1 = bullet(1, 'ghost-parent', 'Coffee logistics');
+    const orphan2 = bullet(2, 'ghost-parent', 'Pasta operations');
+    const request = makeRequest([
+      { sectionId: 'experience', order: 0, entries: [orphan1, orphan2] },
+    ]);
+
+    const engineResponse: TailorResponse = {
+      sections: [{ sectionId: 'experience', entries: [orphan1, orphan2] }],
+    };
+
+    const result = toFilterResponse(request, engineResponse);
+
+    expect(result.filteredBulletIndices).toEqual({});
+  });
 });

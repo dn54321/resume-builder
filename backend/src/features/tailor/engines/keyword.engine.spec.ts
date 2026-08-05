@@ -466,6 +466,71 @@ describe('KeywordEngine', () => {
     expect(defaultEngine).toBeDefined();
   });
 
+  // ── Malformed / defensive-fallback paths ───────────────────
+
+  it('scores a bullet entry with a null field value as zero (?? fallback)', async () => {
+    // isBulletEntry() matches the key, but getBulletText() returns the null
+    // value, so the `?? ''` fallback kicks in and scoreText('') returns 0 —
+    // the zero-score entry is then dropped (RES-92 filter semantics).
+    const jd = 'React developer';
+    const entries = [
+      {
+        order: 0,
+        fields: [{ key: 'bullet', value: null }],
+        children: [],
+      } as unknown as SectionEntryDto,
+    ];
+
+    const result = await engine.match(makeRequest(jd, entries));
+
+    // Score 0 → dropped by the relevance filter.
+    expect(result.sections[0].entries).toHaveLength(0);
+  });
+
+  it('scores a skill entry with a null field value as zero (?? fallback)', async () => {
+    const jd = 'React developer';
+    const entries = [
+      {
+        order: 0,
+        fields: [{ key: 'skill', value: null }],
+        children: [],
+      } as unknown as SectionEntryDto,
+    ];
+
+    const result = await engine.match(makeRequest(jd, entries));
+
+    // Score 0 → dropped by the relevance filter.
+    expect(result.sections[0].entries).toHaveLength(0);
+  });
+
+  it('scores text with no word characters as zero', async () => {
+    const jd = 'React developer';
+    const entries = [bulletEntry(0, '!!!')];
+
+    const result = await engine.match(makeRequest(jd, entries));
+
+    // text '!!!' splits into zero words -> score 0 -> dropped.
+    expect(result.sections[0].entries).toHaveLength(0);
+  });
+
+  it('returns null from getBulletText when no bullet field exists', () => {
+    const engineInternals = engine as unknown as {
+      getBulletText(entry: SectionEntryDto): string | null;
+    };
+    expect(
+      engineInternals.getBulletText(passthroughEntry(0, 'title', 'Engineer')),
+    ).toBeNull();
+  });
+
+  it('returns null from getSkillText when no skill field exists', () => {
+    const engineInternals = engine as unknown as {
+      getSkillText(entry: SectionEntryDto): string | null;
+    };
+    expect(
+      engineInternals.getSkillText(passthroughEntry(0, 'title', 'Engineer')),
+    ).toBeNull();
+  });
+
   // ── Live builder payload shapes (RES-92) ────────────────────
 
   it('recognizes bullets stored with the `text` field key (builder BulletList shape)', async () => {

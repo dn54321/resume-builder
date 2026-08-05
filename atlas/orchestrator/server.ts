@@ -44,7 +44,23 @@ let bossRelay: BossRelay | null = null;
 // Tracks re-queue storms per ticket so worker crash-loops surface on the
 // dashboard and to the boss within minutes instead of buried log lines.
 let requeueTracker: RequeueTracker | null = null;
+// Boss-controlled worker-spawn switch. When true, launchReady() refuses to
+// spawn new workers — lets the boss freeze the board mid-diagnosis (e.g.
+// duplicate workers) instead of burning tokens on more spawns. Set via
+// PAUSE_SPAWNS / RESUME_SPAWNS boss commands; persisted in state so a
+// restart doesn't silently resume spawning.
+let spawnsPaused = false;
 const epicGraphs = new Map<string, { nodes: Map<string, GraphNode>; rootId: string }>();
+// Tickets currently being spawned across launchReady() calls. A ticket can
+// be a child of SEVERAL epics, each holding its OWN GraphNode instance with
+// independent state — marking one epic's node in_progress does NOT mark the
+// others. launchReady() is invoked from many sites (addEpic, scheduler,
+// intercom, reconcile), so without this global guard each call sees the same
+// ticket still 'pending' in a different epic's node and spawns another
+// worker (observed: 3 workers on RES-91, colliding in one worktree).
+// Ticket id is added BEFORE the async spawn and removed after, closing the
+// await-gap race between concurrent launchReady calls.
+const spawningTickets = new Set<string>();
 let webhookServer: http.Server | null = null;
 
 // ─── Logging ────────────────────────────────────────────────────────
@@ -104,7 +120,7 @@ function writeDashboard(): void {
   const headlessCount = active.filter((a) => !a.paneId).length;
   lines.push(`${epicGraphs.size} epics · ${totalTickets} tickets · ${totalRunning} running · ${totalDone} done · ${totalFailed} failed`);
   lines.push(`Pool: ${pool.count()} agents (${pool.getByType('worker').length} workers${headlessCount > 0 ? `, ${headlessCount} headless` : ''})`);
-  lines.push(`Boss: ${bossRelay ? bossRelay.getState() : 'unregistered'}${bossRelay && bossRelay.queuedCount > 0 ? ` (${bossRelay.queuedCount} queued)` : ''}`);
+  lines.push(`Spawns: ${spawnsPaused ? '⏸ PAUSED (boss)' : '▶ active'} · Boss: ${bossRelay ? bossRelay.getState() : 'unregistered'}${bossRelay && bossRelay.queuedCount > 0 ? ` (${bossRelay.queuedCount} queued)` : ''}`);
 
   // ⚠️ Worker pain-point detector: tickets with 2+ re-queues in the rolling
   // window are churning. This surfaces crash-loops (worker dies instantly),
@@ -244,8 +260,29 @@ function areAllEpicsDone(): boolean {
 
 // ─── Worker Launch ──────────────────────────────────────────────────
 
+/**
+ * True when ANY epic graph holds an in_progress node for this ticket.
+ * A ticket is a child of several epics, so it has multiple GraphNode
+ * instances — marking one in_progress leaves the others pending, which
+ * lets launchReady spawn one worker per epic for the same ticket.
+ */
+function isTicketInProgress(ticketId: string): boolean {
+  for (const [, epic] of epicGraphs) {
+    const node = epic.nodes.get(ticketId);
+    if (node && node.state.status === 'in_progress') return true;
+  }
+  return false;
+}
+
 async function launchReady(): Promise<void> {
   if (areAllEpicsDone()) return;
+  // Boss paused worker spawning (PAUSE_SPAWNS) — e.g. while diagnosing
+  // duplicate workers. Freeze the board: no new spawns until RESUME_SPAWNS.
+  // Existing workers keep running; queued tickets simply wait.
+  if (spawnsPaused) {
+    log('launchReady: spawns PAUSED by boss — skipping');
+    return;
+  }
 
   const allReady: GraphNode[] = [];
   const seen = new Set<string>();
@@ -256,7 +293,12 @@ async function launchReady(): Promise<void> {
       // spawns ONE WORKER PER EPIC for the same ticket → 3-5 workers
       // colliding on the same worktree (git races: 'something committed my
       // staged changes') and test DB ('database is locked'). Spawn once.
+      // isTicketInProgress() is the GLOBAL guard: the same ticket may still
+      // be 'pending' in another epic's node after this epic's node was set
+      // in_progress — a fresh launchReady call would otherwise spawn again.
       if (seen.has(node.ticket.id)) continue;
+      if (isTicketInProgress(node.ticket.id)) continue;
+      if (spawningTickets.has(node.ticket.id)) continue;
       seen.add(node.ticket.id);
       allReady.push(node);
     }
@@ -270,7 +312,17 @@ async function launchReady(): Promise<void> {
   const maxWorkers = config.agents.worker.max_instances;
   for (const node of allReady) {
     if (pool.getByType('worker').length >= maxWorkers) return;
-    const agent = await pool.spawn('worker', node);
+    // Re-check under the global guard: a concurrent launchReady call may
+    // have claimed this ticket while we awaited pool.spawn() of an earlier
+    // node (spawn is async — the await gap is the race window).
+    if (isTicketInProgress(node.ticket.id) || spawningTickets.has(node.ticket.id)) continue;
+    spawningTickets.add(node.ticket.id);
+    let agent;
+    try {
+      agent = await pool.spawn('worker', node);
+    } finally {
+      spawningTickets.delete(node.ticket.id);
+    }
     if (!agent) continue;
     log(`Spawned one-shot worker for ${node.ticket.identifier}`);
     writeDashboard();
@@ -513,7 +565,24 @@ async function handleBossCommand(text: string): Promise<void> {
       if (st === 'done' || st === 'merged') totalDone++;
       if (st === 'in_progress') totalRunning++;
     }
-    await tellBoss(`${epicGraphs.size} epics · ${totalTickets} tickets: ${totalRunning} running, ${totalDone} done. ${pool.count()} agents.`);
+    await tellBoss(`${epicGraphs.size} epics · ${totalTickets} tickets: ${totalRunning} running, ${totalDone} done. ${pool.count()} agents. Spawns: ${spawnsPaused ? '⏸ PAUSED' : '▶ active'}.`);
+
+  } else if (trimmed === 'PAUSE_SPAWNS' || trimmed === 'pause-spawns' || trimmed === 'PAUSE') {
+    spawnsPaused = true;
+    // Persist so a restart keeps spawns frozen while the boss diagnoses.
+    const ex = loadState();
+    if (ex) { ex.spawnsPaused = true; saveState(ex); }
+    writeDashboard();
+    await tellBoss('⏸ Worker spawns PAUSED — launchReady will not spawn new workers. Existing workers keep running. Diagnose, then RESUME_SPAWNS.');
+
+  } else if (trimmed === 'RESUME_SPAWNS' || trimmed === 'resume-spawns' || trimmed === 'RESUME') {
+    spawnsPaused = false;
+    const ex = loadState();
+    if (ex) { ex.spawnsPaused = false; saveState(ex); }
+    writeDashboard();
+    await tellBoss('▶ Worker spawns RESUMED — launchReady is active again.');
+    // Spawn for any tickets that became ready while paused.
+    await launchReady();
 
   } else if (trimmed.startsWith('SPAWN ') || trimmed.startsWith('spawn ')) {
     const agentType = trimmed.split(/\s+/)[1]?.trim() as any;
@@ -814,6 +883,11 @@ async function autoStart(): Promise<void> {
   log('Looking for work...');
 
   const existingState = loadState();
+  // Restore the boss's spawn-pause flag across restarts — if the boss
+  // PAUSE_SPAWNS'd to diagnose duplicate workers and the orchestrator
+  // restarts mid-diagnosis, spawns must stay frozen until RESUME_SPAWNS.
+  spawnsPaused = existingState?.spawnsPaused ?? false;
+  if (spawnsPaused) log('⚠️ spawnsPaused restored from state — worker spawning is FROZEN until RESUME_SPAWNS');
   const epicRoots = existingState?.epicRoots ?? [];
 
   if (epicRoots.length > 0) {
@@ -862,8 +936,23 @@ async function autoStart(): Promise<void> {
  * Iterates all graph nodes; for in_progress tickets with agentId/paneId,
  * tries pool.adoptWorker. Live panes keep their slot and ticket; dead
  * panes fall through to the normal orphan-requeue path in healthCheck.
+ *
+ * ⚠️ MUST respect the same caps as spawn(): adoption previously bypassed
+ * max_concurrent/max_instances entirely, so after a chaotic restart with
+ * stale persisted state it re-adopted EVERY in_progress ticket's worker on
+ * top of freshly spawned ones — 8 workers against a cap of 5. It also
+ * adopted the SAME pane for multiple tickets (stale state recorded one
+ * paneId for several tickets, e.g. %20 as worker-1/RES-88 AND
+ * worker-15/RES-98) creating phantom duplicate agents on one process.
  */
 function adoptSurvivingWorkers(): void {
+  const config = getConfig();
+  const maxWorkers = config.agents.worker.max_instances;
+  const maxConcurrent = config.agents.max_concurrent;
+  // One pane hosts exactly one worker. Stale persisted state can carry the
+  // same paneId for several tickets (duplicate-worker era) — adopt it for
+  // the FIRST ticket only, or the same process becomes N phantom agents.
+  const adoptedPanes = new Set<string>();
   for (const [, epic] of epicGraphs) {
     for (const [, node] of epic.nodes) {
       const st = node.state;
@@ -873,6 +962,14 @@ function adoptSurvivingWorkers(): void {
         st.paneId &&
         st.workerName
       ) {
+        // Cap check — identical to spawn(): adoption must never push the
+        // pool past max_concurrent or the worker max_instances.
+        if (pool.count() >= maxConcurrent) return;
+        if (pool.getByType('worker').length >= maxWorkers) return;
+        // Dedup by pane: one pane = one worker process, regardless of how
+        // many tickets' stale state references it.
+        if (adoptedPanes.has(st.paneId)) continue;
+        adoptedPanes.add(st.paneId);
         pool.adoptWorker(
           st.agentId,
           st.workerName,
@@ -1084,7 +1181,8 @@ export async function startOrchestrator(): Promise<void> {
       text === 'STATUS' || text.startsWith('CLOSE ') ||
       text.startsWith('DROP ') || text.startsWith('SPAWN ') ||
       text.startsWith('KILL ') || text.startsWith('SET_INTERVAL ') ||
-      text === 'GET_CONFIG'
+      text === 'GET_CONFIG' || text === 'PAUSE_SPAWNS' || text === 'RESUME_SPAWNS' ||
+      text === 'PAUSE' || text === 'RESUME'
     ) {
       await handleBossCommand(text);
       return;

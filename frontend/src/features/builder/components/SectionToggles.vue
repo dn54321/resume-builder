@@ -95,13 +95,13 @@ import {
 const props = withDefaults(defineProps<{
   layout: LayoutType
   enabledSections: SectionType[]
-  /** Sections protected from Tailor edits (RES-91). */
+  /** Sections protected from Tailor edits. */
   lockedSections?: SectionType[]
   /** Display order of enabled sections (from store, respects drag-and-drop reordering) */
   orderedSectionTypes?: SectionType[]
   columnAssignments: Record<SectionType, 'left' | 'right'>
   selectedSectionId?: string | null
-  /** When false (default), the column assignment dropdowns are hidden behind the ?layout=True feature flag (RES-86). */
+  /** When false (default), the column assignment dropdowns are hidden behind the ?layout=True feature flag. */
   showTwoColumn?: boolean
 }>(), {
   lockedSections: () => [],

@@ -48,6 +48,7 @@ describe('ResumesController', () => {
     findAll: jest.Mock;
     findOne: jest.Mock;
     create: jest.Mock;
+    upsert: jest.Mock;
     duplicate: jest.Mock;
     update: jest.Mock;
     delete: jest.Mock;
@@ -61,6 +62,7 @@ describe('ResumesController', () => {
       findAll: jest.fn(),
       findOne: jest.fn(),
       create: jest.fn(),
+      upsert: jest.fn(),
       duplicate: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
@@ -373,6 +375,58 @@ describe('ResumesController', () => {
 
       await request(app.getHttpServer())
         .post('/api/v1/resumes/r1/duplicate')
+        .expect(401);
+    });
+  });
+
+  describe('PUT /api/v1/resumes', () => {
+    const upsertDto = {
+      layout: 'standard',
+      sections: [
+        {
+          sectionId: 'summary',
+          column: 'right',
+          order: 0,
+          entries: [],
+        },
+      ],
+    };
+
+    it("upserts the authenticated user's resume (create-or-update)", async () => {
+      const upserted: ResumeBody = {
+        id: 'r1',
+        name: null,
+        layout: 'standard',
+        sections: [],
+      };
+      mockResumesService.upsert.mockResolvedValue(upserted);
+
+      const response = await request(app.getHttpServer())
+        .put('/api/v1/resumes')
+        .send(upsertDto)
+        .expect(200);
+
+      const body = response.body as ResumeBody;
+      expect(body.id).toBe('r1');
+      expect(mockResumesService.upsert).toHaveBeenCalledWith(
+        'user-1',
+        expect.any(Object),
+      );
+    });
+
+    it('returns 400 for malformed upsert DTO', async () => {
+      await request(app.getHttpServer())
+        .put('/api/v1/resumes')
+        .send({ layout: 123 })
+        .expect(400);
+    });
+
+    it('returns 401 when not authenticated', async () => {
+      denyAuth();
+
+      await request(app.getHttpServer())
+        .put('/api/v1/resumes')
+        .send(upsertDto)
         .expect(401);
     });
   });

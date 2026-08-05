@@ -195,11 +195,11 @@
       data-testid="unsaved-modal"
     />
 
-    <!-- Mobile FAB: open fullscreen preview (RES-81) -->
+    <!-- Mobile FAB: open fullscreen preview -->
     <!--
       Floating action button shown only on viewports <1024px once a resume
       has loaded. It is the sole fullscreen-preview trigger on mobile — the
-      old expand button in LivePreview's header was removed in RES-81.
+      old expand button in LivePreview's header was removed.
       position: fixed keeps it reachable regardless of scroll position;
       z-40 sits above page content but below the z-50 dialog overlays.
     -->
@@ -247,11 +247,11 @@ const { isTailoring, tailorError, bulletCap, tailorResume, resetFilter } = useTa
 const selectedSectionId = ref<string | null>(null)
 const jdModalOpen = ref(false)
 
-// ─── Mobile fullscreen FAB (RES-81) ───────────────────────────────
+// ─── Mobile fullscreen FAB ───────────────────────────────────────
 //
 // On viewports <1024px a floating action button (fixed bottom-right) opens
 // the FullscreenPreview modal. It replaces the old expand button that used
-// to live in LivePreview's header (removed in RES-81). Reactive matchMedia
+// to live in LivePreview's header (removed). Reactive matchMedia
 // keeps the FAB in sync when the viewport is resized across the breakpoint.
 const fullscreenOpen = ref(false)
 const isMobile = ref(false)
@@ -265,7 +265,7 @@ let mobileMediaQueryListener: ((event: MediaQueryListEvent) => void) | null = nu
  */
 const fabVisible = computed(() => isMobile.value && store.sections.length > 0)
 
-// ─── 2:1 column layout feature flag (RES-86) ──────────────────────
+// ─── 2:1 column layout feature flag ──────────────────────────────
 //
 // The 2:1 column layout (LayoutPicker option + SectionToggles column
 // assignment dropdowns) is hidden by default. It is only exposed when the
@@ -513,7 +513,7 @@ function onDragHandlePointerUp(event: PointerEvent) {
 onMounted(() => {
   window.addEventListener('beforeunload', onBeforeUnload)
 
-  // Reactive mobile viewport detection for the fullscreen FAB (RES-81).
+  // Reactive mobile viewport detection for the fullscreen FAB.
   // Guarded so tests (jsdom has no matchMedia) and SSR degrade to desktop
   // (FAB hidden) instead of crashing.
   if (typeof window.matchMedia === 'function') {
@@ -644,7 +644,7 @@ main::-webkit-scrollbar-thumb:hover {
   .builder-grid {
     grid-template-columns: 1fr !important;
     /*
-     * Stacked rows (RES-81): the editor gets at least 400px and the
+     * Stacked rows: the editor gets at least 400px and the
      * inline preview at least 200px so neither collapses on small
      * viewports. The resize-handle is hidden (display:none below), so
      * grid items are: sidebar (auto), editor (min 400px), preview

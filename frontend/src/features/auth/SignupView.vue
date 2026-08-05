@@ -198,7 +198,7 @@ async function handleSubmit() {
         <CardFooter class="justify-center">
           <p class="text-sm text-muted-foreground">
             Already have an account?
-            <RouterLink to="/login" class="text-primary hover:underline">Log in</RouterLink>
+            <RouterLink to="/login" class="underline underline-offset-4 text-primary hover:text-primary">Log in</RouterLink>
           </p>
         </CardFooter>
       </Card>

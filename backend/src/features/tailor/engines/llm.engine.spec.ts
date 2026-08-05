@@ -496,4 +496,64 @@ describe('LlmEngine', () => {
     const userContent: string = parsedBody.messages[1].content;
     expect(userContent).toContain('at most 10');
   });
+
+  it('defaults bulletCap to 5 when not provided', async () => {
+    mockFetch.mockResolvedValueOnce(
+      makeMockResponse('{"bulletIndices": [], "skillIndices": []}'),
+    );
+
+    const defaultEngine = new LlmEngine(config);
+    const jd = 'React developer';
+    const entries = [bulletEntry(0, 'Entry')];
+
+    await defaultEngine.match(makeRequest(jd, entries));
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const parsedBody = JSON.parse(mockFetch.mock.calls[0][1]!.body as string);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+    const userContent: string = parsedBody.messages[1].content;
+    expect(userContent).toContain('at most 5');
+  });
+
+  it('ignores out-of-range skill indices from LLM response', async () => {
+    mockFetch.mockResolvedValueOnce(
+      makeMockResponse('{"bulletIndices": [], "skillIndices": [999]}'),
+    );
+
+    const jd = 'React developer';
+    const entries = [skillEntry(0, 'React')];
+
+    const result = await engine.match(makeRequest(jd, entries));
+
+    // 999 is out of range for the single categorized entry -> not selected.
+    expect(result.sections[0].entries).toHaveLength(0);
+  });
+
+  it('handles LLM responses with no content via empty-string fallback', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ choices: [{ message: {} }] }),
+      text: () => Promise.resolve(''),
+    } as unknown as Response);
+
+    const jd = 'React developer';
+    const entries = [bulletEntry(0, 'Built React apps')];
+
+    // content is undefined -> `?? ''` fallback -> no JSON found -> throw.
+    await expect(engine.match(makeRequest(jd, entries))).rejects.toThrow(
+      'LLM response did not contain valid JSON',
+    );
+  });
+
+  it('builds a fallback label when an entry has no bullet/skill fields', () => {
+    const engineInternals = engine as unknown as {
+      getEntryLabel(entry: SectionEntryDto): string;
+    };
+    expect(
+      engineInternals.getEntryLabel(
+        passthroughEntry(0, 'company', 'Acme Corp'),
+      ),
+    ).toBe('company: Acme Corp');
+  });
 });

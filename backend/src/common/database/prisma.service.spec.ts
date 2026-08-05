@@ -53,6 +53,30 @@ describe('PrismaService', () => {
     expect(service['config']).toBeDefined();
   });
 
+  it('should delegate unknown props to the underlying client when initialized', () => {
+    // Once _client exists, any property missing from the service (model
+    // delegates like `user`, `resume`, ...) is looked up on the client.
+    (service as unknown as { _client: Record<string, unknown> })._client = {
+      user: 'user-delegate',
+      resume: 'resume-delegate',
+    };
+
+    expect((service as unknown as Record<string, unknown>)['user']).toBe(
+      'user-delegate',
+    );
+    expect((service as unknown as Record<string, unknown>)['resume']).toBe(
+      'resume-delegate',
+    );
+  });
+
+  it('should still return undefined for unknown props when client exists but has no such prop', () => {
+    (service as unknown as { _client: Record<string, unknown> })._client = {};
+
+    expect(
+      (service as unknown as Record<string, unknown>)['nonexistentProp'],
+    ).toBeUndefined();
+  });
+
   describe('onModuleInit', () => {
     it('should call _getClient and connect', async () => {
       const mockClient = { $connect: jest.fn().mockResolvedValue(undefined) };
@@ -114,6 +138,28 @@ describe('PrismaService', () => {
       )._getClient;
       const result = (await getClient.call(service)) as Record<string, never>;
       expect(result).toBe(mockClient);
+    });
+
+    it('should reuse an in-flight init promise instead of re-initialising', async () => {
+      const mockClient = {};
+      const initSpy = jest
+        .spyOn(service as unknown as { _init: () => Promise<unknown> }, '_init')
+        .mockResolvedValue(mockClient);
+
+      // Simulate a concurrent caller already kicking off _init.
+      (
+        service as unknown as { _initPromise: Promise<unknown> | null }
+      )._initPromise = Promise.resolve(mockClient);
+
+      const getClient = (
+        service as unknown as {
+          _getClient: () => Promise<unknown>;
+        }
+      )._getClient;
+      const result = (await getClient.call(service)) as Record<string, never>;
+
+      expect(result).toBe(mockClient);
+      expect(initSpy).not.toHaveBeenCalled();
     });
   });
 });
