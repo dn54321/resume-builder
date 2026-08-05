@@ -110,6 +110,29 @@ STATUS, and go IDLE between tickets. They never exit on their own.
 3. **Never kill yourself** — `STOP boss` is blocked. Don't `kill` your own pi process.
 4. **Stop agents via intercom** — send `STOP worker-2`. Never use `kill <pid>` directly.
 
+### Restarting the Orchestrator (safe procedure)
+
+If you ever need to restart the orchestrator (deploy code changes, recover
+from a crash), use the **orchestrator-control skill** — read it FIRST:
+`.agents/skills/orchestrator-control/SKILL.md`. It exists because restarts
+previously left MULTIPLE zombie orchestrator processes running (all on
+intercom, all spawning workers) — a serious bug.
+
+Key facts to internalize:
+
+- **Restart ≠ stop.** SIGTERM restart PRESERVES workers (tmux panes keep
+  running pi; the new orchestrator re-adopts them via
+  `adoptSurvivingWorkers()`). Use the boss command `STOP` to actually kill
+  workers.
+- **Never `pkill -9 -f "orchestrator/index"`** from a shell whose command
+  line contains that string — it kills your own shell, not the orchestrator.
+- Kill the **node** process by exact PID (`ps -eo pid,args | grep
+  "orchestrator/index.ts" | grep -v "bash -c"`), or just start the new one
+  — `killStaleOrchestrators()` SIGKILLs old instances on startup.
+- After restart: verify exactly ONE orchestrator process, `Boss: alive` on
+  the dashboard, worker panes running pi, then re-register:
+  `intercom({ action: "send", to: "orchestrator", message: "BOSS: registering" })`
+
 ### Adjusting Intervals
 
 View current intervals: `GET_CONFIG`

@@ -744,8 +744,43 @@ function adoptSurvivingWorkers(): void {
 
 // ─── Main ───────────────────────────────────────────────────────────
 
+/**
+ * Kill any OTHER running orchestrator processes before this one starts.
+ * Matches the tsx/node command line for orchestrator/index.ts and excludes
+ * this process (by pid and by the full execArgv match). Stale instances are
+ * killed with SIGKILL — a graceful SIGTERM cleanup can hang on
+ * pool.stopAll() (5s × agents), which is exactly how zombies accumulated.
+ */
+function killStaleOrchestrators(): void {
+  try {
+    const selfPid = String(process.pid);
+    const out = cp.execSync('ps -eo pid,args | grep "orchestrator/index" | grep -v grep', {
+      encoding: 'utf-8',
+      timeout: 5000,
+    });
+    for (const line of out.split('\n').filter(Boolean)) {
+      const pid = line.trim().split(/\s+/)[0];
+      if (!pid || pid === selfPid) continue;
+      // Skip our own bash wrapper / this script's shell
+      if (line.includes('bash -c') || line.includes('grep ')) continue;
+      try {
+        process.kill(Number(pid), 'SIGKILL');
+        log(`Killed stale orchestrator pid ${pid}`);
+      } catch { /* already gone */ }
+    }
+  } catch { /* ps failed — best effort */ }
+}
+
 export async function startOrchestrator(): Promise<void> {
   log('Atlas orchestrator starting...');
+
+  // Single-instance guard: kill any other orchestrator process before we
+  // start. Restarts previously left zombie instances (SIGTERM cleanup waits
+  // 5s×agents via pool.stopAll, and kill scripts sometimes matched the bash
+  // wrapper instead of the node process), so multiple orchestrators ran
+  // simultaneously — all connected to intercom, all spawning workers.
+  // Only the newest instance should survive.
+  killStaleOrchestrators();
 
   // State dir
   const stateDir = path.join(getRepoRoot(), 'atlas', 'state');
@@ -928,6 +963,10 @@ export async function startOrchestrator(): Promise<void> {
     if (webhookServer) webhookServer.close();
     try { await unregisterWebhooks(); } catch { /* ignore */ }
     try { await intercom.disconnect(); } catch { /* ignore */ }
+    // Exit immediately — do NOT wait for agents. Workers live in tmux panes
+    // and survive the restart (adopted on next startup); waiting here was
+    // why zombie orchestrators accumulated (pool.stopAll waits 5s×agents
+    // and old instances never died before the new one started).
     process.exit(0);
   };
   process.on('SIGINT', cleanup);
