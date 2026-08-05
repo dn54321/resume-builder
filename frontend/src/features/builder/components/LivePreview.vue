@@ -1,55 +1,40 @@
 <template>
   <div class="live-preview flex flex-col h-full bg-gray-200 dark:bg-gray-900">
     <!-- Header bar -->
-    <div class="live-preview__header h-10 px-4 border-b border-gray-300 bg-white flex items-center justify-between shrink-0">
+    <!--
+      The fullscreen expand button that used to live here was removed in
+      RES-81 — on mobile the FullscreenPreview modal is now opened by the
+      FAB in ResumeBuilder.vue (the sole fullscreen trigger), and on
+      desktop (>=1024px) the inline preview is used directly (RES-86).
+    -->
+    <div
+      class="live-preview__header h-10 px-4 border-b border-gray-300 bg-white flex items-center justify-between shrink-0"
+    >
       <span class="text-sm font-medium text-gray-600">Preview</span>
-      <!--
-        Fullscreen expand button is desktop-only UX that was removed for
-        wide viewports (RES-86). It stays visible below 1024px until the
-        mobile FAB ticket replaces it. Visibility is driven reactively by
-        window.matchMedia('(min-width: 1024px)') — see isDesktop below.
-      -->
-      <button
-        v-if="!isDesktop"
-        class="live-preview__expand-btn inline-flex items-center justify-center size-8 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-        aria-label="Open full screen preview"
-        title="Full screen preview"
-        @click="isFullscreenOpen = true"
-      >
-        <Maximize2 class="size-4" />
-      </button>
     </div>
 
     <!-- Paper area -->
-    <div ref="bodyRef" class="live-preview__body flex justify-center items-start overflow-y-auto py-3 flex-1">
+    <div
+      ref="bodyRef"
+      class="live-preview__body flex justify-center items-start overflow-y-auto py-3 flex-1"
+    >
       <div
         id="resume-preview"
         class="live-preview__paper"
         :style="{ transform: `scale(${scale})` }"
       >
-        <StandardLayout
-          v-if="store.layout === 'standard'"
-          :sections="store.sections"
-        />
-        <TwoColumnLayout
-          v-else
-          :sections="store.sections"
-        />
+        <StandardLayout v-if="store.layout === 'standard'" :sections="store.sections" />
+        <TwoColumnLayout v-else :sections="store.sections" />
       </div>
     </div>
-
-    <!-- Fullscreen modal -->
-    <FullscreenPreview v-model:open="isFullscreenOpen" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted } from 'vue'
-import { Maximize2 } from '@lucide/vue'
 import { useResumeStore } from '@/features/builder/stores/resume'
 import StandardLayout from './preview/StandardLayout.vue'
 import TwoColumnLayout from './preview/TwoColumnLayout.vue'
-import FullscreenPreview from './FullscreenPreview.vue'
 
 const store = useResumeStore()
 
@@ -59,16 +44,7 @@ const PAPER_WIDTH_PX = 816
 const MAX_SCALE = 1.2
 
 const containerWidth = ref(300)
-const isFullscreenOpen = ref(false)
 const bodyRef = ref<HTMLElement | null>(null)
-
-// Desktop breakpoint for the fullscreen expand button (RES-86):
-// hidden at >=1024px, visible below. Reactive via matchMedia so it
-// updates live when the viewport is resized across the breakpoint.
-const isDesktop = ref(false)
-
-let mediaQuery: MediaQueryList | null = null
-let mediaQueryListener: ((event: MediaQueryListEvent) => void) | null = null
 
 const scale = computed(() => {
   if (containerWidth.value <= 0) return 0.3
@@ -93,26 +69,12 @@ onMounted(() => {
     })
     resizeObserver.observe(el)
   }
-
-  if (typeof window.matchMedia === 'function') {
-    mediaQuery = window.matchMedia('(min-width: 1024px)')
-    isDesktop.value = mediaQuery.matches
-    mediaQueryListener = (event) => {
-      isDesktop.value = event.matches
-    }
-    mediaQuery.addEventListener('change', mediaQueryListener)
-  }
 })
 
 onUnmounted(() => {
   if (resizeObserver) {
     resizeObserver.disconnect()
     resizeObserver = null
-  }
-  if (mediaQuery && mediaQueryListener) {
-    mediaQuery.removeEventListener('change', mediaQueryListener)
-    mediaQuery = null
-    mediaQueryListener = null
   }
 })
 </script>
@@ -129,7 +91,9 @@ onUnmounted(() => {
   width: 816px;
   height: 1056px;
   background: #fff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.15),
+    0 1px 3px rgba(0, 0, 0, 0.1);
   transform-origin: top center;
   overflow: hidden;
   flex-shrink: 0;

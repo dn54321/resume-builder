@@ -43,7 +43,10 @@
 
         <!-- Filter status indicator -->
         <template v-if="store.isFiltered && !tailorError">
-          <span class="text-[0.6875rem] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary/15 text-primary" data-testid="filtered-badge">
+          <span
+            class="text-[0.6875rem] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary/15 text-primary"
+            data-testid="filtered-badge"
+          >
             Filtered
           </span>
           <span class="text-xs text-muted-foreground">
@@ -51,7 +54,11 @@
           </span>
         </template>
 
-        <div v-if="tailorError" class="px-3 py-1.5 rounded-sm bg-destructive/10 text-destructive text-[0.8125rem] leading-relaxed" data-testid="toolbar-error">
+        <div
+          v-if="tailorError"
+          class="px-3 py-1.5 rounded-sm bg-destructive/10 text-destructive text-[0.8125rem] leading-relaxed"
+          data-testid="toolbar-error"
+        >
           {{ tailorError }}
         </div>
       </div>
@@ -83,11 +90,7 @@
       </div>
     </header>
 
-    <div
-      ref="gridRef"
-      class="builder-grid grid gap-4 flex-1 min-h-0"
-      :style="gridStyle"
-    >
+    <div ref="gridRef" class="builder-grid grid gap-4 flex-1 min-h-0" :style="gridStyle">
       <!-- Left sidebar: LayoutPicker + SectionToggles -->
       <aside class="overflow-y-auto p-4 border border-border rounded-lg bg-surface">
         <LayoutPicker v-model="store.layout" :show-two-column="showTwoColumn" />
@@ -153,6 +156,28 @@
       @cancel="onStay"
       data-testid="unsaved-modal"
     />
+
+    <!-- Mobile FAB: open fullscreen preview (RES-81) -->
+    <!--
+      Floating action button shown only on viewports <1024px once a resume
+      has loaded. It is the sole fullscreen-preview trigger on mobile — the
+      old expand button in LivePreview's header was removed in RES-81.
+      position: fixed keeps it reachable regardless of scroll position;
+      z-40 sits above page content but below the z-50 dialog overlays.
+    -->
+    <button
+      v-if="fabVisible"
+      class="fullscreen-fab fixed bottom-4 right-4 z-40 inline-flex items-center justify-center size-12 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 active:bg-primary/80 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      aria-label="Open full screen preview"
+      title="Full screen preview"
+      data-testid="fullscreen-fab"
+      @click="fullscreenOpen = true"
+    >
+      <Eye class="size-5" />
+    </button>
+
+    <!-- Fullscreen preview modal (opened by the mobile FAB) -->
+    <FullscreenPreview v-model:open="fullscreenOpen" />
   </div>
 </template>
 
@@ -170,6 +195,8 @@ import AnonymousBanner from '@/features/builder/components/AnonymousBanner.vue'
 import LivePreview from '@/features/builder/components/LivePreview.vue'
 import PdfExportButton from '@/features/builder/components/PdfExportButton.vue'
 import ConfirmModal from '@/features/builder/components/ConfirmModal.vue'
+import FullscreenPreview from '@/features/builder/components/FullscreenPreview.vue'
+import { Eye } from '@lucide/vue'
 import { useTailor } from '@/features/builder/composables/useTailor'
 import type { SectionType } from '@/features/builder/types/resume'
 
@@ -181,6 +208,24 @@ const { isTailoring, tailorError, bulletCap, tailorResume, resetFilter } = useTa
 
 const selectedSectionId = ref<string | null>(null)
 const jdModalOpen = ref(false)
+
+// ─── Mobile fullscreen FAB (RES-81) ───────────────────────────────
+//
+// On viewports <1024px a floating action button (fixed bottom-right) opens
+// the FullscreenPreview modal. It replaces the old expand button that used
+// to live in LivePreview's header (removed in RES-81). Reactive matchMedia
+// keeps the FAB in sync when the viewport is resized across the breakpoint.
+const fullscreenOpen = ref(false)
+const isMobile = ref(false)
+
+let mobileMediaQuery: MediaQueryList | null = null
+let mobileMediaQueryListener: ((event: MediaQueryListEvent) => void) | null = null
+
+/**
+ * FAB is visible only below 1024px AND once a resume has loaded —
+ * `store.sections` is empty while loadResume() is still in flight.
+ */
+const fabVisible = computed(() => isMobile.value && store.sections.length > 0)
 
 // ─── 2:1 column layout feature flag (RES-86) ──────────────────────
 //
@@ -224,7 +269,10 @@ async function onNameBlur() {
 }
 
 const columnAssignments = computed(() => {
-  const assignments: Record<SectionType, 'left' | 'right'> = {} as Record<SectionType, 'left' | 'right'>
+  const assignments: Record<SectionType, 'left' | 'right'> = {} as Record<
+    SectionType,
+    'left' | 'right'
+  >
   for (const section of store.sections) {
     assignments[section.sectionType] = section.column
   }
@@ -415,12 +463,29 @@ function onDragHandlePointerUp(event: PointerEvent) {
 
 onMounted(() => {
   window.addEventListener('beforeunload', onBeforeUnload)
+
+  // Reactive mobile viewport detection for the fullscreen FAB (RES-81).
+  // Guarded so tests (jsdom has no matchMedia) and SSR degrade to desktop
+  // (FAB hidden) instead of crashing.
+  if (typeof window.matchMedia === 'function') {
+    mobileMediaQuery = window.matchMedia('(max-width: 1023px)')
+    isMobile.value = mobileMediaQuery.matches
+    mobileMediaQueryListener = (event) => {
+      isMobile.value = event.matches
+    }
+    mobileMediaQuery.addEventListener('change', mobileMediaQueryListener)
+  }
 })
 
 onUnmounted(() => {
   window.removeEventListener('beforeunload', onBeforeUnload)
   if (savedTimer) clearTimeout(savedTimer)
   teardownAutoSave()
+  if (mobileMediaQuery && mobileMediaQueryListener) {
+    mobileMediaQuery.removeEventListener('change', mobileMediaQueryListener)
+    mobileMediaQuery = null
+    mobileMediaQueryListener = null
+  }
 })
 
 // ─── Unsaved changes navigation guard ─────────────────────────────
@@ -482,7 +547,14 @@ main::-webkit-scrollbar-thumb:hover {
 @media (max-width: 1024px) {
   .builder-grid {
     grid-template-columns: 1fr !important;
-    grid-template-rows: auto 1fr 1fr !important;
+    /*
+     * Stacked rows (RES-81): the editor gets at least 400px and the
+     * inline preview at least 200px so neither collapses on small
+     * viewports. The resize-handle is hidden (display:none below), so
+     * grid items are: sidebar (auto), editor (min 400px), preview
+     * (min 200px).
+     */
+    grid-template-rows: auto minmax(400px, 1fr) minmax(200px, auto) !important;
   }
 
   .resize-handle {
@@ -490,5 +562,3 @@ main::-webkit-scrollbar-thumb:hover {
   }
 }
 </style>
-
-
