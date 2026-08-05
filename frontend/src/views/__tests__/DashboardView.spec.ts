@@ -38,7 +38,8 @@ const router = createRouter({
 })
 
 /**
- *
+ * Create an authenticated auth store so the dashboard's auth guard passes.
+ * @returns {ReturnType<typeof useAuthStore>} The store with a user set
  */
 function createAuthenticatedStore() {
   const store = useAuthStore()
@@ -62,6 +63,107 @@ const mockResumes = [
     updatedAt: '2025-03-10T09:15:00.000Z',
   },
 ]
+
+/**
+ * Full resume payload for `resume-1` (standard layout) — the wire shape
+ * returned by `GET /api/v1/resumes/:id`.
+ */
+const mockFullResumeStandard = {
+  id: 'resume-1',
+  userId: 'user-1',
+  name: 'Software Engineer Resume',
+  layout: 'standard',
+  createdAt: '2025-01-15T10:00:00.000Z',
+  updatedAt: '2025-03-01T14:30:00.000Z',
+  sections: [
+    {
+      id: 'section-1',
+      sectionId: 'name_contact',
+      column: 'right',
+      order: 0,
+      enabled: true,
+      locked: false,
+      entries: [
+        {
+          id: 'entry-1',
+          order: 0,
+          parentId: null,
+          fields: [{ key: 'fullName', value: 'John Doe', order: 0 }],
+        },
+      ],
+    },
+  ],
+}
+
+/**
+ * Full resume payload for `resume-2` (two-column layout) with both a left
+ * and a right column section — exercises the TwoColumnLayout preview path.
+ */
+const mockFullResumeTwoColumn = {
+  id: 'resume-2',
+  userId: 'user-1',
+  name: 'Two Column Resume',
+  layout: 'column2-1',
+  createdAt: '2025-02-20T08:00:00.000Z',
+  updatedAt: '2025-03-10T09:15:00.000Z',
+  sections: [
+    {
+      id: 'section-2',
+      sectionId: 'name_contact',
+      column: 'right',
+      order: 0,
+      enabled: true,
+      locked: false,
+      entries: [
+        {
+          id: 'entry-2',
+          order: 0,
+          parentId: null,
+          fields: [{ key: 'fullName', value: 'Jane Smith', order: 0 }],
+        },
+      ],
+    },
+    {
+      id: 'section-3',
+      sectionId: 'experience',
+      column: 'left',
+      order: 1,
+      enabled: true,
+      locked: false,
+      entries: [
+        {
+          id: 'entry-3',
+          order: 0,
+          parentId: null,
+          fields: [{ key: 'company', value: 'Acme Corp', order: 0 }],
+        },
+      ],
+    },
+  ],
+}
+
+// Mock ResizeObserver since it is not available in jsdom — mirrors the
+// LivePreview spec. Instances are tracked so tests can trigger a resize.
+class MockResizeObserver {
+  static instances: MockResizeObserver[] = []
+
+  private callback: ResizeObserverCallback
+
+  constructor(callback: ResizeObserverCallback) {
+    this.callback = callback
+    MockResizeObserver.instances.push(this)
+  }
+
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+
+  trigger(entries: ResizeObserverEntry[]) {
+    this.callback(entries, this as unknown as ResizeObserver)
+  }
+}
+
+vi.stubGlobal('ResizeObserver', MockResizeObserver)
 
 /**
  * Open the ellipsis menu on the card at `index` and resolve the teleported
@@ -93,6 +195,7 @@ describe('DashboardView', () => {
     mockFetch.mockReset()
     vi.restoreAllMocks()
     document.body.innerHTML = ''
+    MockResizeObserver.instances = []
   })
 
   // ── Auth Guard ──────────────────────────────────────────────
@@ -123,6 +226,38 @@ describe('DashboardView', () => {
 
     expect(wrapper.find('h1').text()).toBe('My Resumes')
     expect(wrapper.find('.btn-primary').text()).toBe('Create New Resume')
+  })
+
+  // ── Two-Pane Layout ─────────────────────────────────────────
+
+  it('renders two panes: resume list (left) and preview (right)', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="dashboard-list-pane"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="dashboard-preview-pane"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="dashboard-list"]').exists()).toBe(true)
+  })
+
+  it('shows "Select a resume to preview" placeholder when nothing is selected', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    const placeholder = wrapper.find('[data-testid="preview-placeholder"]')
+    expect(placeholder.exists()).toBe(true)
+    expect(placeholder.text()).toContain('Select a resume to preview')
   })
 
   // ── Loading State ───────────────────────────────────────────
@@ -227,76 +362,6 @@ describe('DashboardView', () => {
     expect(cards[0]!.find('.resume-card__date').text()).toContain('Updated')
   })
 
-  it('navigates to builder on card click', async () => {
-    createAuthenticatedStore()
-    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
-    const pushSpy = vi.spyOn(router, 'push')
-
-    const wrapper = mount(DashboardView, {
-      global: { plugins: [router] },
-    })
-
-    await flushPromises()
-
-    const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
-    await cards[0]!.trigger('click')
-
-    expect(pushSpy).toHaveBeenCalledWith('/builder/resume-1')
-  })
-
-  it('navigates to builder on card keyboard enter', async () => {
-    createAuthenticatedStore()
-    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
-    const pushSpy = vi.spyOn(router, 'push')
-
-    const wrapper = mount(DashboardView, {
-      global: { plugins: [router] },
-    })
-
-    await flushPromises()
-
-    const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
-    await cards[1]!.trigger('keydown.enter')
-
-    expect(pushSpy).toHaveBeenCalledWith('/builder/resume-2')
-  })
-
-  it('navigates to builder on card keyboard space', async () => {
-    createAuthenticatedStore()
-    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
-    const pushSpy = vi.spyOn(router, 'push')
-
-    const wrapper = mount(DashboardView, {
-      global: { plugins: [router] },
-    })
-
-    await flushPromises()
-
-    const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
-    await cards[0]!.trigger('keydown.space')
-
-    expect(pushSpy).toHaveBeenCalledWith('/builder/resume-1')
-  })
-
-  it('navigates to builder when the card name is clicked (no inline edit)', async () => {
-    createAuthenticatedStore()
-    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
-    const pushSpy = vi.spyOn(router, 'push')
-
-    const wrapper = mount(DashboardView, {
-      global: { plugins: [router] },
-    })
-
-    await flushPromises()
-
-    // Clicking the name is a card click — it must navigate, not start editing
-    const name = wrapper.findAll('.resume-card__name')[0]!
-    await name.trigger('click')
-
-    expect(pushSpy).toHaveBeenCalledWith('/builder/resume-1')
-    expect(wrapper.find('.resume-card__name-input').exists()).toBe(false)
-  })
-
   it('shows Untitled for null name resumes', async () => {
     createAuthenticatedStore()
     mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
@@ -310,6 +375,290 @@ describe('DashboardView', () => {
     // Second resume has name: null
     const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
     expect(cards[1]!.find('.resume-card__name').text()).toBe('Untitled')
+  })
+
+  // ── Selection & Preview (RES-87) ────────────────────────────
+
+  it('selects the resume and loads its preview on card click (no navigation)', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockFullResumeStandard))
+    const pushSpy = vi.spyOn(router, 'push')
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
+    await cards[0]!.trigger('click')
+    await flushPromises()
+
+    // The full resume is fetched via GET /api/v1/resumes/:id
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/v1/resumes/resume-1',
+      expect.objectContaining({ method: 'GET' }),
+    )
+
+    // No navigation to the builder anymore — preview instead
+    expect(pushSpy).not.toHaveBeenCalled()
+
+    const body = wrapper.find('[data-testid="preview-body"]')
+    expect(body.exists()).toBe(true)
+    // Production layout component rendered with the resume content
+    expect(wrapper.find('.standard-layout').exists()).toBe(true)
+    expect(wrapper.text()).toContain('John Doe')
+  })
+
+  it('selects the resume on card keyboard enter', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockFullResumeStandard))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
+    await cards[1]!.trigger('keydown.enter')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="preview-body"]').exists()).toBe(true)
+  })
+
+  it('selects the resume on card keyboard space', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockFullResumeStandard))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
+    await cards[0]!.trigger('keydown.space')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="preview-body"]').exists()).toBe(true)
+  })
+
+  it('selects the resume when the card name is clicked (no inline edit)', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockFullResumeStandard))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    // Clicking the name is a card click — it must select, not start editing
+    const name = wrapper.findAll('.resume-card__name')[0]!
+    await name.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.resume-card__name-input').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="preview-body"]').exists()).toBe(true)
+  })
+
+  it('renders the two-column layout for resumes saved with column2-1', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockFullResumeTwoColumn))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
+    await cards[1]!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.two-column-layout').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Jane Smith')
+    expect(wrapper.text()).toContain('Acme Corp')
+  })
+
+  it('highlights the selected card', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockFullResumeStandard))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
+    expect(cards[0]!.classes()).not.toContain('resume-card--selected')
+
+    await cards[0]!.trigger('click')
+    await flushPromises()
+
+    const cardsAfter = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
+    expect(cardsAfter[0]!.classes()).toContain('resume-card--selected')
+    expect(cardsAfter[1]!.classes()).not.toContain('resume-card--selected')
+  })
+
+  it('shows a loading state while the full resume is being fetched', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    // Never resolve the full-resume fetch — keep the preview loading
+    mockFetch.mockImplementationOnce(() => new Promise(() => {}))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
+    await cards[0]!.trigger('click')
+    await flushPromises()
+
+    const loading = wrapper.find('[data-testid="preview-loading"]')
+    expect(loading.exists()).toBe(true)
+    expect(loading.text()).toContain('Loading preview')
+  })
+
+  it('shows an error in the preview pane when the full-resume fetch fails', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    mockFetch.mockResolvedValueOnce(
+      mockJsonResponse({ message: 'Failed to load resume' }, 500),
+    )
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
+    await cards[0]!.trigger('click')
+    await flushPromises()
+
+    const error = wrapper.find('[data-testid="preview-error"]')
+    expect(error.exists()).toBe(true)
+    expect(error.text()).toBe('Failed to load resume')
+  })
+
+  it('shows generic preview error when full-resume fetch throws non-API error', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    mockFetch.mockRejectedValueOnce(new Error('Network error'))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
+    await cards[0]!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="preview-error"]').text()).toBe(
+      'Something went wrong',
+    )
+  })
+
+  it('scales the preview paper down to fit the pane', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockFullResumeStandard))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
+    await cards[0]!.trigger('click')
+    await flushPromises()
+
+    const paper = wrapper.find('[data-testid="preview-paper"]')
+    expect(paper.exists()).toBe(true)
+    const style = paper.attributes('style')
+    expect(style).toContain('transform: scale(')
+    // jsdom has no layout — falls back to the unmeasured default scale
+    expect(style).toContain('scale(0.3)')
+  })
+
+  it('recomputes the preview scale when the pane is resized', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockFullResumeStandard))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
+    await cards[0]!.trigger('click')
+    await flushPromises()
+
+    // Simulate a 900px-wide preview pane: scale = (900 - 24) / 816 ≈ 1.0735
+    const instances = MockResizeObserver.instances
+    const observer = instances[instances.length - 1]
+    expect(observer).toBeDefined()
+    observer!.trigger([
+      { contentRect: { width: 900 } } as ResizeObserverEntry,
+    ])
+    await nextTick()
+
+    const style = wrapper
+      .find('[data-testid="preview-paper"]')
+      .attributes('style')
+    const match = style!.match(/scale\(([\d.]+)\)/)
+    expect(match).not.toBeNull()
+    expect(parseFloat(match![1]!)).toBeCloseTo((900 - 24) / 816, 5)
+  })
+
+  it('resets the preview pane when the selected resume is deleted', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockFullResumeStandard))
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(null, 204))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    // Select resume-1 and load its preview
+    const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
+    await cards[0]!.trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="preview-body"]').exists()).toBe(true)
+
+    // Delete it via the dropdown
+    await openCardMenu(wrapper, 0)
+    clickMenuItem('menu-delete')
+    await flushPromises()
+
+    const modal = wrapper.getComponent(ConfirmModal)
+    await modal.vm.$emit('confirm')
+    await flushPromises()
+
+    // Preview pane is back to the placeholder
+    expect(wrapper.find('[data-testid="preview-placeholder"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="preview-body"]').exists()).toBe(false)
+
+    wrapper.unmount()
   })
 
   // ── Card Actions Dropdown ───────────────────────────────────
@@ -354,10 +703,9 @@ describe('DashboardView', () => {
     wrapper.unmount()
   })
 
-  it('does not navigate to builder when the menu trigger is clicked', async () => {
+  it('does not select a resume when the menu trigger is clicked', async () => {
     createAuthenticatedStore()
     mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
-    const pushSpy = vi.spyOn(router, 'push')
 
     const wrapper = mount(DashboardView, {
       global: { plugins: [router] },
@@ -367,8 +715,9 @@ describe('DashboardView', () => {
 
     await openCardMenu(wrapper, 0)
 
-    // The dropdown is open and no navigation happened
-    expect(pushSpy).not.toHaveBeenCalled()
+    // Dropdown is open, no selection, no preview fetch
+    expect(wrapper.find('[data-testid="preview-body"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="preview-placeholder"]').exists()).toBe(true)
 
     wrapper.unmount()
   })
@@ -829,6 +1178,47 @@ describe('DashboardView', () => {
 
     const btn = wrapper.find('.dashboard-header .btn-primary')
     expect(btn.attributes('disabled')).toBeDefined()
+  })
+
+  // ── Responsive <768px ──────────────────────────────────────
+
+  it('stacks the panes vertically below 768px (list on top, preview below)', () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+
+    mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    // Scoped SFC styles are injected as <style> tags in jsdom — find the
+    // (max-width: 767px) media rule targeting .dashboard-body.
+    let mediaCss = ''
+    for (const sheet of Array.from(document.styleSheets)) {
+      let rules: CSSRule[] = []
+      try {
+        rules = Array.from(sheet.cssRules ?? [])
+      } catch {
+        continue // cross-origin stylesheet — skip
+      }
+      for (const rule of rules) {
+        if (
+          rule instanceof CSSMediaRule &&
+          rule.conditionText.includes('max-width: 767px')
+        ) {
+          const css = Array.from(rule.cssRules)
+            .map((r) => r.cssText)
+            .join('\n')
+          if (css.includes('dashboard-body')) {
+            mediaCss += css
+          }
+        }
+      }
+    }
+
+    expect(mediaCss).toContain('flex-direction: column')
+    // The list pane sits above the preview pane in the stacked layout
+    expect(mediaCss).toContain('dashboard-list-pane')
+    expect(mediaCss).toContain('dashboard-preview-pane')
   })
 
   // ── Rename (triggered from the ⋮ dropdown) ────────────────
