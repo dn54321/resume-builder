@@ -25,8 +25,13 @@ import {
 // against this fixed pixel size and scaled down to fit the pane.
 const PAPER_WIDTH_PX = 816
 const PAPER_HEIGHT_PX = 1056
-// Breathing room between the pane edge and the scaled paper.
-const PADDING = 24
+// Total horizontal breathing room between the pane edges and the scaled
+// paper. Must cover the preview body's own `1rem` padding on BOTH sides
+// (16px × 2 = 32px) — otherwise the scaled wrapper is wider than the
+// content box and the paper still overflows narrow panes (verified
+// empirically: with PADDING=24 a 793px pane produced 8px of horizontal
+// overflow). PADDING=32 makes the wrapper exactly fit the content box.
+const PADDING = 32
 const MIN_SCALE = 0.2
 const MAX_SCALE = 1.2
 

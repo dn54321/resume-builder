@@ -637,7 +637,7 @@ describe('DashboardView', () => {
     await cards[0]!.trigger('click')
     await flushPromises()
 
-    // Narrow pane: 300px → scale = (300 - 24) / 816 ≈ 0.3382 → wrapper 276×357
+    // Narrow pane: 300px → scale = (300 - 32) / 816 ≈ 0.3284 → wrapper 268×347
     const observer =
       MockResizeObserver.instances[MockResizeObserver.instances.length - 1]
     expect(observer).toBeDefined()
@@ -647,8 +647,8 @@ describe('DashboardView', () => {
     await nextTick()
 
     const scaled = wrapper.find('[data-testid="preview-scaled"]')
-    expect(scaled.attributes('style')).toContain('width: 276px')
-    expect(scaled.attributes('style')).toContain('height: 357px')
+    expect(scaled.attributes('style')).toContain('width: 268px')
+    expect(scaled.attributes('style')).toContain('height: 347px')
 
     wrapper.unmount()
   })
@@ -668,7 +668,7 @@ describe('DashboardView', () => {
     await cards[0]!.trigger('click')
     await flushPromises()
 
-    // Simulate a 900px-wide preview pane: scale = (900 - 24) / 816 ≈ 1.0735
+    // Simulate a 900px-wide preview pane: scale = (900 - 32) / 816 ≈ 1.0637
     const instances = MockResizeObserver.instances
     const observer = instances[instances.length - 1]
     expect(observer).toBeDefined()
@@ -682,7 +682,7 @@ describe('DashboardView', () => {
       .attributes('style')
     const match = style!.match(/scale\(([\d.]+)\)/)
     expect(match).not.toBeNull()
-    expect(parseFloat(match![1]!)).toBeCloseTo((900 - 24) / 816, 5)
+    expect(parseFloat(match![1]!)).toBeCloseTo((900 - 32) / 816, 5)
   })
 
   it('resets the preview pane when the selected resume is deleted', async () => {
