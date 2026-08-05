@@ -305,7 +305,7 @@ describe('App', () => {
     /**
      * Mount App with a real RouterView so the routed view and
      * <Transition> wrapper render inside <main>.
-     * @returns the mounted wrapper and its router
+     * @returns {Promise<{ router: ReturnType<typeof createRouter>; wrapper: AppWrapper }>} the mounted wrapper and its router
      */
     async function mountWithRealRouter() {
       const router = createRouter({
