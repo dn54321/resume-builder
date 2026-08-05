@@ -29,7 +29,8 @@ test.describe('Login flow', () => {
   }) => {
     // 1. Visit login page
     await page.goto('/login')
-    await expect(page.locator('h1, h2').first()).toContainText('Log')
+    // The CardTitle renders as an <h3> (RES-82 era markup)
+    await expect(page.locator('h1, h2, h3').first()).toContainText('Log')
 
     // 2. Fill credentials
     await page.fill('#login-email', email)
@@ -44,18 +45,16 @@ test.describe('Login flow', () => {
 
     // 5. Verify authenticated nav state — profile icon shown instead of email
     await expect(page.locator('header button svg.lucide-user')).toBeVisible()
-    await expect(page.locator('header')).not.toContainText(email)
+    await expect(page.getByRole('banner')).not.toContainText(email)
 
-    // 6. Verify session cookie / token in localStorage
-    const token = await page.evaluate(() =>
-      localStorage.getItem('auth_token'),
-    )
-    expect(token).toBeTruthy()
+    // 6. Verify the httpOnly session cookie was set for the API origin
+    // (auth is cookie-based — localStorage.auth_token is a legacy leftover)
+    const cookies = await page.context().cookies(`http://localhost:${BACKEND_PORT}`)
+    const sessionCookie = cookies.find((c) => c.name === 'session_token')
+    expect(sessionCookie).toBeTruthy()
 
-    // 7. Verify /api/v1/auth/me returns user
-    const meRes = await page.request.get(`${API_BASE}/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    // 7. Verify /api/v1/auth/me returns user (cookie is sent automatically)
+    const meRes = await page.request.get(`${API_BASE}/auth/me`)
     expect(meRes.status()).toBe(200)
     const meBody = await meRes.json()
     expect(meBody.user.email).toBe(email)
@@ -87,7 +86,8 @@ test.describe('Login flow', () => {
   test('login: redirects to requested page after auth', async ({ page }) => {
     // Try to visit dashboard without auth — should redirect to login
     await page.goto('/dashboard')
-    await page.waitForURL('**/login?redirect=%2Fdashboard')
+    // Vue Router serializes the redirect query un-encoded (redirect=/dashboard)
+    await page.waitForURL('**/login?redirect=/dashboard', { timeout: 15_000 })
 
     // Now login
     await page.fill('#login-email', email)

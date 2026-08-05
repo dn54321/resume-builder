@@ -69,7 +69,7 @@ test.describe('Anonymous resume builder', () => {
     await page.goto('/builder')
 
     // Header should show Log in and Sign up
-    await expect(page.locator('header')).toContainText('Log in')
-    await expect(page.locator('header')).toContainText('Sign up')
+    await expect(page.getByRole('banner')).toContainText('Log in')
+    await expect(page.getByRole('banner')).toContainText('Sign up')
   })
 })

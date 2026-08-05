@@ -43,8 +43,8 @@ test.describe('Logout', () => {
     await page.waitForURL('**/', { timeout: 10_000 })
 
     // 5. Verify login/signup buttons are visible
-    await expect(page.locator('header')).toContainText('Log in')
-    await expect(page.locator('header')).toContainText('Sign up')
+    await expect(page.getByRole('banner')).toContainText('Log in')
+    await expect(page.getByRole('banner')).toContainText('Sign up')
 
     // 6. Verify /api/v1/auth/me returns null user
     const token = await page.evaluate(() =>
@@ -67,7 +67,7 @@ test.describe('Logout', () => {
     await page.waitForURL('**/dashboard', { timeout: 15_000 })
 
     // 2. Create a resume and go to builder
-    await page.getByRole('button', { name: 'Create New Resume' }).click()
+    await page.getByRole('button', { name: 'Create New Resume' }).first().click()
     await page.waitForURL('**/builder/**', { timeout: 15_000 })
     await expect(page.locator('input[aria-label="Resume name"]')).toBeVisible()
 
@@ -78,6 +78,6 @@ test.describe('Logout', () => {
 
     // 4. Verify redirect to home
     await page.waitForURL('**/', { timeout: 10_000 })
-    await expect(page.locator('header')).toContainText('Log in')
+    await expect(page.getByRole('banner')).toContainText('Log in')
   })
 })

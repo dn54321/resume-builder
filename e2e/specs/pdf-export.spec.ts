@@ -30,7 +30,7 @@ test.describe('PDF Export', () => {
     await page.click('button[type="submit"]')
     await page.waitForURL('**/dashboard', { timeout: 15_000 })
 
-    await page.getByRole('button', { name: 'Create New Resume' }).click()
+    await page.getByRole('button', { name: 'Create New Resume' }).first().click()
     await page.waitForURL('**/builder/**', { timeout: 15_000 })
   }
 

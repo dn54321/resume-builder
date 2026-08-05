@@ -31,7 +31,7 @@ test.describe('Unsaved changes guard', () => {
     await page.waitForURL('**/dashboard', { timeout: 15_000 })
 
     // Create a resume
-    await page.getByRole('button', { name: 'Create New Resume' }).click()
+    await page.getByRole('button', { name: 'Create New Resume' }).first().click()
     await page.waitForURL('**/builder/**', { timeout: 15_000 })
 
     // Set resume name — blur commits the name and triggers the autosave
@@ -57,7 +57,7 @@ test.describe('Unsaved changes guard', () => {
     await page.getByRole('link', { name: 'My Resumes' }).click()
 
     // Unsaved changes modal should appear
-    const modal = page.locator('[data-testid="unsaved-modal"]')
+    const modal = page.getByRole('dialog', { name: 'Unsaved Changes' })
     await expect(modal).toBeVisible({ timeout: 5000 })
     await expect(modal).toContainText('Unsaved Changes')
   })
@@ -76,7 +76,7 @@ test.describe('Unsaved changes guard', () => {
     await page.getByRole('link', { name: 'My Resumes' }).click()
 
     // Modal appears
-    const modal = page.locator('[data-testid="unsaved-modal"]')
+    const modal = page.getByRole('dialog', { name: 'Unsaved Changes' })
     await expect(modal).toBeVisible({ timeout: 5000 })
 
     // Click "Stay"
@@ -99,7 +99,7 @@ test.describe('Unsaved changes guard', () => {
     await page.getByRole('link', { name: 'My Resumes' }).click()
 
     // Modal appears
-    const modal = page.locator('[data-testid="unsaved-modal"]')
+    const modal = page.getByRole('dialog', { name: 'Unsaved Changes' })
     await expect(modal).toBeVisible({ timeout: 5000 })
 
     // Click "Leave"
@@ -122,7 +122,7 @@ test.describe('Unsaved changes guard', () => {
     await expect(page.locator('h1').first()).toContainText('My Resumes')
 
     // Modal should NOT have appeared
-    const modal = page.locator('[data-testid="unsaved-modal"]')
+    const modal = page.getByRole('dialog', { name: 'Unsaved Changes' })
     await expect(modal).not.toBeVisible()
   })
 })

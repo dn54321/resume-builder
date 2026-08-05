@@ -11,39 +11,40 @@ const BACKEND_PORT = parseInt(process.env.AGENT_PORT || '3000', 10)
 const API_BASE = `http://localhost:${BACKEND_PORT}/api/v1`
 
 test.describe('Authenticated resume builder', () => {
-  const email = `auth-builder-${Date.now()}@test.com`
   const password = 'TestPass123!'
 
-  test.beforeAll(async ({ request }) => {
+  test.beforeAll(() => {
     resetE2eDatabase()
-
-    // Create user and get session token
-    const res = await request.post(`${API_BASE}/auth/signup`, {
-      data: { email, password },
-    })
-    expect(res.status()).toBe(201)
   })
 
   /**
-   * Helper: log in and set localStorage token.
+   * Helper: sign up a fresh user (unique email so runs never collide),
+   * then log in via the UI.
    */
-  async function loginAndGoToDashboard(page: any) {
+  async function signupAndLogin(page: any): Promise<string> {
+    const email = `auth-builder-${Date.now()}-${Math.floor(Math.random() * 1e6)}@test.com`
+    const signup = await page.request.post(`${API_BASE}/auth/signup`, {
+      data: { email, password },
+    })
+    expect(signup.status()).toBe(201)
+
     await page.goto('/login')
     await page.fill('#login-email', email)
     await page.fill('#login-password', password)
     await page.click('button[type="submit"]')
     await page.waitForURL('**/dashboard', { timeout: 15_000 })
+    return email
   }
 
   test('create new resume → fill sections → save → reload → verify persisted', async ({
     page,
   }) => {
     // 1. Login and go to dashboard
-    await loginAndGoToDashboard(page)
+    await signupAndLogin(page)
     await expect(page.locator('h1').first()).toContainText('My Resumes')
 
     // 2. Create a new resume
-    await page.getByRole('button', { name: 'Create New Resume' }).click()
+    await page.getByRole('button', { name: 'Create New Resume' }).first().click()
 
     // 3. Verify redirected to builder with an ID
     await page.waitForURL('**/builder/**', { timeout: 15_000 })
@@ -88,10 +89,10 @@ test.describe('Authenticated resume builder', () => {
   })
 
   test('dashboard shows created resume', async ({ page }) => {
-    await loginAndGoToDashboard(page)
+    await signupAndLogin(page)
 
     // Create a resume first
-    await page.getByRole('button', { name: 'Create New Resume' }).click()
+    await page.getByRole('button', { name: 'Create New Resume' }).first().click()
     await page.waitForURL('**/builder/**', { timeout: 15_000 })
 
     const nameInput = page.locator('input[aria-label="Resume name"]')

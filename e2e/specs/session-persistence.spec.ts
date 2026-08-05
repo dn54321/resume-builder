@@ -40,15 +40,14 @@ test.describe('Session persistence', () => {
     await expect(page.locator('h1').first()).toContainText('My Resumes')
     await expect(page.locator('header button svg.lucide-user')).toBeVisible()
 
-    // 4. Verify /api/v1/auth/me returns user
-    const token = await page.evaluate(() =>
-      localStorage.getItem('auth_token'),
-    )
-    expect(token).toBeTruthy()
+    // 4. Verify /api/v1/auth/me returns user (cookie-based session)
+    const cookies = await page
+      .context()
+      .cookies(`http://localhost:${BACKEND_PORT}`)
+    const sessionCookie = cookies.find((c) => c.name === 'session_token')
+    expect(sessionCookie).toBeTruthy()
 
-    const meRes = await page.request.get(`${API_BASE}/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    const meRes = await page.request.get(`${API_BASE}/auth/me`)
     expect(meRes.status()).toBe(200)
     const body = await meRes.json()
     expect(body.user.email).toBe(email)
@@ -69,7 +68,7 @@ test.describe('Session persistence', () => {
     await page.waitForURL('**/dashboard')
 
     // 3. Navigate to builder
-    await page.getByRole('button', { name: 'Create New Resume' }).click()
+    await page.getByRole('button', { name: 'Create New Resume' }).first().click()
     await page.waitForURL('**/builder/**', { timeout: 15_000 })
 
     // 4. Verify still authenticated on builder

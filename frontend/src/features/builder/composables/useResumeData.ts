@@ -182,12 +182,21 @@ export function useResumeData() {
         const list = await api.get<Array<{ id: string }>>('/api/v1/resumes')
         if (list.length > 0) {
           const firstId = list[0]!.id
-          const data = await api.get<{ id: string; layout: string; sections: unknown[] }>(
-            `/api/v1/resumes/${firstId}`,
-          )
+          // The wire shape carries `name` — it MUST be forwarded to
+          // loadFromPayload, otherwise the resume name silently resets to
+          // empty on every authenticated reload (found via RES-83 e2e:
+          // "autosave → reload → name persisted" failed while the DB still
+          // had the name).
+          const data = await api.get<{
+            id: string
+            name: string | null
+            layout: string
+            sections: unknown[]
+          }>(`/api/v1/resumes/${firstId}`)
           store.id = firstId
           if (data.sections?.length > 0 || data.layout) {
             store.loadFromPayload({
+              name: data.name ?? '',
               layout: data.layout as 'standard' | 'column2-1',
               sections: data.sections as ResumePayload['sections'],
             })
