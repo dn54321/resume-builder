@@ -25,7 +25,10 @@ test.describe('Authenticated resume builder', () => {
   })
 
   /**
-   * Helper: log in and set localStorage token.
+   * Helper: log in via the form. Auth is cookie-based (HttpOnly
+   * `session_token`) — there is no localStorage auth token anymore,
+   * so the session cookie set by the login response is all that's
+   * needed for subsequent requests.
    */
   async function loginAndGoToDashboard(page: any) {
     await page.goto('/login')
