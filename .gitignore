@@ -9,7 +9,11 @@ frontend/resume.pdf
 
 # Atlas agent system state
 atlas/state/
-atlas/.pi/
+# NOTE: no trailing slash — atlas/.pi is a SYMLINK (→ ../.pi) and a
+# directory-only pattern (trailing slash) does not match symlinks, leaving
+# `git status --porcelain` forever dirty in the main repo, which made the
+# worker merge guard defer every merge (observed RES-91 merge loop).
+atlas/.pi
 atlas/node_modules/
 atlas/coverage/
 playwright-report/
