@@ -254,6 +254,42 @@ describe('PaneManager', () => {
     });
   });
 
+  describe('registerWorkerPane', () => {
+    it('tracks an adopted pane so it is compacted and killable', () => {
+      // Simulates adoptWorker: a pane already exists in tmux (adopted after
+      // restart); the pool registers it so the manager knows about it.
+      pm.registerWorkerPane('worker-1', '%7', 'RES-88');
+      vi.mocked(cp.execSync).mockClear();
+
+      // Registering does NOT split or resize — the pane already exists
+      expect(vi.mocked(cp.execSync)).not.toHaveBeenCalled();
+
+      // The registered pane participates in compaction: after a sibling
+      // dies, killWorkerPane compacts ALL tracked workers (including %7).
+      splitResult = '%3';
+      pm.createWorkerPane('worker-2', 'RES-99');
+      vi.mocked(cp.execSync).mockClear();
+
+      pm.killWorkerPane('worker-2');
+
+      const resizeCalls = vi
+        .mocked(cp.execSync)
+        .mock.calls.map((c) => String(c[0]))
+        .filter((c) => c.includes('resize-pane'));
+      expect(resizeCalls.length).toBe(1);
+      expect(resizeCalls[0]).toContain('-t "%7"');
+
+      // And it can be killed via killWorkerPane
+      vi.mocked(cp.execSync).mockClear();
+      pm.killWorkerPane('worker-1');
+      const killCall = vi
+        .mocked(cp.execSync)
+        .mock.calls.find((c) => String(c[0]).includes('kill-pane'));
+      expect(killCall).toBeDefined();
+      expect(String(killCall![0])).toContain('-t "%7"');
+    });
+  });
+
   describe('isPaneAlive', () => {
     it('returns true when display-message succeeds', () => {
       expect(pm.isPaneAlive('%3')).toBe(true);

@@ -141,6 +141,7 @@ describe('AgentPool — tmux pane wiring', () => {
     createWorkerPane: Mock<[], string | null>;
     killWorkerPane: Mock<[], void>;
     isPaneAlive: Mock<[], boolean>;
+    registerWorkerPane: Mock<[], void>;
   };
   let intercom: { send: Mock<[], Promise<void>> };
 
@@ -153,6 +154,7 @@ describe('AgentPool — tmux pane wiring', () => {
       createWorkerPane: vi.fn() as unknown as Mock<[], string | null>,
       killWorkerPane: vi.fn() as unknown as Mock<[], void>,
       isPaneAlive: vi.fn() as unknown as Mock<[], boolean>,
+      registerWorkerPane: vi.fn() as unknown as Mock<[], void>,
     };
     paneManager.createWorkerPane.mockReturnValue('%3');
     paneManager.isPaneAlive.mockReturnValue(true);
@@ -487,6 +489,12 @@ describe('AgentPool — tmux pane wiring', () => {
       expect(adopted!.currentTask).toBe('RES-88');
       expect(adopted!.status).toBe('active');
       expect(pool.getAgent('a-restart-uuid')).toBeDefined();
+      // The pane is registered with the manager so it participates in
+      // compaction and can be killed (otherwise adopted panes balloon after
+      // sibling deaths and starve new splits).
+      expect(paneManager.registerWorkerPane).toHaveBeenCalledWith(
+        'worker-1', '%77', 'RES-88',
+      );
     });
 
     it('returns null when the surviving worker pane is dead', async () => {

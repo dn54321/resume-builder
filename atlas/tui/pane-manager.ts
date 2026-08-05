@@ -153,6 +153,26 @@ export class PaneManager {
   }
 
   /**
+   * Register an EXISTING worker pane without splitting (used when the pool
+   * re-adopts a surviving worker after an orchestrator restart). The pane is
+   * added to workerPanes so compactWorkerPanes()/killWorkerPane() include it
+   * — without this, an adopted pane is invisible to the manager: it never
+   * gets compacted after sibling deaths (ballooning and starving new splits)
+   * and can never be killed via killWorkerPane().
+   */
+  registerWorkerPane(agentName: string, paneId: string, ticketId: string): void {
+    const fifoPath = path.join(this.fifoDir, `${agentName}.fifo`);
+    this.ensureFifo(fifoPath);
+    this.workerPanes.set(agentName, {
+      agentName,
+      paneId,
+      fifoPath,
+      currentTicket: ticketId,
+    });
+    this.updateBanner();
+  }
+
+  /**
    * Kill a worker pane. The banner remains.
    */
   killWorkerPane(agentName: string): void {

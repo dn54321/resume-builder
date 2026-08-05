@@ -685,6 +685,10 @@ export class AgentPool {
       lastHeartbeat: Date.now(),
     };
     this.agents.set(agentId, instance);
+    // The pane is already alive in tmux — register it with the pane manager
+    // so it participates in compaction (surviving panes balloon after sibling
+    // deaths and starve new splits) and can be killed via killWorkerPane().
+    this.paneManager.registerWorkerPane(name, paneId, currentTask);
     console.log(`[Pool] Adopted surviving worker ${name} (pane ${paneId}) for ${currentTask}`);
     return instance;
   }
