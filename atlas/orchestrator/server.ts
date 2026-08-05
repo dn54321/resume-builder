@@ -643,6 +643,27 @@ async function checkAgentHealth(): Promise<void> {
         node.state.workerName &&
         !liveWorkers.has(node.state.workerName)
       ) {
+        // If the worker's work is ALREADY on the target branch (it completed
+        // and was merged before the completion registered — a common race on
+        // re-verified already-merged tickets), re-queueing just spawns another
+        // worker to re-verify the same merged work forever (observed: RES-85
+        // spawned 3 workers in 5 min). Complete it as done instead.
+        const config = getConfig();
+        const target = config.strategy.branches.direct_push;
+        const merged = node.state.worktreePath
+          ? isBranchMergedTo(node.state.worktreePath, node.state.branch, target)
+          : false;
+        if (merged) {
+          log(`Completing ${node.ticket.identifier} (work already merged to ${target})`);
+          node.state.status = 'done';
+          node.state.finishedAt = new Date().toISOString();
+          node.state.workerName = null;
+          node.state.pid = null;
+          recordCompletedWork('worker');
+          await transitionTicket(node.ticket.id, config.linear.transitions.on_done);
+          await tellBoss(`✅ ${node.ticket.identifier}: completed (work already merged to ${target})`);
+          continue;
+        }
         log(`Re-queuing ${node.ticket.identifier} (worker ${node.state.workerName} gone)`);
         requeueTracker?.record(node.ticket.identifier, `worker ${node.state.workerName} gone`);
         node.state.status = 'pending';
