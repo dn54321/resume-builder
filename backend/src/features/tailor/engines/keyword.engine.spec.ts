@@ -53,6 +53,7 @@ function passthroughEntry(
  * @param jd
  * @param entries
  * @param options - Optional section overrides (e.g. locked: true)
+ * @param options.locked
  */
 function makeRequest(
   jd: string,
