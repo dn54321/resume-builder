@@ -677,6 +677,11 @@ async function checkAgentHealth(): Promise<void> {
   // Freeing a dead-pane slot may unblock waiting tickets — spawn
   // replacements promptly instead of waiting for the next queue_process tick.
   await launchReady();
+
+  // Persist the orphan-completion / re-queue state changes made above —
+  // without this, completed tickets (work already merged) never land in
+  // state/atlas.json and the dashboard stays at the stale count forever.
+  saveAllState();
 }
 
 async function processQueue(): Promise<void> {
