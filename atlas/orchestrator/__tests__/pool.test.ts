@@ -374,4 +374,50 @@ describe('AgentPool — tmux pane wiring', () => {
       expect((agent as AgentInstance).lastHeartbeat).toBeGreaterThan(stale - 60_000);
     });
   });
+
+  describe('adoptWorker', () => {
+    it('re-registers a surviving worker whose pane is alive (restart survival)', async () => {
+      paneManager.isPaneAlive.mockReturnValue(true);
+
+      const adopted = pool.adoptWorker(
+        'a-restart-uuid',
+        'worker-1',
+        '%77',
+        'RES-88',
+        9000,
+      );
+
+      expect(adopted).not.toBeNull();
+      expect(adopted!.id).toBe('a-restart-uuid');
+      expect(adopted!.paneId).toBe('%77');
+      expect(adopted!.currentTask).toBe('RES-88');
+      expect(adopted!.status).toBe('active');
+      expect(pool.getAgent('a-restart-uuid')).toBeDefined();
+    });
+
+    it('returns null when the surviving worker pane is dead', async () => {
+      paneManager.isPaneAlive.mockReturnValue(false);
+
+      const adopted = pool.adoptWorker(
+        'a-dead-uuid',
+        'worker-1',
+        '%78',
+        'RES-88',
+        9000,
+      );
+
+      expect(adopted).toBeNull();
+      expect(pool.getAgent('a-dead-uuid')).toBeUndefined();
+    });
+
+    it('is idempotent for an already-adopted agent', async () => {
+      paneManager.isPaneAlive.mockReturnValue(true);
+      pool.adoptWorker('a-double', 'worker-1', '%79', 'RES-88', 9000);
+
+      const again = pool.adoptWorker('a-double', 'worker-1', '%79', 'RES-88', 9000);
+
+      expect(again).not.toBeNull();
+      expect(pool.count()).toBe(1);
+    });
+  });
 });

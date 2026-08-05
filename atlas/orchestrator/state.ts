@@ -144,6 +144,8 @@ export function recoverFromWorktree(
     assignedPort: null,
     retryCount: 0,
     workerName: null,
+    agentId: null,
+    paneId: null,
   };
 }
 

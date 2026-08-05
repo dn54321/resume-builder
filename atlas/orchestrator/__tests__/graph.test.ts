@@ -38,6 +38,8 @@ describe('Graph — readyTickets', () => {
       assignedPort: null,
       retryCount: 0,
       workerName: null,
+          agentId: null,
+          paneId: null,
     };
 
     return { ticket, state, dependencies: [], dependents: [] };

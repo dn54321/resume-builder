@@ -73,6 +73,10 @@ export interface TicketState {
   assignedPort: number | null;
   retryCount: number;
   workerName: string | null;
+  /** Agent identity persisted so a restarted orchestrator can re-adopt the
+   * live worker (its tmux pane keeps running across restarts). */
+  agentId: string | null;
+  paneId: string | null;
 }
 
 export interface GraphNode {

@@ -238,6 +238,13 @@ export class AgentPool {
       return null;
     }
 
+    // Persist agent identity so a restarted orchestrator can re-adopt this
+    // live worker (its tmux pane survives the orchestrator process).
+    if (node && type === 'worker') {
+      node.state.agentId = uuid;
+      node.state.paneId = paneId;
+    }
+
     // cwd must exist or the pane shell errors on cd.
     const spawnCwd = fs.existsSync(worktreePath) ? worktreePath : getRepoRoot();
 
@@ -523,6 +530,45 @@ export class AgentPool {
     this.agents.delete(id);
   }
 
+  /**
+   * Re-adopt a live worker after an orchestrator restart. The worker's
+   * tmux pane keeps running (pi -p) while the orchestrator process was
+   * down; the new process re-registers it in the pool so its eventual IDLE
+   * message completes the ticket instead of the ticket being orphaned.
+   * Returns the adopted agent or null if the pane is no longer alive.
+   */
+  adoptWorker(
+    agentId: string,
+    name: string,
+    paneId: string,
+    currentTask: string,
+    port: number,
+  ): AgentInstance | null {
+    if (!this.paneManager.isPaneAlive(paneId)) {
+      console.log(`[Pool] Cannot adopt ${name} — pane ${paneId} dead`);
+      return null;
+    }
+    if (this.agents.has(agentId)) return this.agents.get(agentId)!;
+
+    const instance: AgentInstance = {
+      id: agentId,
+      name,
+      type: 'worker',
+      processPid: null,
+      process: null,
+      status: 'active',
+      currentTask,
+      port,
+      paneId,
+      logPath: path.join(getStateDir(), 'logs', `${name}.log`),
+      spawnedAt: Date.now(),
+      lastHeartbeat: Date.now(),
+    };
+    this.agents.set(agentId, instance);
+    console.log(`[Pool] Adopted surviving worker ${name} (pane ${paneId}) for ${currentTask}`);
+    return instance;
+  }
+
   count(): number {
     return this.agents.size;
   }
@@ -586,7 +632,7 @@ export class AgentPool {
       .replace(/\{\{WORKTREE_PATH\}\}/g, worktreePath)
       .replace(/\{\{STRATEGY\}\}/g, strategy.default)
       .replace(/\{\{PR_TARGET\}\}/g, strategy.branches.pr_target)
-      .replace(/\{\{ORCHESTRATOR_NAME\}\}/g, `orchestrator-${process.pid}`);
+      .replace(/\{\{ORCHESTRATOR_NAME\}\}/g, 'orchestrator');
 
     // One-shot worker: append the task so pi -p has everything it needs
     // without an interactive intercom TASK handoff. The uuid MUST be the

@@ -697,6 +697,14 @@ async function autoStart(): Promise<void> {
     log('No active tickets. Send EPIC <ID> or TICKET <ID> to start.');
   }
 
+  // Adopt surviving workers BEFORE spawning new ones. Workers are one-shot
+  // pi processes whose tmux panes keep running while the orchestrator is
+  // down (restart preserves workers; only STOP kills them). For each
+  // in_progress ticket with a persisted agentId+paneId, re-register the
+  // agent if its pane is still alive — its eventual IDLE message then
+  // completes the ticket instead of it being orphaned and re-queued.
+  adoptSurvivingWorkers();
+
   // Pre-spawn workers if there's work
   if (epicGraphs.size > 0) {
     const config = getConfig();
@@ -705,6 +713,34 @@ async function autoStart(): Promise<void> {
       await pool.spawn('worker');
     }
     await launchReady();
+  }
+}
+
+/**
+ * Re-register workers whose tmux panes survived an orchestrator restart.
+ * Iterates all graph nodes; for in_progress tickets with agentId/paneId,
+ * tries pool.adoptWorker. Live panes keep their slot and ticket; dead
+ * panes fall through to the normal orphan-requeue path in healthCheck.
+ */
+function adoptSurvivingWorkers(): void {
+  for (const [, epic] of epicGraphs) {
+    for (const [, node] of epic.nodes) {
+      const st = node.state;
+      if (
+        st.status === 'in_progress' &&
+        st.agentId &&
+        st.paneId &&
+        st.workerName
+      ) {
+        pool.adoptWorker(
+          st.agentId,
+          st.workerName,
+          st.paneId,
+          node.ticket.identifier,
+          st.assignedPort ?? 0,
+        );
+      }
+    }
   }
 }
 
@@ -737,8 +773,13 @@ export async function startOrchestrator(): Promise<void> {
   fs.writeFileSync(path.join(stateDir, 'ready'), new Date().toISOString(), 'utf-8');
 
   // Intercom — use a unique name to avoid collisions with stale sessions.
-  // The boss reads this name from state/orchestrator-name and sends to it.
-  const orchName = `orchestrator-${process.pid}`;
+  // Stable orchestrator intercom name — NOT pid-suffixed. Workers embed
+  // {{ORCHESTRATOR_NAME}} in their prompt at spawn; if the name changed on
+  // every restart, surviving workers' IDLE/STATUS/ASK messages would go to
+  // a dead session after an orchestrator restart. A stable name lets
+  // workers outlive the orchestrator process. Only one orchestrator runs
+  // at a time (atlas.sh kills the old before starting the new).
+  const orchName = 'orchestrator';
   fs.writeFileSync(path.join(stateDir, 'orchestrator-name'), orchName, 'utf-8');
   intercom = new IntercomClient(orchName);
   await intercom.connect();
@@ -874,10 +915,17 @@ export async function startOrchestrator(): Promise<void> {
   // Start webhook server
   startWebhookServer();
 
-  // Cleanup
+  // Cleanup — signal-triggered (restart): preserve workers.
+  //
+  // The user distinguishes two cases:
+  //   - RESTART (SIGTERM/SIGINT on the orchestrator): workers are NOT
+  //     killed — their tmux panes keep running pi. The next orchestrator
+  //     adopts them on startup (see autoStart/adoptWorker) and their IDLE
+  //     messages complete the tickets.
+  //   - STOP (boss command, `STOP` / `STOP <name>`): kills workers via
+  //     pool.stopAll(). This is the real "shut the app down" action.
   const cleanup = async () => {
     scheduler.stop();
-    await pool.stopAll();
     saveAllState();
     if (webhookServer) webhookServer.close();
     try { await unregisterWebhooks(); } catch { /* ignore */ }

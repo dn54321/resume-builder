@@ -100,6 +100,8 @@ export async function buildGraph(
       assignedPort: null,
       retryCount: 0,
       workerName: null,
+      agentId: null,
+      paneId: null,
     };
 
     nodes.set(ticket.identifier, { ticket, state, dependencies: [], dependents: [] });
@@ -139,6 +141,13 @@ export async function buildGraph(
             node.state.error = 'Worker died unexpectedly';
           }
         }
+      } else if (node.state.paneId) {
+        // One-shot workers run in tmux panes (no child pid). A surviving
+        // pane means the worker is still alive across an orchestrator
+        // restart — keep in_progress so adoptSurvivingWorkers() can
+        // re-register it. Dead panes fall through to the orphan-requeue
+        // path in healthCheck.
+        // (paneId is persisted by spawn; pane liveness is checked at adopt)
       } else {
         node.state.status = 'pending';
         node.state.pid = null;

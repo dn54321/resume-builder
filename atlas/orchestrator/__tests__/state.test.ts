@@ -52,6 +52,8 @@ describe('State — persistence', () => {
           assignedPort: null,
           retryCount: 0,
           workerName: null,
+          agentId: null,
+          paneId: null,
         },
       },
       startedAt: new Date().toISOString(),
@@ -90,6 +92,8 @@ describe('State — persistence', () => {
           assignedPort: null,
           retryCount: 0,
           workerName: null,
+          agentId: null,
+          paneId: null,
         },
       },
       startedAt: new Date().toISOString(),
@@ -116,6 +120,8 @@ describe('State — persistence', () => {
         assignedPort: null,
         retryCount: 0,
         workerName: null,
+          agentId: null,
+          paneId: null,
       },
     };
     saveFullState(ticketB, true);
@@ -146,6 +152,8 @@ describe('State — persistence', () => {
           assignedPort: null,
           retryCount: 0,
           workerName: null,
+          agentId: null,
+          paneId: null,
         },
       },
       startedAt: new Date().toISOString(),
@@ -172,6 +180,8 @@ describe('State — persistence', () => {
         assignedPort: null,
         retryCount: 0,
         workerName: null,
+          agentId: null,
+          paneId: null,
       },
     };
     saveFullState(ticketB, false);
@@ -201,6 +211,8 @@ describe('State — persistence', () => {
           assignedPort: null,
           retryCount: 0,
           workerName: null,
+          agentId: null,
+          paneId: null,
         },
         'RES-2': {
           identifier: 'RES-2',
@@ -216,6 +228,8 @@ describe('State — persistence', () => {
           assignedPort: null,
           retryCount: 0,
           workerName: null,
+          agentId: null,
+          paneId: null,
         },
       },
       startedAt: new Date().toISOString(),
@@ -241,6 +255,8 @@ describe('State — persistence', () => {
       assignedPort: null,
       retryCount: 0,
       workerName: null,
+          agentId: null,
+          paneId: null,
     };
     saveTicketState('RES-1', updated);
 
