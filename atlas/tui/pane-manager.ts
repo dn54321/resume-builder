@@ -84,8 +84,10 @@ export class PaneManager {
       // `-P -F '#{pane_id}'` is REQUIRED: split-window prints nothing without
       // -P, and plain -P prints "session:window.pane" rather than the pane id
       // (e.g. "%1") that the caller needs for send-keys / kill-pane.
+      // `-d` keeps the new pane INACTIVE so spawning workers never steals
+      // the user's typing focus (the boss pane stays active).
       const result = cp.execSync(
-        `tmux split-window -P -F '#{pane_id}' -v -t "${this.bannerPaneId}" -l 8 -c "${process.cwd()}" "bash"`,
+        `tmux split-window -d -P -F '#{pane_id}' -v -t "${this.bannerPaneId}" -l 8 -c "${process.cwd()}" "bash"`,
         { timeout: 5000, encoding: 'utf-8' },
       ).trim();
 
