@@ -93,3 +93,46 @@ describe('RequeueTracker', () => {
     expect(tracker.total).toBe(0);
   });
 });
+
+describe('RequeueTracker — benign events', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('recordBenign does NOT trip the anomaly alarm even past threshold', () => {
+    const onAnomaly = vi.fn();
+    const tracker = new RequeueTracker({ threshold: 3, onAnomaly });
+
+    // 5 defers (worker finished, main repo busy) — must NOT alarm
+    for (let i = 0; i < 5; i++) {
+      vi.advanceTimersByTime(1000);
+      tracker.recordBenign('RES-88', 'deferred (main repo dirty)');
+    }
+
+    expect(onAnomaly).not.toHaveBeenCalled();
+    // But the events still show on the dashboard snapshot
+    const snap = tracker.snapshot();
+    expect(snap).toHaveLength(1);
+    expect(snap[0]!.count).toBe(5);
+  });
+
+  it('a real crash (record) after defers still alarms', () => {
+    const onAnomaly = vi.fn();
+    const tracker = new RequeueTracker({ threshold: 3, onAnomaly });
+
+    // 2 defers (benign) + 3 real re-queues (crash) = 5 events, alarm at 3 real
+    tracker.recordBenign('RES-88', 'deferred');
+    tracker.recordBenign('RES-88', 'deferred');
+    for (let i = 0; i < 3; i++) {
+      vi.advanceTimersByTime(1000);
+      tracker.record('RES-88', 'worker exited (code -1)');
+    }
+
+    expect(onAnomaly).toHaveBeenCalledTimes(1);
+  });
+});
