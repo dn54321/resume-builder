@@ -93,10 +93,15 @@ fi
 # suite run.
 LOCK_FILE="${TMPDIR:-/tmp}/atlas-pre-push.lock"
 exec 9>"$LOCK_FILE"
-flock -w 900 9 || {
-  echo "${RED}[pre-push]${NC} Could not acquire test lock within 900s — aborting push"
-  exit 1
-}
+# Wait for the lock as long as needed — a push must NEVER fail just because
+# another push (a worker's) holds the lock. Previously flock -w 900 gave up
+# after 15 min and the push failed SILENTLY, stranding local commits for
+# hours (observed: 7+ commits waited 3h because concurrent worker pushes kept
+# holding the lock). Retry forever; each 30s wait logs progress.
+while ! flock -n 9; do
+  echo "[pre-push] waiting for test lock (another push in progress)..."
+  sleep 30
+done
 
 run_step() {
   local label="$1"
