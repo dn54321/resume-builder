@@ -34,11 +34,11 @@ test.describe('Unsaved changes guard', () => {
     await page.getByRole('button', { name: 'Create New Resume' }).click()
     await page.waitForURL('**/builder/**', { timeout: 15_000 })
 
-    // Set resume name and save
+    // Set resume name — blur commits the name and triggers the autosave
+    // (the sole save mechanism), which persists it immediately.
     const nameInput = page.locator('input[aria-label="Resume name"]')
     await nameInput.fill('Unsaved Test Resume')
-    const saveBtn = page.locator('[data-testid="toolbar-save-btn"]')
-    await saveBtn.click()
+    await nameInput.blur()
     await expect(page.locator('[data-testid="toolbar-saved-msg"]')).toBeVisible(
       { timeout: 10_000 },
     )

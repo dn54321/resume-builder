@@ -12,6 +12,7 @@ const mockSaveResume = vi.fn<() => Promise<void>>()
 const mockSetupAutoSave = vi.fn<() => void>()
 const mockTeardownAutoSave = vi.fn<() => void>()
 const mockDirty = ref(false)
+const mockIsSaving = ref(false)
 
 vi.mock('@/features/builder/composables/useResumeData', () => ({
   useResumeData: () => ({
@@ -20,6 +21,7 @@ vi.mock('@/features/builder/composables/useResumeData', () => ({
     setupAutoSave: mockSetupAutoSave,
     teardownAutoSave: mockTeardownAutoSave,
     dirty: mockDirty,
+    isSaving: mockIsSaving,
   }),
 }))
 
@@ -147,6 +149,8 @@ describe('ResumeBuilder', () => {
     mockTailorResume.mockReset()
     mockResetFilter.mockReset()
     mockIsAuthenticated.value = false
+    mockDirty.value = false
+    mockIsSaving.value = false
   })
 
   it('renders the toolbar with Job Description button', () => {
@@ -384,83 +388,102 @@ describe('ResumeBuilder', () => {
     expect(mockTeardownAutoSave).toHaveBeenCalled()
   })
 
-  // ─── Save button tests ────────────────────────────────────────
+  // ─── Autosave indicator tests ────────────────────────────────
 
-  it('hides Save button when not dirty and not authenticated', () => {
-    mockDirty.value = false
-    mockIsAuthenticated.value = false
+  it('does not render a manual Save button', () => {
+    mockDirty.value = true
+    mockIsAuthenticated.value = true
     const wrapper = mountBuilder()
     expect(wrapper.find('[data-testid="toolbar-save-btn"]').exists()).toBe(false)
   })
 
-  it('shows disabled Saved button when authenticated and not dirty', async () => {
+  it('hides the autosave indicator when idle (not saving, nothing saved yet)', () => {
+    const wrapper = mountBuilder()
+    expect(wrapper.find('[data-testid="autosave-indicator"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="toolbar-saved-msg"]').exists()).toBe(false)
+  })
+
+  it('shows spinner and "Saving…" while isSaving is true', async () => {
+    mockIsSaving.value = true
+    const wrapper = mountBuilder()
+    await nextTick()
+
+    const indicator = wrapper.find('[data-testid="autosave-indicator"]')
+    expect(indicator.exists()).toBe(true)
+    expect(indicator.text()).toContain('Saving')
+    // Spinner is rendered with an aria-hidden decorative span
+    expect(indicator.find('span[aria-hidden="true"]').exists()).toBe(true)
+  })
+
+  it('hides the autosave indicator when isSaving becomes false', async () => {
+    mockIsSaving.value = true
+    const wrapper = mountBuilder()
+    await nextTick()
+    expect(wrapper.find('[data-testid="autosave-indicator"]').exists()).toBe(true)
+
+    mockIsSaving.value = false
+    await nextTick()
+    expect(wrapper.find('[data-testid="autosave-indicator"]').exists()).toBe(false)
+  })
+
+  it('shows "✓ Saved" after a successful save (dirty true → false)', async () => {
+    const wrapper = mountBuilder()
+    await nextTick()
+
+    // Simulate an edit (dirty) followed by a completed autosave (clean)
+    mockDirty.value = true
+    await nextTick()
+    expect(wrapper.find('[data-testid="toolbar-saved-msg"]').exists()).toBe(false)
+
     mockDirty.value = false
-    mockIsAuthenticated.value = true
-    const wrapper = mountBuilder()
-    await nextTick()
-    const saveBtn = wrapper.find('[data-testid="toolbar-save-btn"]')
-    expect(saveBtn.exists()).toBe(true)
-    expect(saveBtn.text()).toBe('Saved')
-    expect(saveBtn.attributes('disabled')).toBeDefined()
-  })
-
-  it('shows Save button when dirty', async () => {
-    mockDirty.value = true
-    const wrapper = mountBuilder()
-    await nextTick()
-    const saveBtn = wrapper.find('[data-testid="toolbar-save-btn"]')
-    expect(saveBtn.exists()).toBe(true)
-    expect(saveBtn.text()).toBe('Save')
-  })
-
-  it('calls saveResume when Save Changes is clicked', async () => {
-    mockDirty.value = true
-    mockSaveResume.mockResolvedValue(undefined)
-    const wrapper = mountBuilder()
     await nextTick()
 
-    const saveBtn = wrapper.find('[data-testid="toolbar-save-btn"]')
-    await saveBtn.trigger('click')
-    expect(mockSaveResume).toHaveBeenCalled()
-  })
-
-  it('shows "Saving..." text while saving', async () => {
-    mockDirty.value = true
-    // Make saveResume hang so we can inspect the button state
-    let resolveSave: () => void
-    mockSaveResume.mockImplementation(() => new Promise((r) => { resolveSave = r }))
-
-    const wrapper = mountBuilder()
-    await nextTick()
-
-    const saveBtn = wrapper.find('[data-testid="toolbar-save-btn"]')
-    await saveBtn.trigger('click')
-    await nextTick()
-
-    expect(saveBtn.text()).toBe('Saving...')
-    expect(saveBtn.attributes('disabled')).toBeDefined()
-
-    // Resolve so cleanup doesn't leak
-    resolveSave!()
-    await nextTick()
-  })
-
-  it('shows "Saved" confirmation after successful save', async () => {
-    vi.useFakeTimers()
-    mockDirty.value = true
-    mockSaveResume.mockResolvedValue(undefined)
-
-    const wrapper = mountBuilder()
-    await nextTick()
-
-    const saveBtn = wrapper.find('[data-testid="toolbar-save-btn"]')
-    await saveBtn.trigger('click')
-    await nextTick()
-
-    // After save, "Saved" message should appear
     const savedMsg = wrapper.find('[data-testid="toolbar-saved-msg"]')
     expect(savedMsg.exists()).toBe(true)
     expect(savedMsg.text()).toContain('Saved')
+  })
+
+  it('does not show "✓ Saved" when save fails (dirty stays true)', async () => {
+    const wrapper = mountBuilder()
+    await nextTick()
+
+    mockDirty.value = true
+    await nextTick()
+    // Save failed — dirty never returns to false, so no confirmation
+    expect(wrapper.find('[data-testid="toolbar-saved-msg"]').exists()).toBe(false)
+  })
+
+  it('dismisses lingering "✓ Saved" when a new save starts', async () => {
+    const wrapper = mountBuilder()
+    await nextTick()
+
+    // First save completes
+    mockDirty.value = true
+    await nextTick()
+    mockDirty.value = false
+    await nextTick()
+    expect(wrapper.find('[data-testid="toolbar-saved-msg"]').exists()).toBe(true)
+
+    // A new autosave starts while the confirmation is still on screen
+    mockIsSaving.value = true
+    await nextTick()
+
+    expect(wrapper.find('[data-testid="toolbar-saved-msg"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="autosave-indicator"]').exists()).toBe(true)
+  })
+
+  it('fades "✓ Saved" after 2 seconds and removes it from the DOM', async () => {
+    vi.useFakeTimers()
+    const wrapper = mountBuilder()
+    await nextTick()
+
+    mockDirty.value = true
+    await nextTick()
+    mockDirty.value = false
+    await nextTick()
+
+    const savedMsg = wrapper.find('[data-testid="toolbar-saved-msg"]')
+    expect(savedMsg.exists()).toBe(true)
 
     // Advance past 2s — message should fade but still be in DOM
     await vi.advanceTimersByTimeAsync(2100)

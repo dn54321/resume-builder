@@ -56,17 +56,21 @@
         </div>
       </div>
 
-      <!-- Right: Save + PDF export -->
+      <!-- Right: Autosave indicator + PDF export -->
       <div class="flex items-center gap-2">
-        <button
-          v-if="isAuthenticated || dirty"
-          class="px-3 py-1.5 rounded-md text-[0.8125rem] font-[inherit] font-medium cursor-pointer transition-colors border border-primary bg-primary text-primary-foreground hover:not-disabled:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
-          :disabled="isSaving || !dirty"
-          @click="onSaveClick"
-          data-testid="toolbar-save-btn"
+        <span
+          v-if="isSaving"
+          class="inline-flex items-center gap-1.5 text-[0.8125rem] font-medium text-muted-foreground"
+          data-testid="autosave-indicator"
+          role="status"
+          aria-live="polite"
         >
-          {{ isSaving ? 'Saving...' : dirty ? 'Save' : 'Saved' }}
-        </button>
+          <span
+            class="inline-block w-[14px] h-[14px] border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin"
+            aria-hidden="true"
+          ></span>
+          Saving…
+        </span>
         <span
           v-if="showSaved"
           class="text-[0.8125rem] font-medium text-green-600 transition-opacity duration-500"
@@ -152,7 +156,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { useResumeStore } from '@/features/builder/stores/resume'
 import { useResumeData } from '@/features/builder/composables/useResumeData'
@@ -170,7 +174,7 @@ import type { SectionType } from '@/features/builder/types/resume'
 
 const store = useResumeStore()
 const { isAuthenticated } = useAuth()
-const { loadResume, saveResume, setupAutoSave, teardownAutoSave, dirty } = useResumeData()
+const { loadResume, saveResume, setupAutoSave, teardownAutoSave, dirty, isSaving } = useResumeData()
 const { isTailoring, tailorError, bulletCap, tailorResume, resetFilter } = useTailor()
 
 const selectedSectionId = ref<string | null>(null)
@@ -197,6 +201,9 @@ async function onNameBlur() {
     pendingName.value = null
     try {
       await saveResume()
+      // Also surface "✓ Saved" directly: for anonymous users the whole
+      // save is synchronous (dirty true → false in the same tick), so the
+      // dirty watcher below batches the transition and never fires.
       showSavedConfirmation()
     } catch (err) {
       console.error('Failed to save resume name:', err)
@@ -229,27 +236,16 @@ async function onTailor() {
   await tailorResume(store.jdText)
 }
 
-// ─── Save button state ────────────────────────────────────────────
+// ─── Autosave indicator state ────────────────────────────────────
 
-const isSaving = ref(false)
 const showSaved = ref(false)
 const savedFadingOut = ref(false)
 let savedTimer: ReturnType<typeof setTimeout> | null = null
 
-/** Handle explicit save button click. */
-async function onSaveClick() {
-  isSaving.value = true
-  try {
-    await saveResume()
-    showSavedConfirmation()
-  } catch (err) {
-    console.error('Save failed:', err)
-  } finally {
-    isSaving.value = false
-  }
-}
-
-/** Show the "Saved" confirmation that fades after 2s. */
+/**
+ * Show the "✓ Saved" confirmation that fades after 2s.
+ * Triggered when a save completes successfully (dirty true → false).
+ */
 function showSavedConfirmation() {
   if (savedTimer) clearTimeout(savedTimer)
   showSaved.value = true
@@ -263,6 +259,24 @@ function showSavedConfirmation() {
     }, 500)
   }, 2000)
 }
+
+// A successful save clears the dirty flag — that transition is the
+// signal that the (auto)save finished, so surface "✓ Saved".
+watch(dirty, (dirtyNow, wasDirty) => {
+  if (wasDirty && !dirtyNow) {
+    showSavedConfirmation()
+  }
+})
+
+// A new save started — dismiss any lingering "✓ Saved" so the
+// indicator switches back to the "Saving…" spinner cleanly.
+watch(isSaving, (saving) => {
+  if (saving) {
+    if (savedTimer) clearTimeout(savedTimer)
+    showSaved.value = false
+    savedFadingOut.value = false
+  }
+})
 
 // ─── beforeunload handler ─────────────────────────────────────────
 

@@ -701,4 +701,98 @@ describe('useResumeData', () => {
       expect(nc!.enabled).toBe(true)
     })
   })
+
+  describe('isSaving indicator', () => {
+    it('is false initially', async () => {
+      const auth = useAuthStore()
+      auth.logout()
+
+      const store = useResumeStore()
+      store.initializeDefaults()
+
+      const { isSaving } = useResumeData()
+      expect(isSaving.value).toBe(false)
+    })
+
+    it('is true while saveResume is in flight and false after it resolves', async () => {
+      const auth = useAuthStore()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
+      )
+      await auth.login('test@test.com', 'password')
+
+      // Hanging PUT so we can inspect isSaving mid-flight
+      let resolvePut!: (value: Response) => void
+      mockFetch.mockClear()
+      mockFetch.mockImplementationOnce(
+        () => new Promise<Response>((resolve) => { resolvePut = resolve }),
+      )
+
+      const store = useResumeStore()
+      store.initializeDefaults()
+
+      const { saveResume, isSaving } = useResumeData()
+      expect(isSaving.value).toBe(false)
+
+      const savePromise = saveResume()
+      // Runs synchronously until the first await — isSaving flips immediately
+      expect(isSaving.value).toBe(true)
+
+      // Complete the PUT
+      resolvePut(createFetchResponse({ id: 'resume-1', layout: 'standard', sections: [] }))
+      await savePromise
+
+      expect(isSaving.value).toBe(false)
+    })
+
+    it('wraps the debounced autosave call', async () => {
+      vi.useFakeTimers()
+      const auth = useAuthStore()
+      auth.logout()
+
+      const store = useResumeStore()
+      store.initializeDefaults()
+      SECTION_TYPES.forEach((t) => store.toggleSection(t))
+
+      const { loadResume, setupAutoSave, teardownAutoSave, dirty, isSaving } = useResumeData()
+      await loadResume()
+      setupAutoSave()
+      expect(isSaving.value).toBe(false)
+
+      // Mutate → autosave scheduled (1.5s debounce), not saving yet
+      store.setLayout('column2-1')
+      await nextTick()
+      expect(dirty.value).toBe(true)
+      expect(isSaving.value).toBe(false)
+
+      // Fire the debounce — the anonymous save completes synchronously,
+      // so isSaving returns to false by the time the timer resolves.
+      await vi.advanceTimersByTimeAsync(2000)
+      expect(isSaving.value).toBe(false)
+      expect(dirty.value).toBe(false)
+
+      teardownAutoSave()
+      vi.useRealTimers()
+    })
+
+    it('resets to false when the save fails', async () => {
+      const auth = useAuthStore()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
+      )
+      await auth.login('test@test.com', 'password')
+
+      mockFetch.mockClear()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ message: 'Server Error' }, 500),
+      )
+
+      const store = useResumeStore()
+      store.initializeDefaults()
+
+      const { saveResume, isSaving } = useResumeData()
+      await expect(saveResume()).rejects.toThrow('Server Error')
+      expect(isSaving.value).toBe(false)
+    })
+  })
 })
