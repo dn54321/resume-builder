@@ -56,12 +56,52 @@ const PUSH_TIMEOUT_MS = Number(process.env.ATLAS_PUSH_TIMEOUT_MS ?? 45 * 60_000)
 
 // ─── Repo ───────────────────────────────────────────────────────────
 
-export function getRepoRoot(): string {
-  const result = execGit(['rev-parse', '--show-toplevel']);
+/**
+ * ⚠️ WARNING — getRepoRoot can THROW when the main repo is in a bad state
+ * (e.g. core.bare=true flipped by a corrupted push, observed 02:33 — the
+ * uncaught throw propagated through mergeToBranch → executeDirect and
+ * killed the entire orchestrator process). Callers MUST either wrap it in
+ * try/catch (mergeToBranch, isBranchMerged do) or be prepared for the
+ * orchestrator to be unable to function at all (pool.ts/server.ts fail-fast
+ * with a descriptive message instead of an opaque crash).
+ *
+ * Never widen this into swallowing the error silently — a bare repo is a
+ * real operational fault that needs an operator to fix.
+ */
+export function getRepoRoot(cwd?: string): string {
+  const result = execGit(['rev-parse', '--show-toplevel'], cwd);
   if (result.exitCode !== 0) {
-    throw new Error('Not in a git repository');
+    throw repoRootError(result.stderr, cwd);
   }
   return result.stdout;
+}
+
+/**
+ * Build a clean, diagnosable error when the repo root cannot be resolved.
+ *
+ * The original implementation threw the opaque "Not in a git repository"
+ * for EVERY failure — when a corrupted push flipped the main repo to
+ * core.bare=true (RES-99, 02:33), the crash log gave no hint WHY the root
+ * was unresolvable. Detect the bare state explicitly so the error says
+ * exactly what is wrong and how to recover.
+ */
+function repoRootError(stderr: string, cwd?: string): Error {
+  // `rev-parse --show-toplevel` fails with "fatal: this operation must be
+  // run in a work tree" when core.bare=true. Probe the actual state so the
+  // message names the fault instead of guessing. Probe the SAME directory
+  // the failing call used — otherwise a cwd-scoped call (tests) would probe
+  // the wrong repo.
+  const bare = execGit(['rev-parse', '--is-bare-repository'], cwd);
+  if (bare.exitCode === 0 && bare.stdout.trim() === 'true') {
+    return new Error(
+      'Repository is bare (core.bare=true) — cannot resolve the work tree root. ' +
+      'Recover with: git config core.bare false',
+    );
+  }
+  if (stderr) {
+    return new Error(`Not in a git repository (git: ${stderr})`);
+  }
+  return new Error('Not in a git repository');
 }
 
 export function getDefaultBranch(): string {
@@ -181,7 +221,24 @@ export function mergeToBranch(
   targetBranch: string,
   commitMessage: string,
 ): GitResult {
-  const mainRepo = getRepoRoot();
+  // ⚠️ getRepoRoot can THROW when the main repo is in a bad state (e.g.
+  // core.bare=true flipped by a corrupted push, observed 02:33 — the throw
+  // propagated through executeDirect and killed the orchestrator). This
+  // function must NEVER let that throw escape: it returns a clean, retryable
+  // GitResult error so the strategy layer re-queues instead of the process
+  // dying. executeDirect ALSO try/catches (belt and suspenders) for callers
+  // that reach mergeToBranch through other paths.
+  let mainRepo: string;
+  try {
+    mainRepo = getRepoRoot();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      stdout: '',
+      stderr: `Merge aborted — cannot resolve the main repo: ${msg}`,
+      exitCode: 1,
+    };
+  }
 
   // ⚠️ GUARD: refuse to merge when the main repo working tree is DIRTY.
   // Workers merge in the MAIN repo (checkout master + merge + push), which
@@ -304,6 +361,14 @@ export function getLastCommitMessage(worktreePath: string): string | null {
  * Check if a branch has been merged into the target branch.
  */
 export function isBranchMerged(branch: string, targetBranch: string): boolean {
-  const result = execGit(['branch', '--merged', targetBranch], getRepoRoot());
+  // getRepoRoot can throw when the main repo is bare/broken — treat that as
+  // "not merged" rather than letting the throw escape (RES-99 crash path).
+  let root: string;
+  try {
+    root = getRepoRoot();
+  } catch {
+    return false;
+  }
+  const result = execGit(['branch', '--merged', targetBranch], root);
   return result.stdout.includes(branch);
 }
