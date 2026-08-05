@@ -7,46 +7,38 @@ import {
   Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { SectionFieldDto } from '../../resumes/dto/create-resume.dto';
 
-export class TailorResponseEntryDto {
-  @IsString()
-  @IsOptional()
-  id?: string;
-
+/**
+ * Per top-level entry: which bullet indices (order-sorted children) are
+ * relevant after tailoring.
+ */
+export class EntryBulletIndicesDto {
   @IsInt()
   @Min(0)
-  order!: number;
-
-  @IsString()
-  @IsOptional()
-  parentId?: string;
-
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => SectionFieldDto)
-  fields!: SectionFieldDto[];
+  entryOrder!: number;
 
   @IsArray()
   @IsOptional()
-  @ValidateNested({ each: true })
-  @Type(() => TailorResponseEntryDto)
-  children?: TailorResponseEntryDto[];
+  @IsInt({ each: true })
+  @Min(0, { each: true })
+  bulletIndices!: number[];
 }
 
-export class TailorResponseSectionDto {
-  @IsString()
-  sectionId!: string;
-
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => TailorResponseEntryDto)
-  entries!: TailorResponseEntryDto[];
-}
-
+/**
+ * Response shape of POST /api/v1/resumes/tailor — the filter the frontend
+ * applies via store.applyTailorFilter(). NOT validated on the way out
+ * (Nest only validates request bodies); exists for OpenAPI/typing.
+ */
 export class TailorResponseDto {
-  @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => TailorResponseSectionDto)
-  sections!: TailorResponseSectionDto[];
+  @Type(() => EntryBulletIndicesDto)
+  filteredBulletIndices!: Record<string, EntryBulletIndicesDto[]>;
+
+  @IsArray()
+  @IsString({ each: true })
+  filteredHardSkills!: string[];
+
+  @IsArray()
+  @IsString({ each: true })
+  filteredSoftSkills!: string[];
 }

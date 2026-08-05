@@ -269,6 +269,7 @@ export const useResumeStore = defineStore('resume', () => {
         enabled: s.enabled,
         locked: s.locked,
         entries: s.entries.map((e) => ({
+          id: e.id,
           order: e.order,
           parentId: e.parentId,
           locked: e.locked,

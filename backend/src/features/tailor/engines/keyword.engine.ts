@@ -77,9 +77,11 @@ const STOP_WORDS = new Set([
 ]);
 
 /**
- * Field keys that contain bullet-point text (experience descriptions).
+ * Field keys that contain bullet-point text. `text` is the key the builder
+ * editors (ExperienceEditor/ProjectsEditor via BulletList) actually emit;
+ * bullet/description/detail are accepted for legacy payloads.
  */
-const BULLET_FIELD_KEYS = new Set(['bullet', 'description', 'detail']);
+const BULLET_FIELD_KEYS = new Set(['bullet', 'description', 'detail', 'text']);
 
 /**
  * Field keys that contain skill names.
@@ -171,8 +173,13 @@ export class KeywordEngine implements MatchingEngine {
   }
 
   /**
-   * Process a section: score bullet/skill entries, filter to top N,
-   * pass non-bullet/non-skill entries through unchanged.
+   * Process a section: keep only bullet/skill entries that score > 0
+   * against the JD (zero-score entries are dropped), capped at bulletCap
+   * PER top-level entry for bullets and per section for skills. This
+   * restores the pre-66cd443 semantics the frontend was built against
+   * ("Showing relevant bullets (max N per entry)"): a bullet with no JD
+   * token overlap is hidden when the section is unlocked, and a locked
+   * section is skipped entirely — every entry passes through unchanged.
    *
    * Locking is honoured at TWO levels (RES-97):
    *  - Section locked (RES-92): every entry in the section passes through
@@ -225,19 +232,39 @@ export class KeywordEngine implements MatchingEngine {
       }
     }
 
-    // Sort descending by score
-    scoredBullets.sort((a, b) => b.score - a.score);
-    scoredSkills.sort((a, b) => b.score - a.score);
-
-    // Take top bulletCap bullets (or all if fewer)
-    const topBullets = scoredBullets
+    // Skills: keep only entries with a JD match, capped per section.
+    const topSkills = scoredSkills
+      .filter((s) => s.score > 0)
+      .sort((a, b) => b.score - a.score)
       .slice(0, this.bulletCap)
       .map((s) => s.entry);
-    const topSkills = scoredSkills.slice(0, this.bulletCap).map((s) => s.entry);
 
-    // Combine: locked pass-through + pass-through + top bullets + top
-    // skills, sorted by original order. Locked entries are included
-    // unconditionally; everything else is subject to the cap/ranking.
+    // Bullets: group by parent entry so the cap applies PER top-level entry
+    // (each job's bullet list gets its own top-N), matching the frontend's
+    // "max {{ bulletCap }} per entry" copy. Entries without a parentId are
+    // grouped together so flat bullet payloads still get capped.
+    const bulletsByParent = new Map<string | null, ScoredEntry[]>();
+    for (const scored of scoredBullets) {
+      const parentId = scored.entry.parentId ?? null;
+      if (!bulletsByParent.has(parentId)) {
+        bulletsByParent.set(parentId, []);
+      }
+      bulletsByParent.get(parentId)!.push(scored);
+    }
+    const topBullets: SectionEntryDto[] = [];
+    for (const group of bulletsByParent.values()) {
+      const kept = group
+        .filter((s) => s.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, this.bulletCap)
+        .map((s) => s.entry);
+      topBullets.push(...kept);
+    }
+
+    // Combine: locked pass-through (RES-97) + pass-through + kept bullets +
+    // kept skills, sorted by original order. Locked sub-items are included
+    // unconditionally — never dropped for zero JD overlap, never counted
+    // against the per-entry/section caps.
     const allEntries = [
       ...lockedPassThrough,
       ...passThrough,

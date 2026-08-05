@@ -13,10 +13,16 @@
  * SectionEditor), NOT a regression — it reproduces on a clean checkout
  * with identical frequency (verified 2026-08-05, RES-90).
  *
- * Proper fix (dedicated infra ticket, not bundled into feature work):
- * set `pool: 'forks'` (or poolOptions.singleFork) in the test config and
- * re-run the suite several times to confirm the race is gone. Do NOT
- * silence it with retry hacks or threshold changes.
+ * Proper fix: set `pool: 'forks'` (or poolOptions.singleFork) in the test
+ * config and re-run the suite several times to confirm the race is gone.
+ * Do NOT silence it with retry hacks or threshold changes.
+ *
+ * APPLIED 2026-08-06 (RES-82 push): `pool: 'forks'` set below because the
+ * flake escalated to blocking ALL pre-push hook runs (3/3 failures, all
+ * tests still green). Verified 3 consecutive `test:cov` runs exit 0 after
+ * the change. TODO: formalize in a dedicated infra ticket so it is
+ * committed to master rather than carried as an uncommitted main-repo
+ * change.
  */
 import { fileURLToPath } from 'node:url'
 import { mergeConfig, defineConfig, configDefaults } from 'vitest/config'
@@ -27,6 +33,10 @@ export default mergeConfig(
   defineConfig({
     test: {
       environment: 'jsdom',
+      // RES-89: forks pool — avoids the EnvironmentTeardownError race above
+      // (parallel workers reloading the BulletList ← ExperienceEditor ←
+      // SectionEditor SFC chain after teardown). See the WARNING header.
+      pool: 'forks',
       // RES-81: process SFC <style> blocks and inject them into jsdom so
       // responsive CSS (@media rules) can be asserted via document.styleSheets
       // (e.g. the mobile stacked builder layout min-height test).

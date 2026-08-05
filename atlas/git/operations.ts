@@ -12,6 +12,22 @@ export interface GitResult {
   exitCode: number;
 }
 
+/*
+ * ⚠️ WARNING — DO NOT push with the default 30s execGit timeout.
+ *
+ * `git push` triggers the repo's pre-push hook (.githooks/pre-push), which
+ * runs the FULL backend + frontend + atlas lint/type-check/test:cov suites
+ * for the pushed range (the hook itself budgets 900s for one run, plus it
+ * waits indefinitely on an flock while another push holds the lock). A 30s
+ * timeout therefore KILLS every push from the orchestrator mid-hook, git
+ * reports "error: failed to push some refs", the strategy layer retries,
+ * and the ticket loops forever re-spawning workers (observed: RES-92/RES-82/
+ * RES-85/RES-81/RES-91/RES-87 'strategy retry' with 20+ commits stranded on
+ * local master, workers 1-45 re-verifying the same already-merged work).
+ *
+ * Fix: every push MUST pass PUSH_TIMEOUT_MS (default 45 min, env-overridable
+ * via ATLAS_PUSH_TIMEOUT_MS). See pushBranch() and mergeToBranch().
+ */
 function execGit(args: string[], cwd?: string, timeout = 30_000): GitResult {
   try {
     const result = cp.spawnSync('git', args, {
@@ -28,6 +44,15 @@ function execGit(args: string[], cwd?: string, timeout = 30_000): GitResult {
     return { stdout: '', stderr: err.message, exitCode: 1 };
   }
 }
+
+/**
+ * Timeout for `git push` calls. The pre-push hook runs full test:cov
+ * suites for the pushed range (backend+frontend+atlas can take ~15 min
+ * under load, plus flock queueing), so the default 30s execGit timeout
+ * kills every push and strands merged commits on local master. See the
+ * ⚠️ WARNING above execGit.
+ */
+const PUSH_TIMEOUT_MS = Number(process.env.ATLAS_PUSH_TIMEOUT_MS ?? 45 * 60_000);
 
 // ─── Repo ───────────────────────────────────────────────────────────
 
@@ -140,7 +165,7 @@ export function commitAll(worktreePath: string, message: string): GitResult {
 }
 
 export function pushBranch(worktreePath: string, branch: string): GitResult {
-  return execGit(['push', '-u', 'origin', branch], worktreePath);
+  return execGit(['push', '-u', 'origin', branch], worktreePath, PUSH_TIMEOUT_MS);
 }
 
 // ─── Merge ──────────────────────────────────────────────────────────
@@ -202,8 +227,10 @@ export function mergeToBranch(
   const mergeResult = execGit(['merge', sourceBranch, '-m', commitMessage], mainRepo);
   if (mergeResult.exitCode !== 0) return mergeResult;
 
-  // Push
-  return execGit(['push', 'origin', targetBranch], mainRepo);
+  // Push — MUST use PUSH_TIMEOUT_MS: the pre-push hook runs the full
+  // test:cov suites (see the ⚠️ WARNING above execGit). The default 30s
+  // timeout killed every orchestrator push and stranded merged work.
+  return execGit(['push', 'origin', targetBranch], mainRepo, PUSH_TIMEOUT_MS);
 }
 
 // ─── Status ─────────────────────────────────────────────────────────

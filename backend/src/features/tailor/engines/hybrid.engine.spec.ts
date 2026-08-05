@@ -241,12 +241,99 @@ describe('HybridEngine', () => {
       bulletEntry(1, 'React Native work'),
     ];
 
-    // Both entries have 0 keyword score for Python/Django
-    // Keyword with cap=6 keeps them anyway (top N even if 0)
+    // Both entries have 0 keyword score for Python/Django — the keyword
+    // pre-filter drops them (RES-92 restored relevance-only filtering), so
+    // the LLM re-rank step receives an empty section.
     const result = await engine.match(makeRequest(jd, entries));
 
-    // Should still work (keyword keeps top N even with 0 score)
-    expect(result.sections[0].entries.length).toBeGreaterThan(0);
+    // Section still present, but with zero entries (nothing survived pre-filter).
+    expect(result.sections).toHaveLength(1);
+    expect(result.sections[0].entries).toHaveLength(0);
+  });
+
+  // ── Locked sections ────────────────────────────────────────
+
+  it('passes a locked section through unchanged (no keyword filtering)', async () => {
+    const jd = 'React developer';
+    const entries = [
+      bulletEntry(0, 'Managed coffee supply chain'),
+      bulletEntry(1, 'Accounting software migration'),
+      bulletEntry(2, 'Bakery management'),
+    ];
+    const request: TailorRequest = {
+      jobDescription: jd,
+      resume: {
+        sections: [
+          {
+            sectionId: 'experience',
+            order: 0,
+            locked: true,
+            entries,
+          },
+        ],
+      },
+    };
+
+    const result = await engine.match(request);
+
+    // Every entry survives — the locked section is never keyword-filtered.
+    expect(result.sections[0].entries).toHaveLength(3);
+    expect(result.sections[0].entries.map((e) => e.order)).toEqual([0, 1, 2]);
+
+    // The LLM receives the locked section with ALL entries intact so its
+    // own locked guard can skip it.
+    const llmRequest = llmMatchSpy.mock.calls[0][0];
+    expect(llmRequest.resume.sections[0].locked).toBe(true);
+    expect(llmRequest.resume.sections[0].entries).toHaveLength(3);
+  });
+
+  it('filters unlocked sections while locked sections stay intact', async () => {
+    const jd = 'React developer';
+    const request: TailorRequest = {
+      jobDescription: jd,
+      resume: {
+        sections: [
+          {
+            sectionId: 'experience',
+            order: 0,
+            locked: true,
+            entries: [
+              bulletEntry(0, 'Managed coffee supply chain'),
+              bulletEntry(1, 'Bakery management'),
+            ],
+          },
+          {
+            sectionId: 'projects',
+            order: 1,
+            entries: [
+              bulletEntry(0, 'Built React dashboards'),
+              bulletEntry(1, 'Planned office potlucks'),
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = await engine.match(request);
+
+    const lockedSection = result.sections.find(
+      (s) => s.sectionId === 'experience',
+    );
+    const unlockedSection = result.sections.find(
+      (s) => s.sectionId === 'projects',
+    );
+
+    // Locked section: both entries pass through untouched.
+    expect(lockedSection?.entries).toHaveLength(2);
+    expect(lockedSection?.entries.map((e) => e.fields[0].value)).toEqual([
+      'Managed coffee supply chain',
+      'Bakery management',
+    ]);
+
+    // Unlocked section: keyword pre-filter still narrows the entry set
+    // before the LLM re-rank.
+    expect(unlockedSection?.entries.length).toBeGreaterThan(0);
+    expect(unlockedSection?.entries.length).toBeLessThanOrEqual(2);
   });
 
   // ── Order preservation ─────────────────────────────────────

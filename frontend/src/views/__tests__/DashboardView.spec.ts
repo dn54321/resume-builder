@@ -598,6 +598,64 @@ describe('DashboardView', () => {
     expect(style).toContain('scale(0.3)')
   })
 
+  it('wraps the paper in a box sized to the scaled footprint (no clipping)', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockFullResumeStandard))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
+    await cards[0]!.trigger('click')
+    await flushPromises()
+
+    // jsdom has no layout → default scale 0.3 → wrapper is 245×317px
+    const scaled = wrapper.find('[data-testid="preview-scaled"]')
+    expect(scaled.exists()).toBe(true)
+    expect(scaled.attributes('style')).toContain('width: 245px')
+    expect(scaled.attributes('style')).toContain('height: 317px')
+
+    // The unscaled paper sits inside the wrapper — its box is larger than
+    // the wrapper, but the wrapper's width is the visible footprint.
+    const paper = wrapper.find('[data-testid="preview-paper"]')
+    expect(paper.exists()).toBe(true)
+  })
+
+  it('shrinks the wrapper footprint when the pane is resized', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockFullResumeStandard))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
+    await cards[0]!.trigger('click')
+    await flushPromises()
+
+    // Narrow pane: 300px → scale = (300 - 32) / 816 ≈ 0.3284 → wrapper 268×347
+    const observer =
+      MockResizeObserver.instances[MockResizeObserver.instances.length - 1]
+    expect(observer).toBeDefined()
+    observer!.trigger([
+      { contentRect: { width: 300 } } as ResizeObserverEntry,
+    ])
+    await nextTick()
+
+    const scaled = wrapper.find('[data-testid="preview-scaled"]')
+    expect(scaled.attributes('style')).toContain('width: 268px')
+    expect(scaled.attributes('style')).toContain('height: 347px')
+
+    wrapper.unmount()
+  })
+
   it('recomputes the preview scale when the pane is resized', async () => {
     createAuthenticatedStore()
     mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
@@ -613,7 +671,7 @@ describe('DashboardView', () => {
     await cards[0]!.trigger('click')
     await flushPromises()
 
-    // Simulate a 900px-wide preview pane: scale = (900 - 24) / 816 ≈ 1.0735
+    // Simulate a 900px-wide preview pane: scale = (900 - 32) / 816 ≈ 1.0637
     const instances = MockResizeObserver.instances
     const observer = instances[instances.length - 1]
     expect(observer).toBeDefined()
@@ -627,7 +685,7 @@ describe('DashboardView', () => {
       .attributes('style')
     const match = style!.match(/scale\(([\d.]+)\)/)
     expect(match).not.toBeNull()
-    expect(parseFloat(match![1]!)).toBeCloseTo((900 - 24) / 816, 5)
+    expect(parseFloat(match![1]!)).toBeCloseTo((900 - 32) / 816, 5)
   })
 
   it('resets the preview pane when the selected resume is deleted', async () => {
@@ -821,6 +879,57 @@ describe('DashboardView', () => {
   })
 
   // ── Delete ──────────────────────────────────────────────────
+
+  it('falls back to the layout name in the modal title when the resume has no name', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    // resume-2 has name: null — the title must fall back to its layout
+    await openCardMenu(wrapper, 1)
+    clickMenuItem('menu-delete')
+    await flushPromises()
+
+    const modal = wrapper.getComponent(ConfirmModal)
+    expect(modal.props('modelValue')).toBe(true)
+    expect(modal.props('title')).toBe('Delete modern?')
+
+    wrapper.unmount()
+  })
+
+  it('ignores confirm when no resume is pending deletion', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    // Emit confirm without ever opening the modal — resumeToDelete is null,
+    // so handleConfirmDelete must early-return without any DELETE call.
+    const modal = wrapper.getComponent(ConfirmModal)
+    await modal.vm.$emit('confirm')
+    await flushPromises()
+
+    const deleteCalls = mockFetch.mock.calls.filter(
+      (call: unknown[]) => call[1] && (call[1] as RequestInit).method === 'DELETE',
+    )
+    expect(deleteCalls.length).toBe(0)
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+
+    // List unchanged
+    const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
+    expect(cards.length).toBe(2)
+
+    wrapper.unmount()
+  })
 
   it('opens confirm modal when Delete is chosen from the menu', async () => {
     createAuthenticatedStore()
