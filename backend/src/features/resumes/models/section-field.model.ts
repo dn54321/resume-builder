@@ -3,6 +3,7 @@
  */
 export interface SectionField {
   id: string;
+  sectionEntryId: string;
   key: string;
   value: string;
   iv: string;

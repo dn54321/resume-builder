@@ -4,6 +4,14 @@ import { useRouter } from 'vue-router'
 import { useAuth } from '@/features/auth/composables/useAuth'
 import { useApi, ApiRequestError } from '@/shared/composables/useApi'
 import ConfirmModal from '@/shared/components/ConfirmModal.vue'
+import { Ellipsis, Pencil, Copy, Trash2 } from '@lucide/vue'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
 
 interface ResumeSummary {
   id: string
@@ -30,6 +38,7 @@ const editValue = ref('')
 const editingOriginal = ref('')
 const renameError = ref('')
 const renameLoading = ref(false)
+const duplicatingId = ref<string | null>(null)
 
 onMounted(async () => {
   if (!auth.isAuthenticated.value) {
@@ -86,7 +95,9 @@ async function handleCreateResume(): Promise<void> {
  * @returns {string} Locale-formatted date
  */
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString(undefined, {
+  const date = new Date(dateStr)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleDateString(undefined, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -155,6 +166,33 @@ async function commitRename(): Promise<void> {
 function cancelRename(): void {
   editingId.value = null
   renameError.value = ''
+}
+
+/**
+ * Duplicate a resume via the API and add the copy to the list.
+ *
+ * The copy is prepended so the list stays consistent with the backend's
+ * `createdAt desc` ordering (newest first).
+ * @param {ResumeSummary} resume - The resume to duplicate
+ */
+async function handleDuplicate(resume: ResumeSummary): Promise<void> {
+  error.value = ''
+  duplicatingId.value = resume.id
+
+  try {
+    const copy = await api.post<ResumeSummary>(
+      `/api/v1/resumes/${resume.id}/duplicate`,
+    )
+    resumes.value.unshift(copy)
+  } catch (err) {
+    if (err instanceof ApiRequestError) {
+      error.value = err.message
+    } else {
+      error.value = 'Something went wrong'
+    }
+  } finally {
+    duplicatingId.value = null
+  }
 }
 
 /**
@@ -252,17 +290,8 @@ async function handleConfirmDelete(): Promise<void> {
         @keydown.space.prevent="router.push(`/builder/${resume.id}`)"
       >
         <div class="resume-card__header">
-          <!-- Display name (click to edit) -->
-          <h3
-            v-if="editingId !== resume.id"
-            class="resume-card__name"
-            role="button"
-            tabindex="0"
-            :aria-label="`Rename ${resume.name || 'Untitled'}`"
-            @click.stop="startEditing(resume)"
-            @keydown.enter.prevent.stop="startEditing(resume)"
-            @keydown.space.prevent.stop="startEditing(resume)"
-          >
+          <!-- Display name (rename via the ⋮ dropdown) -->
+          <h3 v-if="editingId !== resume.id" class="resume-card__name">
             {{ resume.name || 'Untitled' }}
           </h3>
 
@@ -281,14 +310,44 @@ async function handleConfirmDelete(): Promise<void> {
             <span v-if="renameLoading" class="rename-spinner" />
           </div>
 
-          <button
-            class="resume-card__delete-btn"
-            data-testid="delete-btn"
-            :aria-label="`Delete ${resume.name || 'Untitled'}`"
-            @click.stop="handleDeleteClick(resume)"
-          >
-            🗑️
-          </button>
+          <!-- Card actions: Rename / Duplicate / Delete -->
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              class="resume-card__menu-btn"
+              data-testid="resume-menu-trigger"
+              :aria-label="`Options for ${resume.name || 'Untitled'}`"
+              @click.stop
+              @keydown.stop
+            >
+              <Ellipsis class="size-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" class="w-44">
+              <DropdownMenuItem
+                data-testid="menu-rename"
+                @select="startEditing(resume)"
+              >
+                <Pencil class="size-4" />
+                Rename
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                data-testid="menu-duplicate"
+                :disabled="duplicatingId === resume.id"
+                @select="handleDuplicate(resume)"
+              >
+                <Copy class="size-4" />
+                {{ duplicatingId === resume.id ? 'Duplicating…' : 'Duplicate' }}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                data-testid="menu-delete"
+                variant="destructive"
+                @select="handleDeleteClick(resume)"
+              >
+                <Trash2 class="size-4" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <!-- Rename error -->
@@ -391,20 +450,20 @@ async function handleConfirmDelete(): Promise<void> {
   text-transform: capitalize;
   word-break: break-word;
   flex: 1;
-  cursor: text;
 }
 
-.resume-card__delete-btn {
+.resume-card__menu-btn {
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 0.25rem;
   border: none;
   background: none;
   cursor: pointer;
-  font-size: 1rem;
-  line-height: 1;
   border-radius: 4px;
-  opacity: 0.5;
-  transition: opacity 0.15s, background-color 0.15s;
+  color: var(--muted-foreground);
+  transition: color 0.15s, background-color 0.15s;
 }
 
 /* ── Inline Rename ──────────────────────── */
@@ -452,13 +511,9 @@ async function handleConfirmDelete(): Promise<void> {
   color: #dc2626;
 }
 
-.resume-card__delete-btn:hover {
-  opacity: 1;
-  background-color: #fee2e2;
-}
-
-.dark .resume-card__delete-btn:hover {
-  background-color: #450a0a;
+.resume-card__menu-btn:hover {
+  color: var(--color-foreground);
+  background-color: var(--muted);
 }
 
 .resume-card__date {

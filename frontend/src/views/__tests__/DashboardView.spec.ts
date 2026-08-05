@@ -1,8 +1,9 @@
 // oxlint-disable vitest/require-mock-type-parameters
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { createRouter, createWebHistory } from 'vue-router'
+import { nextTick } from 'vue'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import DashboardView from '@/views/DashboardView.vue'
@@ -13,9 +14,10 @@ const mockFetch = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promis
 globalThis.fetch = mockFetch
 
 /**
- *
- * @param data
- * @param status
+ * Build a minimal fetch Response for mocking API calls.
+ * @param {unknown} data - Payload to return from `json()`/`text()`
+ * @param {number} status - HTTP status code (default 200)
+ * @returns {Response} A mock Response with the given status and payload
  */
 function mockJsonResponse(data: unknown, status = 200): Response {
   return {
@@ -61,11 +63,36 @@ const mockResumes = [
   },
 ]
 
+/**
+ * Open the ellipsis menu on the card at `index` and resolve the teleported
+ * content (reka-ui portals DropdownMenuContent to document.body).
+ * @param {VueWrapper} wrapper - Mounted DashboardView wrapper
+ * @param {number} index - Card index whose menu should be opened
+ * @returns {Promise<void>} Resolves once the menu content has rendered
+ */
+async function openCardMenu(wrapper: VueWrapper, index = 0): Promise<void> {
+  const triggers = wrapper.findAll('[data-testid="resume-menu-trigger"]')
+  await triggers[index]!.trigger('click')
+  await nextTick()
+}
+
+/**
+ * Click a teleported dropdown item by test id.
+ * @param {string} testId - data-testid of the menu item
+ */
+function clickMenuItem(testId: string): void {
+  const item = document.querySelector<HTMLElement>(`[data-testid="${testId}"]`)
+  expect(item).not.toBeNull()
+  item!.click()
+}
+
 describe('DashboardView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     localStorage.clear()
     mockFetch.mockReset()
+    vi.restoreAllMocks()
+    document.body.innerHTML = ''
   })
 
   // ── Auth Guard ──────────────────────────────────────────────
@@ -234,9 +261,43 @@ describe('DashboardView', () => {
     expect(pushSpy).toHaveBeenCalledWith('/builder/resume-2')
   })
 
-  // ── Delete Button ───────────────────────────────────────────
+  it('navigates to builder on card keyboard space', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    const pushSpy = vi.spyOn(router, 'push')
 
-  it('shows trash icon button on each resume card', async () => {
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
+    await cards[0]!.trigger('keydown.space')
+
+    expect(pushSpy).toHaveBeenCalledWith('/builder/resume-1')
+  })
+
+  it('navigates to builder when the card name is clicked (no inline edit)', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    const pushSpy = vi.spyOn(router, 'push')
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    // Clicking the name is a card click — it must navigate, not start editing
+    const name = wrapper.findAll('.resume-card__name')[0]!
+    await name.trigger('click')
+
+    expect(pushSpy).toHaveBeenCalledWith('/builder/resume-1')
+    expect(wrapper.find('.resume-card__name-input').exists()).toBe(false)
+  })
+
+  it('shows Untitled for null name resumes', async () => {
     createAuthenticatedStore()
     mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
 
@@ -246,11 +307,170 @@ describe('DashboardView', () => {
 
     await flushPromises()
 
-    const deleteBtns = wrapper.findAll('[data-testid="delete-btn"]')
-    expect(deleteBtns.length).toBe(2)
+    // Second resume has name: null
+    const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
+    expect(cards[1]!.find('.resume-card__name').text()).toBe('Untitled')
   })
 
-  it('opens confirm modal on trash button click', async () => {
+  // ── Card Actions Dropdown ───────────────────────────────────
+
+  it('shows an ellipsis menu button on each resume card', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    const menuBtns = wrapper.findAll('[data-testid="resume-menu-trigger"]')
+    expect(menuBtns.length).toBe(2)
+  })
+
+  it('renders Rename, Duplicate and Delete options in the dropdown', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    await openCardMenu(wrapper, 0)
+
+    const renameItem = document.querySelector('[data-testid="menu-rename"]')
+    const duplicateItem = document.querySelector('[data-testid="menu-duplicate"]')
+    const deleteItem = document.querySelector('[data-testid="menu-delete"]')
+
+    expect(renameItem).not.toBeNull()
+    expect(duplicateItem).not.toBeNull()
+    expect(deleteItem).not.toBeNull()
+    expect(renameItem!.textContent).toContain('Rename')
+    expect(duplicateItem!.textContent).toContain('Duplicate')
+    expect(deleteItem!.textContent).toContain('Delete')
+
+    wrapper.unmount()
+  })
+
+  it('does not navigate to builder when the menu trigger is clicked', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    const pushSpy = vi.spyOn(router, 'push')
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    await openCardMenu(wrapper, 0)
+
+    // The dropdown is open and no navigation happened
+    expect(pushSpy).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  // ── Duplicate ───────────────────────────────────────────────
+
+  it('duplicates a resume and adds the copy to the list', async () => {
+    createAuthenticatedStore()
+    // Deep-clone so the unshift of the copy doesn't pollute the shared mock
+    const data = JSON.parse(JSON.stringify(mockResumes)) as typeof mockResumes
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(data))
+    mockFetch.mockResolvedValueOnce(
+      mockJsonResponse(
+        {
+          id: 'resume-1-copy',
+          name: 'Copy of Software Engineer Resume',
+          layout: 'standard',
+          createdAt: '2025-04-01T10:00:00.000Z',
+          updatedAt: '2025-04-01T10:00:00.000Z',
+        },
+        201,
+      ),
+    )
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    await openCardMenu(wrapper, 0)
+    clickMenuItem('menu-duplicate')
+    await flushPromises()
+
+    // POST to the duplicate endpoint
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/v1/resumes/resume-1/duplicate',
+      expect.objectContaining({ method: 'POST' }),
+    )
+
+    // The copy is prepended (newest first) and no navigation happened
+    const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
+    expect(cards.length).toBe(3)
+    expect(cards[0]!.find('.resume-card__name').text()).toBe(
+      'Copy of Software Engineer Resume',
+    )
+
+    wrapper.unmount()
+  })
+
+  it('shows error alert when duplicate fails', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    mockFetch.mockResolvedValueOnce(
+      mockJsonResponse({ message: 'Failed to duplicate resume' }, 500),
+    )
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    await openCardMenu(wrapper, 0)
+    clickMenuItem('menu-duplicate')
+    await flushPromises()
+
+    expect(wrapper.find('[role="alert"]').exists()).toBe(true)
+    expect(wrapper.find('[role="alert"]').text()).toBe(
+      'Failed to duplicate resume',
+    )
+
+    // List unchanged
+    const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
+    expect(cards.length).toBe(2)
+
+    wrapper.unmount()
+  })
+
+  it('shows generic error when duplicate throws non-API error', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    mockFetch.mockRejectedValueOnce(new Error('Network error'))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    await openCardMenu(wrapper, 0)
+    clickMenuItem('menu-duplicate')
+    await flushPromises()
+
+    expect(wrapper.find('[role="alert"]').text()).toBe('Something went wrong')
+
+    wrapper.unmount()
+  })
+
+  // ── Delete ──────────────────────────────────────────────────
+
+  it('opens confirm modal when Delete is chosen from the menu', async () => {
     createAuthenticatedStore()
     mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
 
@@ -264,9 +484,8 @@ describe('DashboardView', () => {
     const modal = wrapper.getComponent(ConfirmModal)
     expect(modal.props('modelValue')).toBe(false)
 
-    // Click trash on first card
-    const deleteBtns = wrapper.findAll('[data-testid="delete-btn"]')
-    await deleteBtns[0]!.trigger('click')
+    await openCardMenu(wrapper, 0)
+    clickMenuItem('menu-delete')
     await flushPromises()
 
     // ConfirmModal should now be visible with correct props
@@ -274,6 +493,8 @@ describe('DashboardView', () => {
     expect(modal.props('title')).toBe('Delete Software Engineer Resume?')
     expect(modal.props('description')).toBe('This action cannot be undone.')
     expect(modal.props('variant')).toBe('destructive')
+
+    wrapper.unmount()
   })
 
   it('deletes resume on confirm and removes from list', async () => {
@@ -288,9 +509,8 @@ describe('DashboardView', () => {
 
     await flushPromises()
 
-    // Click trash on first card
-    const deleteBtns = wrapper.findAll('[data-testid="delete-btn"]')
-    await deleteBtns[0]!.trigger('click')
+    await openCardMenu(wrapper, 0)
+    clickMenuItem('menu-delete')
     await flushPromises()
 
     // Emit confirm on the modal
@@ -308,6 +528,8 @@ describe('DashboardView', () => {
     const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
     expect(cards.length).toBe(1)
     expect(cards[0]!.find('.resume-card__name').text()).toBe('Untitled')
+
+    wrapper.unmount()
   })
 
   it('closes modal without deleting when cancel is clicked', async () => {
@@ -320,9 +542,8 @@ describe('DashboardView', () => {
 
     await flushPromises()
 
-    // Click trash on first card
-    const deleteBtns = wrapper.findAll('[data-testid="delete-btn"]')
-    await deleteBtns[0]!.trigger('click')
+    await openCardMenu(wrapper, 0)
+    clickMenuItem('menu-delete')
     await flushPromises()
 
     // Emit cancel on the modal
@@ -339,6 +560,8 @@ describe('DashboardView', () => {
     // Both resumes still present
     const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
     expect(cards.length).toBe(2)
+
+    wrapper.unmount()
   })
 
   it('shows error alert when delete fails', async () => {
@@ -354,9 +577,8 @@ describe('DashboardView', () => {
 
     await flushPromises()
 
-    // Click trash on first card
-    const deleteBtns = wrapper.findAll('[data-testid="delete-btn"]')
-    await deleteBtns[0]!.trigger('click')
+    await openCardMenu(wrapper, 0)
+    clickMenuItem('menu-delete')
     await flushPromises()
 
     // Emit confirm on the modal
@@ -367,6 +589,59 @@ describe('DashboardView', () => {
     // Error alert should show
     expect(wrapper.find('[role="alert"]').exists()).toBe(true)
     expect(wrapper.find('[role="alert"]').text()).toBe('Failed to delete resume')
+
+    wrapper.unmount()
+  })
+
+  it('shows generic error when delete throws non-API error', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    mockFetch.mockRejectedValueOnce(new Error('Network error'))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    await openCardMenu(wrapper, 0)
+    clickMenuItem('menu-delete')
+    await flushPromises()
+
+    const modal = wrapper.getComponent(ConfirmModal)
+    await modal.vm.$emit('confirm')
+    await flushPromises()
+
+    expect(wrapper.find('[role="alert"]').text()).toBe('Something went wrong')
+
+    wrapper.unmount()
+  })
+
+  it('shows generic error when rename throws non-API error', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    mockFetch.mockRejectedValueOnce(new Error('Network error'))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    await openCardMenu(wrapper, 0)
+    clickMenuItem('menu-rename')
+    await flushPromises()
+
+    const input = wrapper.find('.resume-card__name-input')
+    await input.setValue('Network Name')
+    await input.trigger('keydown.enter')
+    await flushPromises()
+
+    // Stays in edit mode with a generic rename error
+    expect(wrapper.find('.rename-error').exists()).toBe(true)
+    expect(wrapper.find('.rename-error').text()).toBe('Failed to rename')
+
+    wrapper.unmount()
   })
 
   // ── Create Resume Flow ─────────────────────────────────────
@@ -556,9 +831,9 @@ describe('DashboardView', () => {
     expect(btn.attributes('disabled')).toBeDefined()
   })
 
-  // ── Inline Rename ─────────────────────────────────────────
+  // ── Rename (triggered from the ⋮ dropdown) ────────────────
 
-  it('swaps name to input on click and focuses it', async () => {
+  it('starts inline rename when Rename is chosen from the menu', async () => {
     createAuthenticatedStore()
     mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
 
@@ -568,20 +843,23 @@ describe('DashboardView', () => {
 
     await flushPromises()
 
-    // Click the first resume's name
-    const name = wrapper.findAll('.resume-card__name')[0]!
-    await name.trigger('click')
+    await openCardMenu(wrapper, 0)
+    clickMenuItem('menu-rename')
     await flushPromises()
 
     // Should now show an input
     const input = wrapper.find('.resume-card__name-input')
     expect(input.exists()).toBe(true)
     expect((input.element as HTMLInputElement).value).toBe('Software Engineer Resume')
+
+    wrapper.unmount()
   })
 
   it('commits rename on Enter and calls PUT', async () => {
     createAuthenticatedStore()
-    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    // Deep-clone — commitRename mutates the local resume's name in place
+    const data = JSON.parse(JSON.stringify(mockResumes)) as typeof mockResumes
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(data))
     // PUT response for rename
     mockFetch.mockResolvedValueOnce(
       mockJsonResponse({ id: 'resume-1', name: 'New Name', layout: 'standard' }),
@@ -593,9 +871,8 @@ describe('DashboardView', () => {
 
     await flushPromises()
 
-    // Start editing
-    const name = wrapper.findAll('.resume-card__name')[0]!
-    await name.trigger('click')
+    await openCardMenu(wrapper, 0)
+    clickMenuItem('menu-rename')
     await flushPromises()
 
     // Type new name and press Enter
@@ -616,6 +893,8 @@ describe('DashboardView', () => {
     // Should be back to display mode
     expect(wrapper.find('.resume-card__name-input').exists()).toBe(false)
     expect(wrapper.findAll('.resume-card__name')[0]!.text()).toBe('New Name')
+
+    wrapper.unmount()
   })
 
   it('cancels rename on Escape and reverts to display mode', async () => {
@@ -630,9 +909,8 @@ describe('DashboardView', () => {
 
     await flushPromises()
 
-    // Start editing
-    const name = wrapper.findAll('.resume-card__name')[0]!
-    await name.trigger('click')
+    await openCardMenu(wrapper, 0)
+    clickMenuItem('menu-rename')
     await flushPromises()
 
     // Change value then press Escape
@@ -646,11 +924,15 @@ describe('DashboardView', () => {
     expect(wrapper.find('.resume-card__name').exists()).toBe(true)
     // Name should not be the edited value
     expect(wrapper.find('.resume-card__name').text()).not.toBe('Changed')
+
+    wrapper.unmount()
   })
 
   it('commits rename on blur', async () => {
     createAuthenticatedStore()
-    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    // Deep-clone — commitRename mutates the local resume's name in place
+    const data = JSON.parse(JSON.stringify(mockResumes)) as typeof mockResumes
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(data))
     mockFetch.mockResolvedValueOnce(
       mockJsonResponse({ id: 'resume-1', name: 'Blurred Name', layout: 'standard' }),
     )
@@ -661,9 +943,8 @@ describe('DashboardView', () => {
 
     await flushPromises()
 
-    // Start editing
-    const name = wrapper.findAll('.resume-card__name')[0]!
-    await name.trigger('click')
+    await openCardMenu(wrapper, 0)
+    clickMenuItem('menu-rename')
     await flushPromises()
 
     // Type and blur
@@ -676,6 +957,8 @@ describe('DashboardView', () => {
       'http://localhost:3000/api/v1/resumes/resume-1',
       expect.objectContaining({ method: 'PUT' }),
     )
+
+    wrapper.unmount()
   })
 
   it('cancels rename when trimmed value is empty', async () => {
@@ -688,9 +971,8 @@ describe('DashboardView', () => {
 
     await flushPromises()
 
-    // Start editing
-    const name = wrapper.findAll('.resume-card__name')[0]!
-    await name.trigger('click')
+    await openCardMenu(wrapper, 0)
+    clickMenuItem('menu-rename')
     await flushPromises()
 
     // Clear and press Enter
@@ -701,6 +983,8 @@ describe('DashboardView', () => {
 
     // Should cancel — no PUT call, back to display
     expect(wrapper.find('.resume-card__name-input').exists()).toBe(false)
+
+    wrapper.unmount()
   })
 
   it('shows rename error on failed PUT', async () => {
@@ -716,9 +1000,8 @@ describe('DashboardView', () => {
 
     await flushPromises()
 
-    // Start editing
-    const name = wrapper.findAll('.resume-card__name')[0]!
-    await name.trigger('click')
+    await openCardMenu(wrapper, 0)
+    clickMenuItem('menu-rename')
     await flushPromises()
 
     // Type and press Enter
@@ -731,21 +1014,8 @@ describe('DashboardView', () => {
     expect(wrapper.find('.rename-error').exists()).toBe(true)
     expect(wrapper.find('.rename-error').text()).toBe('Name already taken')
     expect(wrapper.find('.resume-card__name-input').exists()).toBe(true)
-  })
 
-  it('shows Untitled for null name resumes', async () => {
-    createAuthenticatedStore()
-    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
-
-    const wrapper = mount(DashboardView, {
-      global: { plugins: [router] },
-    })
-
-    await flushPromises()
-
-    // Second resume has name: null
-    const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
-    expect(cards[1]!.find('.resume-card__name').text()).toBe('Untitled')
+    wrapper.unmount()
   })
 
   it('does not call PUT when name is unchanged', async () => {
@@ -758,9 +1028,8 @@ describe('DashboardView', () => {
 
     await flushPromises()
 
-    // Start editing
-    const name = wrapper.findAll('.resume-card__name')[0]!
-    await name.trigger('click')
+    await openCardMenu(wrapper, 0)
+    clickMenuItem('menu-rename')
     await flushPromises()
 
     // Press Enter without changing the value
@@ -772,5 +1041,7 @@ describe('DashboardView', () => {
     expect(mockFetch).toHaveBeenCalledTimes(1)
     // Back to display mode
     expect(wrapper.find('.resume-card__name-input').exists()).toBe(false)
+
+    wrapper.unmount()
   })
 })

@@ -431,6 +431,157 @@ describe('ResumesService', () => {
     });
   });
 
+  describe('duplicate', () => {
+    /**
+     * Configure the findOne half (findUnique + decrypt) and the create half
+     * ($transaction) mocks so that `duplicate` runs end-to-end.
+     * @param {Partial<ResumeTreeRow>} overrides - Row overrides for the source resume
+     * @param {jest.Mock} [sectionCreate] - Optional spy to capture the section create payload
+     */
+    function mockFullDuplicateFlow(
+      overrides: Partial<ResumeTreeRow> = {},
+      sectionCreate?: jest.Mock,
+    ) {
+      const sourceRow = makeResumeResponse(overrides);
+      mockPrisma.resume.findUnique.mockResolvedValue(sourceRow);
+
+      const createdResume = {
+        id: 'resume-copy-1',
+        userId,
+        name: sourceRow.name ? `Copy of ${sourceRow.name}` : 'Copy of Untitled',
+        layout: 'standard',
+      };
+      const createdSection = {
+        id: 'rs-copy-1',
+        resumeId: 'resume-copy-1',
+        sectionId: 'summary',
+        column: 'right',
+        order: 0,
+        locked: false,
+      };
+      const createdEntry = {
+        id: 'entry-copy-1',
+        resumeSectionId: 'rs-copy-1',
+        order: 0,
+        parentId: null,
+      };
+
+      mockPrisma.$transaction.mockImplementation(
+        async (cb: TransactionCallback<ResumeTreeRow>) => {
+          const tx = {
+            resume: {
+              create: jest.fn().mockResolvedValue(createdResume),
+              findUnique: jest.fn().mockResolvedValue(
+                makeResumeResponse({
+                  id: 'resume-copy-1',
+                  name: createdResume.name,
+                }),
+              ),
+            },
+            resumeSection: {
+              create:
+                sectionCreate ?? jest.fn().mockResolvedValue(createdSection),
+            },
+            sectionEntry: {
+              create: jest.fn().mockResolvedValue(createdEntry),
+            },
+            sectionField: {
+              create: jest.fn().mockResolvedValue({}),
+            },
+          };
+          const result = cb(tx);
+          return result instanceof Promise ? result : Promise.resolve(result);
+        },
+      );
+
+      mockCrypto.decryptField.mockImplementation(
+        (encrypted: string, _iv: string, _authTag: string) =>
+          encrypted.replace('enc_', ''),
+      );
+      mockCrypto.encryptField.mockImplementation((value: string) =>
+        makeEncryptedField(value),
+      );
+    }
+
+    it('returns a copy named "Copy of <original>" with same sections', async () => {
+      mockFullDuplicateFlow({ name: 'Software Engineer Resume' });
+
+      const result = await service.duplicate(resumeId, userId);
+
+      expect(result.name).toBe('Copy of Software Engineer Resume');
+      expect(result.id).toBe('resume-copy-1');
+      // The source tree was loaded (ownership check) and copied
+      expect(mockPrisma.resume.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: resumeId } }),
+      );
+    });
+
+    it('names the copy "Copy of Untitled" when the source has no name', async () => {
+      mockFullDuplicateFlow({ name: null });
+
+      const result = await service.duplicate(resumeId, userId);
+
+      expect(result.name).toBe('Copy of Untitled');
+    });
+
+    it('re-encrypts the copied field values', async () => {
+      mockFullDuplicateFlow({ name: 'Software Engineer Resume' });
+
+      await service.duplicate(resumeId, userId);
+
+      // findOne decrypts 'enc_Software Engineer' → 'Software Engineer';
+      // create() must re-encrypt the plaintext value.
+      expect(mockCrypto.encryptField).toHaveBeenCalledWith('Software Engineer');
+    });
+
+    it('passes the source sections (sectionId/column/order/locked) to create', async () => {
+      const sectionCreate = jest.fn().mockResolvedValue({
+        id: 'rs-copy-1',
+        resumeId: 'resume-copy-1',
+        sectionId: 'summary',
+        column: 'right',
+        order: 0,
+        locked: false,
+      });
+      mockFullDuplicateFlow(
+        { name: 'Software Engineer Resume' },
+        sectionCreate,
+      );
+
+      await service.duplicate(resumeId, userId);
+
+      expect(sectionCreate).toHaveBeenCalledWith({
+        data: {
+          resumeId: 'resume-copy-1',
+          sectionId: 'summary',
+          column: 'right',
+          order: 0,
+          locked: false,
+        },
+      });
+    });
+
+    it('throws NotFoundException for non-existent resume', async () => {
+      mockPrisma.resume.findUnique.mockResolvedValue(null);
+
+      await expect(service.duplicate('nonexistent', userId)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it("throws NotFoundException for another user's resume", async () => {
+      mockPrisma.resume.findUnique.mockResolvedValue(
+        makeResumeResponse({ userId: otherUserId }),
+      );
+
+      await expect(service.duplicate(resumeId, userId)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+  });
+
   describe('create', () => {
     const dto: CreateResumeDto = {
       layout: 'standard',
