@@ -299,6 +299,42 @@ describe('useResumeStore', () => {
       expect(store.isSectionEnabled('hobbies')).toBe(false)
     })
 
+    it('round-trips locked flag correctly', () => {
+      const store = useResumeStore()
+      store.initializeDefaults()
+
+      // Lock a section and persist
+      const exp = store.sections.find((s) => s.sectionType === 'experience')!
+      exp.locked = true
+      const payload = store.toPayload()
+      expect(payload.sections.find((s) => s.sectionId === 'experience')!.locked).toBe(true)
+      expect(payload.sections.find((s) => s.sectionId === 'summary')!.locked).toBe(false)
+
+      // Reload and verify lock survives
+      store.loadFromPayload(payload)
+      const reloaded = store.sections.find((s) => s.sectionType === 'experience')!
+      expect(reloaded.locked).toBe(true)
+    })
+
+    it('defaults to unlocked when payload omits locked', () => {
+      const store = useResumeStore()
+
+      store.loadFromPayload({
+        layout: 'standard' as const,
+        sections: [
+          {
+            sectionId: 'experience',
+            column: 'right',
+            order: 0,
+            entries: [],
+          },
+        ],
+      })
+
+      const exp = store.sections.find((s) => s.sectionType === 'experience')!
+      expect(exp.locked).toBe(false)
+    })
+
     it('fills in missing sections as disabled and keeps saved ones', () => {
       const store = useResumeStore()
 

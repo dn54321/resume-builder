@@ -173,6 +173,16 @@ Example response:
     const sections: TailorResponse['sections'] = [];
 
     for (const section of request.resume.sections) {
+      // Locked sections are skipped entirely — every entry passes through
+      // unchanged so their visibility is left exactly as the user set it.
+      if (section.locked === true) {
+        sections.push({
+          sectionId: section.sectionId,
+          entries: section.entries,
+        });
+        continue;
+      }
+
       const passThrough: SectionEntryDto[] = [];
       const categorized: Array<{
         entry: SectionEntryDto;
