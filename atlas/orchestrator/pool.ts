@@ -268,9 +268,13 @@ export class AgentPool {
     // `webidl.util.markAsUncloneable is not a function`.
     sendKeys(`export PATH='${path.dirname(process.execPath)}':$PATH`);
     // Non-interactive one-shot: -p processes the prompt (which embeds the
-    // TASK) and exits when done. `; exit` kills the pane's bash with pi so
-    // the pane goes dead and the pool slot frees up.
-    sendKeys(`${PI_BIN} -p --system-prompt "@${promptContent}"; exit`);
+    // TASK) and exits when done. The message argument is REQUIRED — with no
+    // message, `pi -p --system-prompt @file` processes nothing and exits
+    // immediately (verified empirically). `; exit` kills the pane's bash
+    // with pi so the pane goes dead and the pool slot frees up.
+    sendKeys(
+      `${PI_BIN} -p --system-prompt "@${promptContent}" "Begin work on your assigned TASK now. Implement it fully, then report completion and exit."; exit`,
+    );
 
     // Worker output is now visible live in the tmux pane (capture with
     // `tmux capture-pane`). Keep a log file for API compatibility.

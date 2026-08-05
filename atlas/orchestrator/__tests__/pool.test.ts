@@ -212,6 +212,8 @@ describe('AgentPool — tmux pane wiring', () => {
       expect(joined).toContain(path.dirname(process.execPath));
       // Non-interactive one-shot: -p + --system-prompt, then exit
       expect(joined).toContain('pi -p --system-prompt "@');
+      // The message arg is REQUIRED — without it pi -p exits immediately
+      expect(joined).toContain('Begin work on your assigned TASK now');
       expect(joined).toContain('exit');
       // No interactive registration commands typed into the pane
       expect(joined).not.toContain('/name worker-1');
