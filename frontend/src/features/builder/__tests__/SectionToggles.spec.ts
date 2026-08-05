@@ -155,7 +155,21 @@ describe('SectionToggles', () => {
     expect(wrapper.emitted('toggle')![0]).toEqual(['name_contact' as SectionType])
   })
 
-  it('shows column select only for 2:1 layout with enabled sections', () => {
+  it('shows column select only for 2:1 layout with enabled sections (showTwoColumn=true)', () => {
+    const wrapper = mount(SectionToggles, {
+      props: {
+        layout: 'column2-1',
+        enabledSections: allEnabled,
+        columnAssignments: noAssignments,
+        showTwoColumn: true,
+      },
+    })
+
+    const selects = wrapper.findAll('select')
+    expect(selects).toHaveLength(10)
+  })
+
+  it('hides column select in 2:1 layout when showTwoColumn is false (feature flag off)', () => {
     const wrapper = mount(SectionToggles, {
       props: {
         layout: 'column2-1',
@@ -165,7 +179,7 @@ describe('SectionToggles', () => {
     })
 
     const selects = wrapper.findAll('select')
-    expect(selects).toHaveLength(10)
+    expect(selects).toHaveLength(0)
   })
 
   it('hides column select for standard layout', () => {
@@ -174,6 +188,7 @@ describe('SectionToggles', () => {
         layout: 'standard',
         enabledSections: allEnabled,
         columnAssignments: noAssignments,
+        showTwoColumn: true,
       },
     })
 
@@ -188,6 +203,7 @@ describe('SectionToggles', () => {
         layout: 'column2-1',
         enabledSections: enabled,
         columnAssignments: noAssignments,
+        showTwoColumn: true,
       },
     })
 
@@ -201,6 +217,7 @@ describe('SectionToggles', () => {
         layout: 'column2-1',
         enabledSections: allEnabled,
         columnAssignments: noAssignments,
+        showTwoColumn: true,
       },
     })
 

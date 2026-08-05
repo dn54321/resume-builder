@@ -14,7 +14,14 @@
         <span class="text-[0.8125rem] font-semibold text-foreground">Standard</span>
         <span class="text-[0.6875rem] text-muted-foreground">Single column</span>
       </button>
+      <!--
+        2:1 Column layout is behind the ?layout=True feature flag (RES-86).
+        It only renders when the parent passes showTwoColumn=true, otherwise
+        the Standard layout is the only option shown. The TwoColumnLayout
+        component itself is preserved and still used when selected.
+      -->
       <button
+        v-if="showTwoColumn"
         class="flex-1 flex flex-col items-center gap-1.5 px-3 py-4 border-2 border-border rounded-lg bg-surface cursor-pointer transition-colors hover:border-primary font-[inherit]"
         :class="{ 'border-primary! ring-2 ring-primary/30': modelValue === 'column2-1' }"
         @click="$emit('update:modelValue', 'column2-1')"
@@ -34,9 +41,13 @@
 <script setup lang="ts">
 import type { LayoutType } from '@/features/builder/types/resume'
 
-defineProps<{
+withDefaults(defineProps<{
   modelValue: LayoutType
-}>()
+  /** When false (default), the 2:1 Column layout option is hidden behind the ?layout=True feature flag (RES-86). */
+  showTwoColumn?: boolean
+}>(), {
+  showTwoColumn: false,
+})
 
 defineEmits<{
   'update:modelValue': [value: LayoutType]

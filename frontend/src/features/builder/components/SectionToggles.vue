@@ -46,7 +46,7 @@
         </label>
 
         <select
-          v-if="layout === 'column2-1' && section.enabled"
+          v-if="layout === 'column2-1' && showTwoColumn && section.enabled"
           :value="section.column"
           @change="emit('setColumn', section.type, ($event.target as HTMLSelectElement).value as 'left' | 'right')"
           class="text-xs py-1 px-2 border border-border rounded-sm bg-surface text-foreground font-[inherit]"
@@ -78,14 +78,18 @@ import {
   type LayoutType,
 } from '@/features/builder/types/resume'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   layout: LayoutType
   enabledSections: SectionType[]
   /** Display order of enabled sections (from store, respects drag-and-drop reordering) */
   orderedSectionTypes?: SectionType[]
   columnAssignments: Record<SectionType, 'left' | 'right'>
   selectedSectionId?: string | null
-}>()
+  /** When false (default), the column assignment dropdowns are hidden behind the ?layout=True feature flag (RES-86). */
+  showTwoColumn?: boolean
+}>(), {
+  showTwoColumn: false,
+})
 
 const emit = defineEmits<{
   toggle: [sectionType: SectionType]

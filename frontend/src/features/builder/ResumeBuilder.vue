@@ -86,13 +86,14 @@
     >
       <!-- Left sidebar: LayoutPicker + SectionToggles -->
       <aside class="overflow-y-auto p-4 border border-border rounded-lg bg-surface">
-        <LayoutPicker v-model="store.layout" />
+        <LayoutPicker v-model="store.layout" :show-two-column="showTwoColumn" />
         <SectionToggles
           :layout="store.layout"
           :enabled-sections="store.enabledSections"
           :ordered-section-types="store.orderedSectionTypes"
           :column-assignments="columnAssignments"
           :selected-section-id="selectedSectionId"
+          :show-two-column="showTwoColumn"
           @toggle="store.toggleSection"
           @set-column="store.setSectionColumn"
           @reorder="store.reorderSections"
@@ -153,7 +154,7 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted } from 'vue'
-import { onBeforeRouteLeave } from 'vue-router'
+import { onBeforeRouteLeave, useRoute } from 'vue-router'
 import { useResumeStore } from '@/features/builder/stores/resume'
 import { useResumeData } from '@/features/builder/composables/useResumeData'
 import { useAuth } from '@/features/auth/composables/useAuth'
@@ -169,12 +170,22 @@ import { useTailor } from '@/features/builder/composables/useTailor'
 import type { SectionType } from '@/features/builder/types/resume'
 
 const store = useResumeStore()
+const route = useRoute()
 const { isAuthenticated } = useAuth()
 const { loadResume, saveResume, setupAutoSave, teardownAutoSave, dirty } = useResumeData()
 const { isTailoring, tailorError, bulletCap, tailorResume, resetFilter } = useTailor()
 
 const selectedSectionId = ref<string | null>(null)
 const jdModalOpen = ref(false)
+
+// ─── 2:1 column layout feature flag (RES-86) ──────────────────────
+//
+// The 2:1 column layout (LayoutPicker option + SectionToggles column
+// assignment dropdowns) is hidden by default. It is only exposed when the
+// URL contains ?layout=True (exact case match). The TwoColumnLayout
+// component itself is preserved and still renders for resumes that were
+// saved with the column2-1 layout.
+const showTwoColumn = computed(() => route.query.layout === 'True')
 
 // ─── Resume name editing ───────────────────────────────────────────
 

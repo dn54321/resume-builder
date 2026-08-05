@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import { setActivePinia, createPinia } from 'pinia'
 import { useResumeStore } from '@/features/builder/stores/resume'
 import LivePreview from '@/features/builder/components/LivePreview.vue'
@@ -60,11 +61,60 @@ class MockResizeObserver {
 
 vi.stubGlobal('ResizeObserver', MockResizeObserver)
 
+/**
+ * Mock MediaQueryList with a test helper to simulate viewport changes.
+ * Returns the mql mock plus a simulateChange() function that fires any
+ * registered 'change' listeners (mirrors matchMedia behavior at runtime).
+ * @param initialMatches
+ */
+/**
+ * Stub window.matchMedia for a test. Returns the mock MediaQueryList plus a
+ * simulateChange() helper that fires registered 'change' listeners, mirroring
+ * real matchMedia behavior across the 1024px breakpoint.
+ * @param {boolean} initialMatches - whether (min-width: 1024px) initially matches
+ * @returns {{ mql: object; simulateChange: (matches: boolean) => void }} mock MQL object and simulateChange helper
+ */
+function stubMatchMedia(initialMatches: boolean) {
+  const listeners: Array<(event: { matches: boolean }) => void> = []
+  const mql = {
+    matches: initialMatches,
+    media: '(min-width: 1024px)',
+    onchange: null,
+    addEventListener: vi.fn<(_type: string, listener: (event: { matches: boolean }) => void) => void>(
+      (_type, listener) => {
+        listeners.push(listener)
+      },
+    ),
+    removeEventListener: vi.fn<(_type: string, listener: (event: { matches: boolean }) => void) => void>(
+      (_type, listener) => {
+        const idx = listeners.indexOf(listener)
+        if (idx !== -1) listeners.splice(idx, 1)
+      },
+    ),
+    addListener: vi.fn<() => void>(),
+    removeListener: vi.fn<() => void>(),
+    dispatchEvent: vi.fn<() => boolean>(),
+  }
+  vi.stubGlobal('matchMedia', vi.fn(() => mql))
+  return {
+    mql,
+    simulateChange(matches: boolean) {
+      mql.matches = matches
+      for (const listener of listeners) {
+        listener({ matches } as MediaQueryListEvent)
+      }
+    },
+  }
+}
+
 describe('LivePreview', () => {
   beforeEach(() => {
     // Ensure pinia is set up
     pinia = createPinia()
     setActivePinia(pinia)
+    // jsdom does not implement matchMedia — reset any stub left by a
+    // previous test so the fullscreen button defaults to visible (<1024px).
+    vi.stubGlobal('matchMedia', undefined)
   })
 
   it('renders the header bar with Preview label', () => {
@@ -90,6 +140,66 @@ describe('LivePreview', () => {
     expect(button.exists()).toBe(true)
     expect(button.attributes('aria-label')).toBe('Open full screen preview')
     expect(button.attributes('title')).toBe('Full screen preview')
+  })
+
+  it('hides the full-screen expand button at desktop widths (>=1024px)', async () => {
+    stubMatchMedia(true) // min-width: 1024px matches → desktop
+    const store = makeStore()
+    store.initializeDefaults()
+    store.layout = 'standard'
+
+    const wrapper = mountLivePreview()
+    // isDesktop is set in onMounted → flush the reactive update
+    await nextTick()
+
+    const button = wrapper.find('.live-preview__expand-btn')
+    expect(button.exists()).toBe(false)
+  })
+
+  it('shows the full-screen expand button below 1024px (mobile)', async () => {
+    stubMatchMedia(false) // min-width: 1024px does not match → mobile
+    const store = makeStore()
+    store.initializeDefaults()
+    store.layout = 'standard'
+
+    const wrapper = mountLivePreview()
+    await nextTick()
+
+    const button = wrapper.find('.live-preview__expand-btn')
+    expect(button.exists()).toBe(true)
+  })
+
+  it('hides/shows the expand button reactively when the viewport crosses 1024px', async () => {
+    const { simulateChange } = stubMatchMedia(false) // start mobile
+    const store = makeStore()
+    store.initializeDefaults()
+    store.layout = 'standard'
+
+    const wrapper = mountLivePreview()
+    expect(wrapper.find('.live-preview__expand-btn').exists()).toBe(true)
+
+    // Resize to desktop → button disappears
+    simulateChange(true)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.live-preview__expand-btn').exists()).toBe(false)
+
+    // Resize back below 1024px → button reappears
+    simulateChange(false)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.live-preview__expand-btn').exists()).toBe(true)
+  })
+
+  it('keeps the expand button visible when matchMedia is unavailable', async () => {
+    // No matchMedia stub — jsdom default is undefined; the component must
+    // degrade gracefully and keep the button visible (mobile default).
+    const store = makeStore()
+    store.initializeDefaults()
+    store.layout = 'standard'
+
+    const wrapper = mountLivePreview()
+    await nextTick()
+
+    expect(wrapper.find('.live-preview__expand-btn').exists()).toBe(true)
   })
 
   it('opens FullscreenPreview when full-screen button is clicked', async () => {

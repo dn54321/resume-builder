@@ -3,7 +3,14 @@
     <!-- Header bar -->
     <div class="live-preview__header h-10 px-4 border-b border-gray-300 bg-white flex items-center justify-between shrink-0">
       <span class="text-sm font-medium text-gray-600">Preview</span>
+      <!--
+        Fullscreen expand button is desktop-only UX that was removed for
+        wide viewports (RES-86). It stays visible below 1024px until the
+        mobile FAB ticket replaces it. Visibility is driven reactively by
+        window.matchMedia('(min-width: 1024px)') — see isDesktop below.
+      -->
       <button
+        v-if="!isDesktop"
         class="live-preview__expand-btn inline-flex items-center justify-center size-8 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
         aria-label="Open full screen preview"
         title="Full screen preview"
@@ -55,6 +62,14 @@ const containerWidth = ref(300)
 const isFullscreenOpen = ref(false)
 const bodyRef = ref<HTMLElement | null>(null)
 
+// Desktop breakpoint for the fullscreen expand button (RES-86):
+// hidden at >=1024px, visible below. Reactive via matchMedia so it
+// updates live when the viewport is resized across the breakpoint.
+const isDesktop = ref(false)
+
+let mediaQuery: MediaQueryList | null = null
+let mediaQueryListener: ((event: MediaQueryListEvent) => void) | null = null
+
 const scale = computed(() => {
   if (containerWidth.value <= 0) return 0.3
   // Add some padding (24px) so the scaled paper isn't flush against edges
@@ -78,12 +93,26 @@ onMounted(() => {
     })
     resizeObserver.observe(el)
   }
+
+  if (typeof window.matchMedia === 'function') {
+    mediaQuery = window.matchMedia('(min-width: 1024px)')
+    isDesktop.value = mediaQuery.matches
+    mediaQueryListener = (event) => {
+      isDesktop.value = event.matches
+    }
+    mediaQuery.addEventListener('change', mediaQueryListener)
+  }
 })
 
 onUnmounted(() => {
   if (resizeObserver) {
     resizeObserver.disconnect()
     resizeObserver = null
+  }
+  if (mediaQuery && mediaQueryListener) {
+    mediaQuery.removeEventListener('change', mediaQueryListener)
+    mediaQuery = null
+    mediaQueryListener = null
   }
 })
 </script>
