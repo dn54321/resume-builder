@@ -101,4 +101,36 @@ if [ -d "${AGENTS_SRC}/skills" ]; then
   done
 fi
 
+# ─── Sync playwright configs (headless-by-default) ────────────────
+# Worktrees branched BEFORE commit 4fabce6 carry an old playwright config
+# with `headless: !!process.env.CI` — headed unless CI is set. Workers run
+# e2e without CI, so Chromium opens a visible window (or fails on headless
+# hosts) and the run is slow/fragile. Sync the current configs from the
+# main repo when the worktree's copy is the stale pattern, so every worker
+# runs headless by default (PW_HEADED opt-in). Skip if the worktree already
+# has the new pattern (branch includes the fix, or the worker edited it).
+sync_playwright_config() {
+  local rel="$1"
+  local src="${MAIN_REPO_ROOT}/${rel}"
+  local dst="${ATLAS_WORKTREE}/${rel}"
+  if [ ! -f "$src" ]; then
+    echo "[pre.sh] WARNING: main repo $rel not found — cannot sync"
+    return
+  fi
+  if [ ! -f "$dst" ]; then
+    cp "$src" "$dst"
+    echo "[pre.sh] Copied $rel → worktree (missing)"
+    return
+  fi
+  if grep -q "PW_HEADED" "$dst"; then
+    echo "[pre.sh] $rel already headless-by-default (PW_HEADED pattern)"
+  else
+    cp "$src" "$dst"
+    echo "[pre.sh] Synced $rel from main repo (stale pre-4fabce6 config)"
+  fi
+}
+
+sync_playwright_config "e2e/playwright.config.ts"
+sync_playwright_config "frontend/playwright.config.ts"
+
 echo "[pre.sh] Ready."
