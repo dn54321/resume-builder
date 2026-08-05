@@ -77,25 +77,6 @@ export class ResumesService {
     await this.prisma.resume.delete({ where: { id } });
   }
 
-  /**
-   * Map decrypted tree entries into `SectionEntryDto` shape (nested children
-   * included) so `create()` can re-persist them.
-   * @param {SectionEntry[]} entries - Decrypted entries from the source tree
-   * @returns {CreateResumeDto['sections'][number]['entries']} DTO-ready entries
-   */
-  private toEntryDtos(
-    entries: SectionEntry[],
-  ): CreateResumeDto['sections'][number]['entries'] {
-    return entries.map((entry) => ({
-      order: entry.order,
-      fields: entry.fields.map((field) => ({
-        key: field.key,
-        value: field.value,
-      })),
-      children: entry.children ? this.toEntryDtos(entry.children) : [],
-    }));
-  }
-
   async create(userId: string, dto: CreateResumeDto): Promise<ResumeTree> {
     return this.prisma.$transaction(async (tx) => {
       const resume = await tx.resume.create({
@@ -162,6 +143,10 @@ export class ResumesService {
         column: section.column,
         order: section.order,
         locked: section.locked,
+        // Preserve the soft-toggle visibility flag — a hidden section in
+        // the original must stay hidden in the copy (create() defaults
+        // undefined to true).
+        enabled: section.enabled,
         // Prisma's back-relation returns every entry for a section, children
         // included — child entries show up in the flat `entries` array (with
         // parentId set) AND nested in their parent's `children`. Map only the
