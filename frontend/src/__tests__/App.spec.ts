@@ -298,4 +298,75 @@ describe('App', () => {
       expect(content.exists()).toBe(true)
     })
   })
+
+  describe('route transitions', () => {
+    // Mount App with a REAL RouterView (no stub) so the routed view and
+    // the <Transition> wrapper actually render.
+    /**
+     * Mount App with a real RouterView so the routed view and
+     * <Transition> wrapper render inside <main>.
+     * @returns the mounted wrapper and its router
+     */
+    async function mountWithRealRouter() {
+      const router = createRouter({
+        history: createWebHistory(),
+        routes: [
+          { path: '/', name: 'home', component: { template: '<div>Home</div>' } },
+          {
+            path: '/dashboard',
+            name: 'dashboard',
+            component: { template: '<div>Dashboard</div>' },
+          },
+        ],
+      })
+      await router.push('/')
+      await router.isReady()
+      const wrapper = mount(App, {
+        global: {
+          plugins: [pinia, router],
+          stubs: { AppLogo: true },
+        },
+      })
+      return { router, wrapper }
+    }
+
+    it('wraps the routed view in a fade Transition with out-in mode', async () => {
+      const { wrapper } = await mountWithRealRouter()
+
+      const main = wrapper.find('main')
+      const transition = main.findComponent({ name: 'Transition' })
+      expect(transition.exists()).toBe(true)
+      expect(transition.props('name')).toBe('fade')
+      expect(transition.props('mode')).toBe('out-in')
+
+      // The routed component renders inside the transition wrapper
+      expect(transition.text()).toContain('Home')
+      expect(wrapper.text()).toContain('Home')
+    })
+
+    it('renders the fade transition CSS classes', async () => {
+      await mountWithRealRouter()
+
+      // Vitest runs with `css: true`, so SFC <style scoped> blocks are
+      // injected into jsdom as real stylesheets. Verify the fade classes
+      // and the 150ms opacity transition from the ticket spec are present.
+      const css = Array.from(document.styleSheets)
+        .flatMap((sheet) => {
+          try {
+            return Array.from(sheet.cssRules).map((rule) => rule.cssText)
+          } catch {
+            return []
+          }
+        })
+        .join('\n')
+
+      expect(css).toContain('.fade-enter-active')
+      expect(css).toContain('.fade-leave-active')
+      expect(css).toContain('.fade-enter-from')
+      expect(css).toContain('.fade-leave-to')
+      // opacity 0 → 1 over 150ms, snappy per acceptance criteria
+      expect(css).toContain('0.15s')
+      expect(css).toMatch(/opacity\s*:\s*0/)
+    })
+  })
 })
