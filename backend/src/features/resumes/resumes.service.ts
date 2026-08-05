@@ -143,6 +143,10 @@ export class ResumesService {
         column: section.column,
         order: section.order,
         locked: section.locked,
+        // Preserve the soft-toggle visibility flag — a hidden section in
+        // the original must stay hidden in the copy (create() defaults
+        // undefined to true).
+        enabled: section.enabled,
         // Prisma's back-relation returns every entry for a section, children
         // included — child entries show up in the flat `entries` array (with
         // parentId set) AND nested in their parent's `children`. Map only the

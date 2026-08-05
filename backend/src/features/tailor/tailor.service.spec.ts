@@ -9,6 +9,45 @@ const KEYWORD_RESULT = { sections: [{ sectionId: 'kw', entries: [] }] };
 const LLM_RESULT = { sections: [{ sectionId: 'llm', entries: [] }] };
 const HYBRID_RESULT = { sections: [{ sectionId: 'hybrid', entries: [] }] };
 
+// ─── Helpers ──────────────────────────────────────────────────────
+
+/**
+ * A realistic builder payload: one job with two parented bullets.
+ */
+function makeBulletRequest(): TailorRequest {
+  return {
+    jobDescription: 'Software Engineer with React experience',
+    resume: {
+      sections: [
+        {
+          sectionId: 'experience',
+          order: 0,
+          entries: [
+            {
+              order: 0,
+              id: 'job-1',
+              fields: [{ key: 'company', value: 'Acme Corp' }],
+              children: [],
+            },
+            {
+              order: 1,
+              parentId: 'job-1',
+              fields: [{ key: 'text', value: 'Built React apps' }],
+              children: [],
+            },
+            {
+              order: 2,
+              parentId: 'job-1',
+              fields: [{ key: 'text', value: 'Coffee logistics' }],
+              children: [],
+            },
+          ],
+        },
+      ],
+    },
+  };
+}
+
 jest.mock('./engines/keyword.engine', () => ({
   KeywordEngine: jest.fn().mockImplementation(() => ({
     match: jest.fn().mockResolvedValue(KEYWORD_RESULT),
@@ -107,7 +146,7 @@ describe('TailorService', () => {
       expect(HybridEngine).not.toHaveBeenCalled();
     });
 
-    it('returns the keyword engine response', async () => {
+    it('returns the filter response shape (adapts engine sections for the frontend)', async () => {
       const config = makeConfig({ MATCHING_ENGINE: 'keyword' });
       const mockConfigService = { get: jest.fn((key: string) => config[key]) };
 
@@ -119,9 +158,21 @@ describe('TailorService', () => {
       }).compile();
 
       const service = module.get<TailorService>(TailorService);
-      const result = await service.tailor(makeRequest());
+      const request = makeBulletRequest();
 
-      expect(result).toEqual(KEYWORD_RESULT);
+      // The stubbed KeywordEngine returns { sections: [{ sectionId: 'kw',
+      // entries: [] }] } — 'kw' does not match the request's 'experience'
+      // section, so the adapter treats every request entry as surviving and
+      // reports both bullets of the single job as visible.
+      const result = await service.tailor(request);
+
+      expect(result).toEqual({
+        filteredBulletIndices: {
+          experience: [{ entryOrder: 0, bulletIndices: [0, 1] }],
+        },
+        filteredHardSkills: [],
+        filteredSoftSkills: [],
+      });
     });
   });
 

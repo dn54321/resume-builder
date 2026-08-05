@@ -54,6 +54,7 @@ interface ResumeSectionRow {
   column: string;
   order: number;
   locked: boolean;
+  enabled?: boolean;
   entries: SectionEntryRow[];
 }
 
@@ -610,6 +611,45 @@ describe('ResumesService', () => {
           order: 0,
           locked: false,
           enabled: true,
+        },
+      });
+    });
+
+    it('preserves the section enabled (visibility) state in the copy', async () => {
+      const sectionCreate = jest.fn().mockResolvedValue({
+        id: 'rs-copy-1',
+        resumeId: 'resume-copy-1',
+        sectionId: 'summary',
+        column: 'right',
+        order: 0,
+        locked: false,
+        enabled: false,
+      });
+      mockFullDuplicateFlow(
+        {
+          name: 'Software Engineer Resume',
+          sections: [
+            {
+              ...makeResumeResponse().sections[0],
+              enabled: false,
+            },
+          ],
+        },
+        sectionCreate,
+      );
+
+      await service.duplicate(resumeId, userId);
+
+      // A section that was hidden (enabled: false) in the original must be
+      // created hidden in the copy — not silently reset to the default true.
+      expect(sectionCreate).toHaveBeenCalledWith({
+        data: {
+          resumeId: 'resume-copy-1',
+          sectionId: 'summary',
+          column: 'right',
+          order: 0,
+          locked: false,
+          enabled: false,
         },
       });
     });

@@ -100,14 +100,16 @@ describe('KeywordEngine', () => {
     expect(result.sections).toHaveLength(1);
     const resultEntries = result.sections[0].entries;
 
-    // All three bullets should be present (cap is 3, only 3 bullets)
-    expect(resultEntries).toHaveLength(3);
+    // Zero-score bullets are DROPPED (only relevant bullets are kept, capped
+    // per entry) — the coffee bullet has no JD token overlap.
+    expect(resultEntries).toHaveLength(2);
 
-    // The highest scoring entries should appear first by order
-    // "Built React applications" and "Wrote TypeScript type definitions" have matches
-    // "Managed coffee supply chain" has no matches
-    // But they're sorted by order, not score — entries are sorted by original order
-    expect(resultEntries.map((e) => e.order)).toEqual([0, 1, 2]);
+    // The matching bullets keep their original order.
+    expect(resultEntries.map((e) => e.order)).toEqual([0, 2]);
+    expect(resultEntries.map((e) => e.fields[0].value)).toEqual([
+      'Built React applications',
+      'Wrote TypeScript type definitions',
+    ]);
   });
 
   it('caps bullets at BULLET_CAP', async () => {
@@ -188,10 +190,11 @@ describe('KeywordEngine', () => {
 
     const result = await engine.match(makeRequest(jd, entries));
 
-    // 4 bullets → capped at 3 bullets
-    // 4 skills → capped at 3 skills
-    // Total = 3 + 3 = 6
-    expect(result.sections[0].entries).toHaveLength(6);
+    // 4 matching bullets → capped at 3 bullets
+    // 2 matching skills (React, TypeScript) → capped at 3, both kept
+    // Non-matching skills (Node.js, Python) are dropped.
+    // Total = 3 + 2 = 5
+    expect(result.sections[0].entries).toHaveLength(5);
   });
 
   // ── Empty JD ───────────────────────────────────────────────
@@ -250,9 +253,9 @@ describe('KeywordEngine', () => {
 
     const result = await engine.match(makeRequest(jd, entries));
 
-    // No matching tokens, but entries are still returned (they're the top 3 even with score 0)
-    // The engine takes top N regardless of score
-    expect(result.sections[0].entries.length).toBeGreaterThan(0);
+    // No matching tokens → every bullet/skill is dropped (the frontend then
+    // records empty per-entry arrays so all bullets in the section are hidden).
+    expect(result.sections[0].entries).toHaveLength(0);
   });
 
   // ── Multiple sections ──────────────────────────────────────
@@ -391,9 +394,12 @@ describe('KeywordEngine', () => {
 
     const result = await engine.match(makeRequest(jd, entries));
 
-    // No `locked` field -> unlocked -> filtering applies (cap is 3, both stay,
-    // but the engine still processes the section normally).
-    expect(result.sections[0].entries).toHaveLength(2);
+    // No `locked` field -> unlocked -> relevance filtering applies: only the
+    // React bullet matches, the coffee bullet is dropped.
+    expect(result.sections[0].entries).toHaveLength(1);
+    expect(result.sections[0].entries.map((e) => e.fields[0].value)).toEqual([
+      'Built React apps',
+    ]);
   });
 
   // ── Edge cases ─────────────────────────────────────────────
@@ -464,7 +470,8 @@ describe('KeywordEngine', () => {
 
   it('scores a bullet entry with a null field value as zero (?? fallback)', async () => {
     // isBulletEntry() matches the key, but getBulletText() returns the null
-    // value, so the `?? ''` fallback kicks in and scoreText('') returns 0.
+    // value, so the `?? ''` fallback kicks in and scoreText('') returns 0 —
+    // the zero-score entry is then dropped (RES-92 filter semantics).
     const jd = 'React developer';
     const entries = [
       {
@@ -476,8 +483,8 @@ describe('KeywordEngine', () => {
 
     const result = await engine.match(makeRequest(jd, entries));
 
-    // The entry is still kept (top N regardless of score), scored 0.
-    expect(result.sections[0].entries).toHaveLength(1);
+    // Score 0 → dropped by the relevance filter.
+    expect(result.sections[0].entries).toHaveLength(0);
   });
 
   it('scores a skill entry with a null field value as zero (?? fallback)', async () => {
@@ -492,7 +499,8 @@ describe('KeywordEngine', () => {
 
     const result = await engine.match(makeRequest(jd, entries));
 
-    expect(result.sections[0].entries).toHaveLength(1);
+    // Score 0 → dropped by the relevance filter.
+    expect(result.sections[0].entries).toHaveLength(0);
   });
 
   it('scores text with no word characters as zero', async () => {
@@ -501,8 +509,8 @@ describe('KeywordEngine', () => {
 
     const result = await engine.match(makeRequest(jd, entries));
 
-    // text '!!!' splits into zero words -> score 0, entry still kept.
-    expect(result.sections[0].entries).toHaveLength(1);
+    // text '!!!' splits into zero words -> score 0 -> dropped.
+    expect(result.sections[0].entries).toHaveLength(0);
   });
 
   it('returns null from getBulletText when no bullet field exists', () => {
@@ -521,5 +529,103 @@ describe('KeywordEngine', () => {
     expect(
       engineInternals.getSkillText(passthroughEntry(0, 'title', 'Engineer')),
     ).toBeNull();
+  });
+
+  // ── Live builder payload shapes (RES-92) ────────────────────
+
+  it('recognizes bullets stored with the `text` field key (builder BulletList shape)', async () => {
+    const jd = 'React developer';
+    const entries = [
+      {
+        order: 0,
+        fields: [{ key: 'company', value: 'Acme Corp' }],
+        children: [],
+      },
+      {
+        order: 1,
+        parentId: 'job-1',
+        fields: [{ key: 'text', value: 'Built React apps' }],
+        children: [],
+      },
+      {
+        order: 2,
+        parentId: 'job-1',
+        fields: [{ key: 'text', value: 'Managed coffee supply' }],
+        children: [],
+      },
+    ];
+
+    const result = await engine.match(makeRequest(jd, entries));
+
+    // The job entry passes through; only the matching `text` bullet survives.
+    const values = result.sections[0].entries.map((e) => e.fields[0].value);
+    expect(values).toContain('Acme Corp');
+    expect(values).toContain('Built React apps');
+    expect(values).not.toContain('Managed coffee supply');
+  });
+
+  it('caps bullets PER top-level entry (parented bullets)', async () => {
+    const jd = 'React developer';
+    const entries: SectionEntryDto[] = [];
+    // Two jobs, each with three matching bullets → cap 3 per job keeps all.
+    for (let job = 0; job < 2; job++) {
+      const jobId = `job-${job}`;
+      entries.push({
+        order: job * 10,
+        fields: [{ key: 'company', value: `Company ${job}` }],
+        children: [],
+      });
+      for (let b = 0; b < 3; b++) {
+        entries.push({
+          order: job * 10 + b + 1,
+          parentId: jobId,
+          fields: [{ key: 'text', value: `React bullet ${job}-${b}` }],
+          children: [],
+        });
+      }
+      // A non-matching bullet that must be dropped.
+      entries.push({
+        order: job * 10 + 4,
+        parentId: jobId,
+        fields: [{ key: 'text', value: 'Coffee logistics' }],
+        children: [],
+      });
+    }
+
+    const result = await engine.match(makeRequest(jd, entries));
+
+    const values = result.sections[0].entries.map((e) => e.fields[0].value);
+    // 2 companies pass through + 6 matching bullets (3 per job, coffee dropped)
+    expect(values.filter((v) => v.startsWith('Company'))).toHaveLength(2);
+    expect(values.filter((v) => v.startsWith('React bullet'))).toHaveLength(6);
+    expect(values).not.toContain('Coffee logistics');
+  });
+
+  it('recognizes skills stored with the `name` field key (builder skill shape)', async () => {
+    const jd = 'React and TypeScript developer';
+    const entries = [
+      {
+        order: 0,
+        fields: [{ key: 'name', value: 'React' }],
+        children: [],
+      },
+      {
+        order: 1,
+        fields: [{ key: 'name', value: 'Excel' }],
+        children: [],
+      },
+      {
+        order: 2,
+        fields: [{ key: 'name', value: 'TypeScript' }],
+        children: [],
+      },
+    ];
+
+    const result = await engine.match(makeRequest(jd, entries));
+
+    const values = result.sections[0].entries.map((e) => e.fields[0].value);
+    expect(values).toContain('React');
+    expect(values).toContain('TypeScript');
+    expect(values).not.toContain('Excel');
   });
 });

@@ -63,7 +63,7 @@ agents:
     post_script: agents/worker/post.sh
     spawn: on_demand               # Auto-spawned when pending tickets exist
     max_instances: 5               # Raised from 3 once infra stabilized (flock-serialized pre-push, GIT_DIR fix, vitest worktree exclusion) — 32 cores, load <1
-    max_lifetime_spawns: 20        # Crash-loop guard: reset on successful ticket completion
+    max_lifetime_spawns: 100       # Crash-loop guard (reset on completion); 20 was too low — legit 26-ticket backlog + re-spawns exhausted it, stranding the board
     retry_limit: 2                 # Max retries per ticket before marking failed
     task_timeout_minutes: 30       # Kill worker if task takes longer than this
 

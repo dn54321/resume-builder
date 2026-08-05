@@ -24,8 +24,14 @@ import {
 // US Letter paper size at 96 DPI — the preview components are authored
 // against this fixed pixel size and scaled down to fit the pane.
 const PAPER_WIDTH_PX = 816
-// Breathing room between the pane edge and the scaled paper.
-const PADDING = 24
+const PAPER_HEIGHT_PX = 1056
+// Total horizontal breathing room between the pane edges and the scaled
+// paper. Must cover the preview body's own `1rem` padding on BOTH sides
+// (16px × 2 = 32px) — otherwise the scaled wrapper is wider than the
+// content box and the paper still overflows narrow panes (verified
+// empirically: with PADDING=24 a 793px pane produced 8px of horizontal
+// overflow). PADDING=32 makes the wrapper exactly fit the content box.
+const PADDING = 32
 const MIN_SCALE = 0.2
 const MAX_SCALE = 1.2
 
@@ -76,6 +82,17 @@ const previewScale = computed(() => {
   return Math.min(MAX_SCALE, Math.max(MIN_SCALE, s))
 })
 
+/**
+ * Layout size of the scaled paper. CSS transforms do not affect layout, so
+ * the paper itself stays 816×1056px in the box model — without these
+ * explicit dimensions the unscaled box would overflow narrow preview panes
+ * (horizontal scrollbar + flexbox centering clips the left edge). Wrapping
+ * the paper in a box sized to the scaled dimensions keeps it fully visible
+ * and unscrollable (RES-87).
+ */
+const scaledPaperWidth = computed(() => Math.round(PAPER_WIDTH_PX * previewScale.value))
+const scaledPaperHeight = computed(() => Math.round(PAPER_HEIGHT_PX * previewScale.value))
+
 let resizeObserver: ResizeObserver | null = null
 
 onMounted(() => {
@@ -119,7 +136,8 @@ onMounted(async () => {
 })
 
 /**
- *
+ * Fetch the resume list from the API.
+ * @returns {Promise<void>} Resolves when the list has been loaded
  */
 async function fetchResumes(): Promise<void> {
   isLoading.value = true
@@ -139,7 +157,8 @@ async function fetchResumes(): Promise<void> {
 }
 
 /**
- *
+ * Create a new resume and navigate to its builder.
+ * @returns {Promise<void>} Resolves once navigation is triggered
  */
 async function handleCreateResume(): Promise<void> {
   error.value = ''
@@ -521,11 +540,21 @@ async function handleConfirmDelete(): Promise<void> {
           class="dashboard-preview-body"
           data-testid="preview-body"
         >
+          <!-- Sizing wrapper: holds the scaled footprint so the scaled-down
+               paper never overflows (and clips) narrow preview panes -->
           <div
-            class="dashboard-preview__paper"
-            :style="{ transform: `scale(${previewScale})` }"
-            data-testid="preview-paper"
+            class="dashboard-preview__scaled"
+            :style="{
+              width: `${scaledPaperWidth}px`,
+              height: `${scaledPaperHeight}px`,
+            }"
+            data-testid="preview-scaled"
           >
+            <div
+              class="dashboard-preview__paper"
+              :style="{ transform: `scale(${previewScale})` }"
+              data-testid="preview-paper"
+            >
             <StandardLayout
               v-if="previewResume.layout === 'standard'"
               :sections="previewSections"
@@ -534,6 +563,7 @@ async function handleConfirmDelete(): Promise<void> {
               v-else
               :sections="previewSections"
             />
+            </div>
           </div>
         </div>
       </section>
@@ -881,6 +911,14 @@ html.dark .dashboard-preview-error {
   align-items: flex-start;
 }
 
+/* Sizing wrapper — holds the paper's scaled footprint (see scaledPaperWidth).
+   Without it the 816px unscaled box overflows narrow panes and, combined
+   with justify-content: center, clips the paper's left edge. */
+.dashboard-preview__scaled {
+  position: relative;
+  flex-shrink: 0;
+}
+
 .dashboard-preview__paper {
   width: 816px;
   height: 1056px;
@@ -888,9 +926,8 @@ html.dark .dashboard-preview-error {
   box-shadow:
     0 2px 8px rgba(0, 0, 0, 0.15),
     0 1px 3px rgba(0, 0, 0, 0.1);
-  transform-origin: top center;
+  transform-origin: top left;
   overflow: hidden;
-  flex-shrink: 0;
 }
 
 /* ── Responsive: stack vertically < 768px ── */
