@@ -43,7 +43,7 @@ vi.mock('../../integrations/github/client', () => ({
   createPR: vi.fn().mockResolvedValue({ url: 'https://github.com/pr/1' }),
 }));
 
-import { commitAll, isBranchMergedTo } from '../../git/operations';
+import { commitAll, isBranchMergedTo, mergeToBranch } from '../../git/operations';
 import { transitionTicket } from '../../integrations/linear/client';
 import type { Mock } from 'vitest';
 
@@ -146,5 +146,32 @@ describe('Strategist — executeDirect already-merged fast path', () => {
     expect(result.success).toBe(true);
     expect(result.alreadyMerged).toBeUndefined();
     expect(commitAll).toHaveBeenCalled();
+  });
+});
+
+describe('Strategist — merge throw resilience', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'atlas-strat-throw-'));
+    setStateDir(tmpDir);
+    vi.mocked(getConfig).mockReturnValue(testConfig() as never);
+    vi.mocked(commitAll).mockClear();
+    vi.mocked(isBranchMergedTo).mockReturnValue(false);
+  });
+
+  it('returns a retryable error when mergeToBranch THROWS (repo state) instead of crashing', async () => {
+    // getRepoRoot throws when the main repo is bare — this previously
+    // propagated through executeDirect and killed the orchestrator (02:33).
+    vi.mocked(mergeToBranch).mockImplementation(() => {
+      throw new Error('Not in a git repository');
+    });
+
+    const node = makeNode();
+    const result = await executeStrategy(node);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Merge threw');
+    expect(result.error).toContain('Not in a git repository');
   });
 });
