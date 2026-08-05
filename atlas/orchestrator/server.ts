@@ -936,8 +936,23 @@ async function autoStart(): Promise<void> {
  * Iterates all graph nodes; for in_progress tickets with agentId/paneId,
  * tries pool.adoptWorker. Live panes keep their slot and ticket; dead
  * panes fall through to the normal orphan-requeue path in healthCheck.
+ *
+ * ⚠️ MUST respect the same caps as spawn(): adoption previously bypassed
+ * max_concurrent/max_instances entirely, so after a chaotic restart with
+ * stale persisted state it re-adopted EVERY in_progress ticket's worker on
+ * top of freshly spawned ones — 8 workers against a cap of 5. It also
+ * adopted the SAME pane for multiple tickets (stale state recorded one
+ * paneId for several tickets, e.g. %20 as worker-1/RES-88 AND
+ * worker-15/RES-98) creating phantom duplicate agents on one process.
  */
 function adoptSurvivingWorkers(): void {
+  const config = getConfig();
+  const maxWorkers = config.agents.worker.max_instances;
+  const maxConcurrent = config.agents.max_concurrent;
+  // One pane hosts exactly one worker. Stale persisted state can carry the
+  // same paneId for several tickets (duplicate-worker era) — adopt it for
+  // the FIRST ticket only, or the same process becomes N phantom agents.
+  const adoptedPanes = new Set<string>();
   for (const [, epic] of epicGraphs) {
     for (const [, node] of epic.nodes) {
       const st = node.state;
@@ -947,6 +962,14 @@ function adoptSurvivingWorkers(): void {
         st.paneId &&
         st.workerName
       ) {
+        // Cap check — identical to spawn(): adoption must never push the
+        // pool past max_concurrent or the worker max_instances.
+        if (pool.count() >= maxConcurrent) return;
+        if (pool.getByType('worker').length >= maxWorkers) return;
+        // Dedup by pane: one pane = one worker process, regardless of how
+        // many tickets' stale state references it.
+        if (adoptedPanes.has(st.paneId)) continue;
+        adoptedPanes.add(st.paneId);
         pool.adoptWorker(
           st.agentId,
           st.workerName,

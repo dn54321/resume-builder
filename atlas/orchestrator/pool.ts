@@ -669,6 +669,17 @@ export class AgentPool {
       return null;
     }
     if (this.agents.has(agentId)) return this.agents.get(agentId)!;
+    // ⚠️ One pane hosts exactly one worker process. Stale persisted state
+    // can reference the same paneId for several tickets (duplicate-worker
+    // era) — adopting it a second time creates a phantom agent whose
+    // completion races the real one and frees the wrong slot. Reject
+    // duplicate pane adoption outright; the first adopter owns the pane.
+    for (const [, existing] of this.agents) {
+      if (existing.paneId && existing.paneId === paneId) {
+        console.log(`[Pool] Cannot adopt ${name} — pane ${paneId} already owned by ${existing.name}`);
+        return null;
+      }
+    }
 
     const instance: AgentInstance = {
       id: agentId,
