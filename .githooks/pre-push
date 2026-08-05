@@ -72,6 +72,21 @@ fi
 
 # ─── Helpers ─────────────────────────────────────────────────────────
 
+# Serialize the heavy test runs across CONCURRENT pushes (worker agents push
+# from parallel worktrees). Running 5 full test:cov suites at once on one
+# machine causes CPU/memory contention — tests randomly fail with timeouts
+# or coverage dips below threshold, the push is rejected, and the ticket
+# gets a spurious strategy-retry loop (observed: RES-85/RES-81 'strategy
+# retry 3/2' with test:cov passing standalone). flock queues pushes so each
+# one gets the machine to itself; 900s covers a full backend+frontend+atlas
+# suite run.
+LOCK_FILE="${TMPDIR:-/tmp}/atlas-pre-push.lock"
+exec 9>"$LOCK_FILE"
+flock -w 900 9 || {
+  echo "${RED}[pre-push]${NC} Could not acquire test lock within 900s — aborting push"
+  exit 1
+}
+
 run_step() {
   local label="$1"
   shift
