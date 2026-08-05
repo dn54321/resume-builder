@@ -5,7 +5,7 @@
 
 import * as path from 'node:path';
 import * as fs from 'node:fs';
-import type { GraphNode, OrchestratorState, TicketInfo } from './types';
+import type { GraphNode, OrchestratorState, TicketInfo, TicketState } from './types';
 import {
   fetchTicketByIdentifier,
   fetchChildren,
@@ -14,6 +14,29 @@ import {
 import { getDefaultBranch, branchName, isBranchMergedTo } from '../git/operations';
 import { loadState, recoverFromWorktree, getStateDir } from './state';
 import { getConfig } from './config';
+
+// ─── Shared Ticket State ────────────────────────────────────────────
+
+/**
+ * ⚠️ WARNING — a ticket can be a child of SEVERAL epics (e.g. RES-85 sits
+ * in RES-77, RES-92, RES-91, RES-85, RES-83, RES-76), so it appears in
+ * multiple epic graphs. Each epic graph used to build its OWN TicketState
+ * object from loadState(), so a spawn marked ONE epic's node in_progress
+ * while the others stayed pending — and the next launchReady() call
+ * (triggered by addEpic, the scheduler, or intercom) saw the same ticket
+ * ready in a different epic and spawned ANOTHER worker. Observed: 3 workers
+ * colliding on RES-91 in the same worktree (git races + DB locks).
+ *
+ * Fix: keep a module-level registry keyed by ticket identifier so every
+ * epic graph references the SAME TicketState object. Any transition
+ * (spawn → in_progress, re-queue → pending, complete → done) now propagates
+ * to all epic graphs automatically, making the launchReady dedup global.
+ *
+ * The registry lives for the orchestrator process lifetime and is re-seeded
+ * from loadState() on first build per identifier — restarting the
+ * orchestrator resets it, which is fine (state is persisted via saveState).
+ */
+const sharedTicketStates = new Map<string, TicketState>();
 
 // ─── Build Graph ────────────────────────────────────────────────────
 
@@ -63,6 +86,19 @@ export async function buildGraph(
   const logsDir = path.join(getStateDir(), 'logs');
 
   for (const [, ticket] of fetched) {
+    // ⚠️ Use the SHARED state object for this ticket if another epic graph
+    // already built it. Without this, each epic graph gets its own
+    // TicketState and a spawn marks only ONE epic's node in_progress — the
+    // others stay pending and the next launchReady() spawns duplicate
+    // workers for the same ticket (observed: 3 workers on RES-91).
+    // Reuse the registry object; the worktree-recovery/validation below
+    // only runs on the FIRST build of an identifier.
+    const existingShared = sharedTicketStates.get(ticket.identifier);
+    if (existingShared) {
+      nodes.set(ticket.identifier, { ticket, state: existingShared, dependencies: [], dependents: [] });
+      continue;
+    }
+
     let ticketState = existing?.tickets[ticket.identifier];
 
     // If no saved state, try worktree recovery
@@ -105,6 +141,8 @@ export async function buildGraph(
     };
 
     nodes.set(ticket.identifier, { ticket, state, dependencies: [], dependents: [] });
+    // Register so subsequent epic graphs share this exact state object.
+    sharedTicketStates.set(ticket.identifier, state);
   }
 
   // Wire dependencies
