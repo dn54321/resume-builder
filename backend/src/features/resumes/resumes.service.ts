@@ -121,7 +121,15 @@ export class ResumesService {
         column: section.column,
         order: section.order,
         locked: section.locked,
-        entries: section.entries.map((entry) => this.entryToDto(entry)),
+        // Prisma's back-relation returns every entry for a section, children
+        // included — child entries show up in the flat `entries` array (with
+        // parentId set) AND nested in their parent's `children`. Map only the
+        // top-level entries to DTO entries; their children are copied from the
+        // nested `children` arrays, otherwise each child would be duplicated
+        // once as a nested child and once as a phantom top-level entry.
+        entries: section.entries
+          .filter((entry) => !entry.parentId)
+          .map((entry) => this.entryToDto(entry)),
       })),
     };
 

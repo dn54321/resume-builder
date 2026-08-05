@@ -871,6 +871,155 @@ describe('ResumesService', () => {
       expect(mockCrypto.encryptField).toHaveBeenCalledWith('ChildValue');
     });
 
+    it('does not duplicate children as phantom top-level entries (flat Prisma back-relation)', async () => {
+      // Real Prisma shape: the section's `entries` back-relation returns ALL
+      // entries (children included, with parentId set) while the nested
+      // `children` include also nests them under their parent. The DTO must
+      // be built from top-level entries only, or the copy gains a phantom
+      // sibling for every child.
+      const original = makeResumeResponse({
+        name: 'My Resume',
+        sections: [
+          {
+            id: 'rs-1',
+            resumeId,
+            sectionId: 'experience',
+            column: 'right',
+            order: 0,
+            locked: false,
+            entries: [
+              {
+                id: 'parent-1',
+                resumeSectionId: 'rs-1',
+                order: 0,
+                parentId: null,
+                fields: [
+                  {
+                    id: 'f-1',
+                    sectionEntryId: 'parent-1',
+                    key: 'company',
+                    value: 'enc_Acme',
+                    iv: 'iv_Acme',
+                    authTag: 'tag_Acme',
+                    order: 0,
+                  },
+                ],
+                children: [
+                  {
+                    id: 'child-1',
+                    resumeSectionId: 'rs-1',
+                    order: 0,
+                    parentId: 'parent-1',
+                    fields: [
+                      {
+                        id: 'f-2',
+                        sectionEntryId: 'child-1',
+                        key: 'detail',
+                        value: 'enc_ChildValue',
+                        iv: 'iv_ChildValue',
+                        authTag: 'tag_ChildValue',
+                        order: 0,
+                      },
+                    ],
+                    children: [],
+                  },
+                ],
+              },
+              // ← child also appears in the flat entries list (Prisma back-relation)
+              {
+                id: 'child-1',
+                resumeSectionId: 'rs-1',
+                order: 0,
+                parentId: 'parent-1',
+                fields: [
+                  {
+                    id: 'f-2',
+                    sectionEntryId: 'child-1',
+                    key: 'detail',
+                    value: 'enc_ChildValue',
+                    iv: 'iv_ChildValue',
+                    authTag: 'tag_ChildValue',
+                    order: 0,
+                  },
+                ],
+                children: [],
+              },
+            ],
+          },
+        ],
+      });
+      mockPrisma.resume.findUnique.mockResolvedValue(original);
+      mockCrypto.decryptField.mockImplementation(
+        (encrypted: string, _iv: string, _authTag: string) =>
+          encrypted.replace('enc_', ''),
+      );
+      mockCrypto.encryptField.mockImplementation((value: string) =>
+        makeEncryptedField(value),
+      );
+
+      const entryCreate = jest
+        .fn()
+        .mockResolvedValueOnce({ id: 'entry-copy-parent' })
+        .mockResolvedValueOnce({ id: 'entry-copy-child' });
+      const sectionCreate = jest.fn().mockResolvedValue({
+        id: 'rs-copy',
+        resumeId: 'resume-copy',
+        sectionId: 'experience',
+        column: 'right',
+        order: 0,
+        locked: false,
+      });
+
+      mockPrisma.$transaction.mockImplementation(
+        async (cb: TransactionCallback<ResumeTreeRow>) => {
+          const tx = {
+            resume: {
+              create: jest.fn().mockResolvedValue({
+                id: 'resume-copy',
+                userId,
+                name: 'Copy of My Resume',
+                layout: 'standard',
+              }),
+              findUnique: jest
+                .fn()
+                .mockResolvedValue(
+                  makeResumeResponse({ name: 'Copy of My Resume' }),
+                ),
+            },
+            resumeSection: { create: sectionCreate },
+            sectionEntry: { create: entryCreate },
+            sectionField: { create: jest.fn().mockResolvedValue({}) },
+          };
+          const result = cb(tx);
+          return result instanceof Promise ? result : Promise.resolve(result);
+        },
+      );
+
+      await service.duplicate(resumeId, userId);
+
+      // One top-level entry + one child entry — the phantom sibling must not
+      // be recreated as a top-level entry.
+      interface EntryCreateCall {
+        data: {
+          resumeSectionId: string;
+          order: number;
+          parentId: string | null;
+        };
+      }
+      const entryCalls = entryCreate.mock
+        .calls as unknown as EntryCreateCall[][];
+      expect(entryCalls).toHaveLength(2);
+      const parentCall = entryCalls.find(([arg]) => arg.data.parentId === null);
+      const childCall = entryCalls.find(([arg]) => arg.data.parentId !== null);
+      expect(parentCall).toBeDefined();
+      expect(childCall).toBeDefined();
+      // child is linked to the newly created parent entry, not created as a
+      // phantom top-level sibling
+      expect(childCall![0].data.parentId).toBe('entry-copy-parent');
+      expect(mockCrypto.encryptField).toHaveBeenCalledWith('Acme');
+      expect(mockCrypto.encryptField).toHaveBeenCalledWith('ChildValue');
+    });
+
     it('duplicates entries that have no children array', async () => {
       const original = makeResumeResponse({
         name: 'My Resume',
