@@ -167,6 +167,90 @@ describe('PaneManager', () => {
       pm.killWorkerPane('nope');
       expect(vi.mocked(cp.execSync)).not.toHaveBeenCalled();
     });
+
+    it('compacts surviving worker panes after a kill (space for future splits)', () => {
+      // Two workers alive; one dies. tmux would inflate the survivor with the
+      // freed lines, starving the next split. killWorkerPane must resize the
+      // surviving pane back to the target height.
+      splitResult = '%3';
+      pm.createWorkerPane('worker-1', 'RES-99');
+      splitResult = '%4';
+      pm.createWorkerPane('worker-2', 'RES-98');
+      vi.mocked(cp.execSync).mockClear();
+
+      pm.killWorkerPane('worker-1');
+
+      const resizeCalls = vi
+        .mocked(cp.execSync)
+        .mock.calls.map((c) => String(c[0]))
+        .filter((c) => c.includes('resize-pane'));
+      // The surviving worker-2 pane (%4) is compacted back to 8 lines
+      expect(resizeCalls.length).toBe(1);
+      expect(resizeCalls[0]).toContain('-t "%4"');
+      expect(resizeCalls[0]).toContain('-y 8');
+    });
+
+    it('skips compaction for dead panes', () => {
+      splitResult = '%3';
+      pm.createWorkerPane('worker-1', 'RES-99');
+      splitResult = '%4';
+      pm.createWorkerPane('worker-2', 'RES-98');
+      // worker-2's pane is dead
+      let call = 0;
+      vi.mocked(cp.execSync).mockImplementation(((cmd: unknown) => {
+        const c = String(cmd);
+        if (c.includes('display-message')) {
+          // %3 alive, %4 dead
+          call += 1;
+          return c.includes('-t "%4"') ? '1\n' : '0\n';
+        }
+        if (c.includes('has-session')) return 'yes\n';
+        if (c.includes('split-window')) return splitResult + '\n';
+        if (c.includes('list-panes')) return '%1\n';
+        if (c.includes('kill-pane')) return '';
+        if (c.includes('mkfifo')) return '';
+        return '';
+      }) as any);
+      vi.mocked(cp.execSync).mockClear();
+
+      pm.killWorkerPane('worker-1');
+
+      const resizeCalls = vi
+        .mocked(cp.execSync)
+        .mock.calls.map((c) => String(c[0]))
+        .filter((c) => c.includes('resize-pane'));
+      // %4 is dead — no resize attempted for it
+      expect(resizeCalls.length).toBe(0);
+    });
+  });
+
+  describe('createWorkerPane compaction', () => {
+    it('compacts existing worker panes before splitting a new one', () => {
+      // One worker already exists; the next spawn must first shrink it back
+      // to 8 lines so the split has room.
+      splitResult = '%3';
+      pm.createWorkerPane('worker-1', 'RES-99');
+      vi.mocked(cp.execSync).mockClear();
+
+      splitResult = '%4';
+      pm.createWorkerPane('worker-2', 'RES-98');
+
+      const resizeCalls = vi
+        .mocked(cp.execSync)
+        .mock.calls.map((c) => String(c[0]))
+        .filter((c) => c.includes('resize-pane'));
+      expect(resizeCalls.length).toBe(1);
+      expect(resizeCalls[0]).toContain('-t "%3"');
+      expect(resizeCalls[0]).toContain('-y 8');
+
+      // The split happens AFTER the compaction
+      const callOrder = vi
+        .mocked(cp.execSync)
+        .mock.calls.map((c) => String(c[0]));
+      expect(callOrder.indexOf(resizeCalls[0])).toBeLessThan(
+        callOrder.findIndex((c) => c.includes('split-window')),
+      );
+    });
   });
 
   describe('isPaneAlive', () => {

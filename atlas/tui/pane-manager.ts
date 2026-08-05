@@ -19,6 +19,13 @@ export interface PaneManagerOptions {
   maxWorkers: number;
 }
 
+/**
+ * Target height (lines) for each worker pane. Must match the `-l` used in
+ * createWorkerPane's split so compactWorkerPanes() restores exactly the
+ * layout a fresh spawn expects.
+ */
+const WORKER_PANE_HEIGHT = 8;
+
 interface WorkerPane {
   agentName: string;
   paneId: string;
@@ -100,6 +107,14 @@ export class PaneManager {
     // Check session exists
     if (!this.sessionExists()) return null;
 
+    // When a worker pane dies, tmux redistributes its lines to the surviving
+    // worker panes — a survivor can balloon (e.g. 33 lines) and swallow the
+    // space needed for the next 8-line split, so every new spawn hits "no
+    // space for new pane" and falls back to a headless worker. Compacting
+    // survivors back to the target height BEFORE splitting guarantees room
+    // for this pane regardless of how many panes died since the last spawn.
+    this.compactWorkerPanes();
+
     try {
       // Split the banner vertically (8 lines) and start a shell in the pane.
       // `-P -F '#{pane_id}'` is REQUIRED: split-window prints nothing without
@@ -108,7 +123,7 @@ export class PaneManager {
       // `-d` keeps the new pane INACTIVE so spawning workers never steals
       // the user's typing focus (the boss pane stays active).
       const result = cp.execSync(
-        `tmux split-window -d -P -F '#{pane_id}' -v -t "${this.bannerPaneId}" -l 8 -c "${process.cwd()}" "bash"`,
+        `tmux split-window -d -P -F '#{pane_id}' -v -t "${this.bannerPaneId}" -l ${WORKER_PANE_HEIGHT} -c "${process.cwd()}" "bash"`,
         { timeout: 5000, encoding: 'utf-8' },
       ).trim();
 
@@ -152,8 +167,40 @@ export class PaneManager {
     } catch { /* already dead */ }
 
     this.workerPanes.delete(agentName);
+    // After a pane dies, tmux inflates the survivors with the freed lines.
+    // Compact them back to the target height so the freed space is actually
+    // available for the next worker split — otherwise one death cascades
+    // into "no space for new pane" for every subsequent spawn.
+    this.compactWorkerPanes();
     this.updateBanner();
   }
+
+  /**
+   * Resize every live worker pane back to the target split height.
+   *
+   * WHY: tmux rebalances a pane group when a pane dies — the survivors grow
+   * to fill the freed space (a surviving worker can balloon from 8 to 33
+   * lines). The next `split-window -l 8` then fails with "no space for new
+   * pane" because the survivors ate the space, forcing the pool into the
+   * headless fallback. Compacting keeps the worker column at
+   * maxWorkers × targetHeight + banner, so there is always room for another
+   * split. Best-effort: skips dead/missing panes and never touches the
+   * banner.
+   */
+  private compactWorkerPanes(targetHeight: number = WORKER_PANE_HEIGHT): void {
+    for (const [name, pane] of this.workerPanes) {
+      if (!this.paneAlive(pane.paneId, false)) continue;
+      try {
+        cp.execSync(
+          `tmux resize-pane -t "${pane.paneId}" -y ${targetHeight}`,
+          { timeout: 3000 },
+        );
+      } catch (err: any) {
+        console.error(`[PaneManager] Failed to compact pane for ${name}: ${err.message}`);
+      }
+    }
+  }
+
 
   /**
    * Update the banner display.
