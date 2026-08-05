@@ -3,6 +3,17 @@
 # Only checks what was modified. Fails fast within each directory group.
 set -euo pipefail
 
+# ⚠️ Strip inherited GIT_* env vars (see atlas/orchestrator/__tests__/state.test.ts).
+# When this hook runs during a push from a linked worktree, git exports
+# GIT_DIR=<git-dir>/worktrees/<branch> into the hook environment. If left
+# set, every child git command — and the atlas test suite, whose
+# throwaway-repo tests run `git init`/`git add`/`git commit` — operates on
+# the PUSHING BRANCH'S repository instead of its intended target, silently
+# corrupting the branch (observed 2026-08-06: the RES-91 branch gained stray
+# "base" commits and its tree was replaced by a single file.txt while its
+# pre-push hook ran the atlas suite).
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_CEILING_DIRECTORIES 2>/dev/null || true
+
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 
 # If we are inside a git worktree, --show-toplevel points at the WORKTREE
