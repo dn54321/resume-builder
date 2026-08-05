@@ -11,7 +11,7 @@ import {
   fetchChildren,
   transitionTicket,
 } from '../integrations/linear/client';
-import { getDefaultBranch, branchName } from '../git/operations';
+import { getDefaultBranch, branchName, isBranchMergedTo } from '../git/operations';
 import { loadState, recoverFromWorktree, getStateDir } from './state';
 import { getConfig } from './config';
 
@@ -153,7 +153,16 @@ export async function buildGraph(
       if (
         node.state.worktreePath &&
         fs.existsSync(node.state.worktreePath) &&
-        hasMeaningfulWorkCheck(node.state.worktreePath, defaultBranch)
+        hasMeaningfulWorkCheck(node.state.worktreePath, defaultBranch) &&
+        // Committed work is NOT enough — the branch must actually be merged
+        // into the target. A worker can commit without the merge ever
+        // landing (merge race / strategy failure); marking those 'done'
+        // silently drops the ticket from the queue (RES-85).
+        isBranchMergedTo(
+          node.state.worktreePath,
+          node.state.branch,
+          defaultBranch,
+        )
       ) {
         node.state.status = 'done';
         node.state.error = 'Work exists despite failed status — marking done';

@@ -14,6 +14,7 @@ import {
   saveTicketState,
   allocatePort,
   releasePort,
+  recoverFromWorktree,
 } from '../state';
 import type { OrchestratorState, TicketState } from '../types';
 
@@ -296,3 +297,80 @@ describe('State — port management', () => {
     expect(state.usedPorts).toHaveLength(1);
   });
 });
+
+describe('State — worktree recovery', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'atlas-recovery-test-'));
+    setStateDir(tmpDir);
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('recovers a ticket as done when its branch is merged into the target', () => {
+    // Build a throwaway repo: base commit, ticket branch with work,
+    // then merge the ticket branch into the target branch.
+    const repo = path.join(tmpDir, 'repo');
+    const wt = path.join(tmpDir, 'wt');
+    fs.mkdirSync(repo);
+    runGit(['init', '-b', 'master'], repo);
+    fs.writeFileSync(path.join(repo, 'file.txt'), 'base\n');
+    runGit(['add', '.'], repo);
+    runGit(['commit', '-m', 'base'], repo);
+
+    runGit(['branch', 'ticket/res-77', 'master'], repo);
+    runGit(['worktree', 'add', wt, 'ticket/res-77'], repo);
+    fs.writeFileSync(path.join(wt, 'file.txt'), 'base\nwork\n');
+    runGit(['add', '.'], wt);
+    runGit(['commit', '-m', '[RES-77] real work'], wt);
+
+    // Merge the ticket branch into master (simulates a completed delivery)
+    runGit(['checkout', 'master'], repo);
+    runGit(['merge', 'ticket/res-77', '-m', 'Closes RES-77'], repo);
+
+    const recovered = recoverFromWorktree('RES-77', wt, 'master', 'master');
+    expect(recovered).not.toBeNull();
+    expect(recovered!.status).toBe('done');
+  });
+
+  it('does NOT recover a ticket when its branch was never merged', () => {
+    const repo = path.join(tmpDir, 'repo2');
+    const wt = path.join(tmpDir, 'wt2');
+    fs.mkdirSync(repo);
+    runGit(['init', '-b', 'master'], repo);
+    fs.writeFileSync(path.join(repo, 'file.txt'), 'base\n');
+    runGit(['add', '.'], repo);
+    runGit(['commit', '-m', 'base'], repo);
+
+    runGit(['branch', 'ticket/res-85', 'master'], repo);
+    runGit(['worktree', 'add', wt, 'ticket/res-85'], repo);
+    fs.writeFileSync(path.join(wt, 'file.txt'), 'base\nlocked\n');
+    runGit(['add', '.'], wt);
+    runGit(['commit', '-m', '[RES-85] add locked column'], wt);
+
+    // Work is committed but NEVER merged to master — the exact scenario
+    // that previously lost tickets (RES-85). Must NOT recover as done.
+    const recovered = recoverFromWorktree('RES-85', wt, 'master', 'master');
+    expect(recovered).toBeNull();
+  });
+
+  it('returns null when the worktree does not exist', () => {
+    const recovered = recoverFromWorktree(
+      'RES-99',
+      path.join(tmpDir, 'missing'),
+      'master',
+      'master',
+    );
+    expect(recovered).toBeNull();
+  });
+});
+
+function runGit(args: string[], cwd: string): void {
+  const res = require('node:child_process').spawnSync('git', args, { cwd, encoding: 'utf-8' });
+  if (res.status !== 0) {
+    throw new Error(`git ${args.join(' ')} failed: ${res.stderr || res.stdout}`);
+  }
+}

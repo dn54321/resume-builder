@@ -7,7 +7,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { OrchestratorState, TicketState } from './types';
-import { hasMeaningfulWork } from '../git/operations';
+import { isBranchMergedTo } from '../git/operations';
 
 // ─── Paths ──────────────────────────────────────────────────────────
 
@@ -107,6 +107,13 @@ export function saveTicketState(
 /**
  * Check if a ticket's worktree has committed work.
  * Used on restart when state is missing or the process is dead.
+ *
+ * A ticket is ONLY recovered as 'done' if its committed work actually
+ * reached the target branch. Having commits in the worktree is NOT
+ * enough — a worker can commit without the merge ever succeeding
+ * (e.g. merge race or strategy failure). Marking such tickets 'done'
+ * silently loses the work from the queue. Verify with
+ * `git merge-base --is-ancestor` against the target branch.
  */
 export function recoverFromWorktree(
   identifier: string,
@@ -115,12 +122,18 @@ export function recoverFromWorktree(
   defaultBranch: string,
 ): TicketState | null {
   if (!fs.existsSync(worktreePath)) return null;
-  if (!hasMeaningfulWork(worktreePath, baseBranch)) return null;
+
+  const worktreeBranch = `ticket/${identifier.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
+  // The worktree's branch head must be an ancestor of the target branch
+  // (i.e. actually merged). Otherwise the ticket is still pending — the
+  // worker committed but the merge never landed.
+  const merged = isBranchMergedTo(worktreePath, worktreeBranch, defaultBranch);
+  if (!merged) return null;
 
   return {
     identifier,
     status: 'done',
-    branch: `ticket/${identifier.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`,
+    branch: worktreeBranch,
     worktreePath,
     logPath: path.join(getStateDir(), 'logs', `${identifier}.log`),
     pid: null,

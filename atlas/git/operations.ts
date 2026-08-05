@@ -188,6 +188,27 @@ export function isClean(worktreePath: string): boolean {
 const GENERATED_FILES = ['frontend/resume.pdf'];
 
 /**
+ * Check whether a branch's head is an ancestor of the target branch
+ * (i.e. the branch was actually merged into it). Runs in the worktree's
+ * git context (shared object store). Returns false on any error.
+ */
+export function isBranchMergedTo(
+  worktreePath: string,
+  branch: string,
+  targetBranch: string,
+): boolean {
+  try {
+    const result = execGit(
+      ['merge-base', '--is-ancestor', branch, targetBranch],
+      worktreePath,
+    );
+    return result.exitCode === 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Check if the branch contains meaningful changes beyond generated files.
  */
 export function hasMeaningfulWork(worktreePath: string, baseBranch: string): boolean {
