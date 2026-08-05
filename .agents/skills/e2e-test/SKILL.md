@@ -2,6 +2,11 @@
 
 Run end-to-end tests before finishing a ticket to catch integration failures that unit tests miss.
 
+> **Headless by default:** Playwright now runs headless unless `PW_HEADED=1` is set
+> (both `frontend/playwright.config.ts` and `e2e/playwright.config.ts`). No Chrome
+> popups. Set `PW_HEADED=1` only when you need to watch the browser interactively.
+> This applies to agents too — workers should NOT set PW_HEADED.
+
 ## When to use
 
 Use this skill when:

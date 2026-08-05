@@ -39,8 +39,9 @@ export default defineConfig({
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
 
-    /* Only on CI systems run the tests headless */
-    headless: !!process.env.CI,
+    /* Headless by default (no Chrome popups). Opt into headed mode with
+       PW_HEADED=1 (e.g. when debugging interactively). */
+    headless: process.env.PW_HEADED ? false : true,
   },
 
   /* Configure projects for major browsers */

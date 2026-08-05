@@ -26,7 +26,9 @@ export default defineConfig({
     actionTimeout: 0,
     baseURL: BASE_URL,
     trace: 'on-first-retry',
-    headless: !!process.env.CI,
+    // Headless by default (no Chrome popups). Opt into headed mode with
+    // PW_HEADED=1 (e.g. when debugging interactively).
+    headless: process.env.PW_HEADED ? false : true,
     // Allow self-signed certs in dev
     ignoreHTTPSErrors: true,
   },
