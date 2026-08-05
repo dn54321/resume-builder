@@ -25,8 +25,12 @@ test.describe('Anonymous resume builder', () => {
     await expect(page.locator('input[aria-label="Resume name"]')).toBeVisible()
 
     // 4. Verify anonymous banner is shown (no auth)
-    await expect(page.locator('header')).toContainText('Log in')
-    await expect(page.locator('header')).toContainText('Sign up')
+    // Scope to the app navbar links — a bare 'header' locator is ambiguous
+    // (the builder toolbar header also matches) and fails in strict mode.
+    // exact: true distinguishes the navbar "Log in" from the builder
+    // banner's "Log In".
+    await expect(page.getByRole('link', { name: 'Log in', exact: true })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Sign up', exact: true })).toBeVisible()
   })
 
   test('fill personal info section', async ({ page }) => {
