@@ -3,7 +3,6 @@ import { TailorController } from './tailor.controller';
 import { TailorService } from './tailor.service';
 import { TailorRequestDto } from './dto/tailor-request.dto';
 import type { TailorRequest } from './models/tailor-request.model';
-import type { TailorFilterResponse } from './models/tailor-filter-response.model';
 
 const mockTailorResult = {
   filteredBulletIndices: {
