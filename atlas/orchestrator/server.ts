@@ -74,15 +74,25 @@ function writeDashboard(): void {
 
   const lines: string[] = [];
   const now = new Date().toLocaleTimeString();
-  let totalTickets = 0, totalDone = 0, totalRunning = 0, totalFailed = 0;
 
+  // ⚠️ A ticket can appear in MULTIPLE epic graphs: buildGraph pulls in the
+  // epic's children PLUS all ref: dependencies (which point at tickets owned
+  // by other epics). Summing epic.nodes.size across epics overcounts badly —
+  // 21 unique tickets rendered as "61 tickets" (RES-85 alone sits in ~6
+  // epics). Dedup by ticket id for the header totals so the count reflects
+  // real work items.
+  const uniqueStates = new Map<string, string>(); // ticketId -> status
   for (const [, epic] of epicGraphs) {
-    totalTickets += epic.nodes.size;
     for (const [, n] of epic.nodes) {
-      if (n.state.status === 'done' || n.state.status === 'merged') totalDone++;
-      if (n.state.status === 'in_progress') totalRunning++;
-      if (n.state.status === 'failed') totalFailed++;
+      uniqueStates.set(n.ticket.identifier, n.state.status);
     }
+  }
+  const totalTickets = uniqueStates.size;
+  let totalDone = 0, totalRunning = 0, totalFailed = 0;
+  for (const status of uniqueStates.values()) {
+    if (status === 'done' || status === 'merged') totalDone++;
+    if (status === 'in_progress') totalRunning++;
+    if (status === 'failed') totalFailed++;
   }
 
   lines.push(`══ Atlas Dashboard ${now.padStart(30)} ══`);
@@ -107,7 +117,11 @@ function writeDashboard(): void {
       const id = node.ticket.identifier.padEnd(10);
       const title = node.ticket.title.slice(0, 40).padEnd(40);
       const agent = node.state.workerName || '—';
-      lines.push(`  ${icon} ${id} ${title} [${agent.padEnd(10)}]`);
+      // Mark tickets that are only REFERENCED (belong to another epic) so
+      // the board makes the sharing visible instead of implying ownership.
+      const owned = node.ticket.id === epic.rootId || node.ticket.parentId === epic.rootId;
+      const marker = owned ? '  ' : ' ↳';
+      lines.push(`  ${icon} ${id} ${title} [${agent.padEnd(10)}]${marker}`);
     }
     lines.push('');
   }
@@ -422,12 +436,18 @@ async function handleBossCommand(text: string): Promise<void> {
       return;
     }
     let totalTickets = 0, totalDone = 0, totalRunning = 0;
+    // Dedup by ticket id — same overcount issue as writeDashboard (a ticket
+    // referenced by several epics was counted once per epic).
+    const statuses = new Map<string, string>();
     for (const [, epic] of epicGraphs) {
-      totalTickets += epic.nodes.size;
       for (const [, n] of epic.nodes) {
-        if (n.state.status === 'done' || n.state.status === 'merged') totalDone++;
-        if (n.state.status === 'in_progress') totalRunning++;
+        statuses.set(n.ticket.identifier, n.state.status);
       }
+    }
+    totalTickets = statuses.size;
+    for (const st of statuses.values()) {
+      if (st === 'done' || st === 'merged') totalDone++;
+      if (st === 'in_progress') totalRunning++;
     }
     await tellBoss(`${epicGraphs.size} epics · ${totalTickets} tickets: ${totalRunning} running, ${totalDone} done. ${pool.count()} agents.`);
 
