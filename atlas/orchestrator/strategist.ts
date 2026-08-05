@@ -6,6 +6,7 @@
 
 import * as fs from 'node:fs';
 import type { GraphNode, ResolvedStrategy, Strategy, StrategyResult } from './types';
+import type { GitResult } from '../git/operations';
 import { getConfig } from './config';
 import {
   commitAll,
@@ -128,8 +129,18 @@ async function executeDirect(
   const commitMsg = `${node.ticket.title}\n\nCloses ${node.ticket.identifier}`;
   commitAll(wt, commitMsg);
 
-  // Merge to target branch
-  const mergeResult = mergeToBranch(wt, node.state.branch, targetBranch, commitMsg);
+  // Merge to target branch. mergeToBranch (via getRepoRoot) can THROW when
+  // the main repo is in a bad state (e.g. core.bare flipped by a corrupted
+  // push, observed 02:33 — the throw propagated through executeDirect and
+  // killed the entire orchestrator process). Catch it and return a clean
+  // retryable error instead of crashing.
+  let mergeResult: GitResult;
+  try {
+    mergeResult = mergeToBranch(wt, node.state.branch, targetBranch, commitMsg);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false, error: `Merge threw (repo state?): ${msg}` };
+  }
   if (mergeResult.exitCode !== 0) {
     const error = mergeResult.stderr || mergeResult.stdout || 'Merge failed';
     return { success: false, error };
