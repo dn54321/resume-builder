@@ -433,6 +433,15 @@ async function handleConfirmDelete(): Promise<void> {
           </button>
         </header>
 
+        <!-- Hint: discoverable double-click affordance (RES-104) -->
+        <p
+          v-if="resumes.length > 0"
+          class="dashboard-dblclick-hint"
+          data-testid="dashboard-dblclick-hint"
+        >
+          💡 Double-click a resume to edit it in the builder
+        </p>
+
         <!-- Error State -->
         <div
           v-if="error"
@@ -476,6 +485,7 @@ async function handleConfirmDelete(): Promise<void> {
             role="button"
             tabindex="0"
             :aria-pressed="selectedResumeId === resume.id"
+            title="Double-click to edit in builder"
             @click="selectResume(resume)"
             @dblclick="handleEditResume(resume)"
             @keydown.enter="selectResume(resume)"
@@ -705,6 +715,15 @@ async function handleConfirmDelete(): Promise<void> {
 .dashboard-header h1 {
   margin: 0;
   font-size: 1.5rem;
+}
+
+/* ── Double-click hint (RES-104) ────────── */
+
+.dashboard-dblclick-hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+  flex-shrink: 0;
 }
 
 /* ── Buttons ────────────────────────────── */

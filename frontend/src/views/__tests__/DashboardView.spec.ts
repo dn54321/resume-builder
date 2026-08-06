@@ -350,6 +350,52 @@ describe('DashboardView', () => {
     expect(cards[1]!.find('.resume-card__name').text()).toBe('Untitled')
   })
 
+  it('shows the double-click hint when resumes exist', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    const hint = wrapper.find('[data-testid="dashboard-dblclick-hint"]')
+    expect(hint.exists()).toBe(true)
+    expect(hint.text()).toContain('Double-click a resume to edit it in the builder')
+  })
+
+  it('does not show the double-click hint in the empty state', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse([]))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.find('.empty-state').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="dashboard-dblclick-hint"]').exists()).toBe(false)
+  })
+
+  it('adds a "Double-click to edit in builder" title tooltip to each card', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
+    expect(cards.length).toBeGreaterThan(0)
+    for (const card of cards) {
+      expect(card.attributes('title')).toBe('Double-click to edit in builder')
+    }
+  })
+
   it('shows formatted dates on resume cards', async () => {
     createAuthenticatedStore()
     mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
