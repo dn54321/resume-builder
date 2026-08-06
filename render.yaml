@@ -28,7 +28,7 @@ services:
     # health response (a 200 on an unauthenticated GET isn't expected).
     healthCheckPath: /api/v1/resumes
     autoDeploy: true
-    plan: starter
+    plan: free # no payment info required; 512MB RAM, sleeps after 15min idle
     envVars:
       - key: NODE_ENV
         value: production
@@ -59,7 +59,7 @@ services:
     # nginx listens on $PORT (envsubst at boot) — Render routes here.
     healthCheckPath: /
     autoDeploy: true
-    plan: starter
+    plan: free # no payment info required; 512MB RAM, sleeps after 15min idle
     envVars:
       - key: VITE_API_BASE_URL
         sync: false # your API URL, e.g. https://resume-backend.onrender.com
