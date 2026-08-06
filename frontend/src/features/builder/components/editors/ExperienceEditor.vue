@@ -16,6 +16,7 @@
       @add="addJob"
       @remove="onRemoveJob"
       @toggle-lock="editor.toggleEntryLock"
+      @toggle-visibility="editor.toggleEntryVisibility"
       @reorder="editor.reorderEntries"
     >
       <template #fields="{ entry, index: entryIndex }">

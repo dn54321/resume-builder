@@ -707,4 +707,199 @@ describe('StandardLayout', () => {
       expect(wrapper.text()).toContain('A great summary.')
     })
   })
+
+  describe('hidden entries (RES-106)', () => {
+    it('excludes a hidden experience entry from the preview', () => {
+      const store = makeStore()
+      store.initializeDefaults()
+      const expSection = store.sections.find((s) => s.sectionType === 'experience')!
+      expSection.entries = []
+      expSection.entries.push({
+        id: 'exp-visible',
+        order: 0,
+        parentId: null,
+        locked: false,
+        visible: true,
+        fields: [{ key: 'company', value: 'Visible Corp', order: 0 }],
+      })
+      expSection.entries.push({
+        id: 'exp-hidden',
+        order: 1,
+        parentId: null,
+        locked: false,
+        visible: false,
+        fields: [{ key: 'company', value: 'Hidden Corp', order: 0 }],
+      })
+
+      const wrapper = mount(StandardLayout, {
+        props: { sections: store.sections },
+      })
+
+      expect(wrapper.find('.standard-layout__company').text()).toBe('Visible Corp')
+      expect(wrapper.findAll('.standard-layout__company')).toHaveLength(1)
+      expect(wrapper.text()).not.toContain('Hidden Corp')
+    })
+
+    it('excludes hidden skills from the comma-separated list', () => {
+      const store = makeStore()
+      store.initializeDefaults()
+      const skillSection = store.sections.find((s) => s.sectionType === 'hard_skills')!
+      skillSection.entries = []
+      skillSection.entries.push({
+        id: 's1',
+        order: 0,
+        parentId: null,
+        locked: false,
+        visible: true,
+        fields: [{ key: 'name', value: 'TypeScript', order: 0 }],
+      })
+      skillSection.entries.push({
+        id: 's2',
+        order: 1,
+        parentId: null,
+        locked: false,
+        visible: false,
+        fields: [{ key: 'name', value: 'Rust', order: 0 }],
+      })
+
+      const wrapper = mount(StandardLayout, {
+        props: { sections: store.sections },
+      })
+
+      const skills = wrapper.find('.standard-layout__skills-text')
+      expect(skills.text()).toBe('TypeScript')
+      expect(wrapper.text()).not.toContain('Rust')
+    })
+
+    it('excludes hidden languages from the languages list', () => {
+      const store = makeStore()
+      store.initializeDefaults()
+      const langSection = store.sections.find((s) => s.sectionType === 'languages')!
+      langSection.entries = []
+      langSection.entries.push({
+        id: 'l1',
+        order: 0,
+        parentId: null,
+        locked: false,
+        visible: true,
+        fields: [
+          { key: 'name', value: 'English', order: 0 },
+          { key: 'proficiency', value: 'Native', order: 1 },
+        ],
+      })
+      langSection.entries.push({
+        id: 'l2',
+        order: 1,
+        parentId: null,
+        locked: false,
+        visible: false,
+        fields: [
+          { key: 'name', value: 'Spanish', order: 0 },
+          { key: 'proficiency', value: 'Intermediate', order: 1 },
+        ],
+      })
+
+      const wrapper = mount(StandardLayout, {
+        props: { sections: store.sections },
+      })
+
+      const text = wrapper.find('.standard-layout__languages-text')
+      expect(text.text()).toBe('English (Native)')
+      expect(wrapper.text()).not.toContain('Spanish')
+    })
+
+    it('excludes bullets belonging to a hidden parent entry', () => {
+      const store = makeStore()
+      store.initializeDefaults()
+      const expSection = store.sections.find((s) => s.sectionType === 'experience')!
+      expSection.entries = []
+      expSection.entries.push({
+        id: 'hidden-parent',
+        order: 0,
+        parentId: null,
+        locked: false,
+        visible: false,
+        fields: [{ key: 'company', value: 'Hidden Corp', order: 0 }],
+      })
+      expSection.entries.push({
+        id: 'b1',
+        order: 0,
+        parentId: 'hidden-parent',
+        locked: false,
+        visible: true,
+        fields: [{ key: 'text', value: 'Hidden bullet', order: 0 }],
+      })
+
+      const wrapper = mount(StandardLayout, {
+        props: { sections: store.sections },
+      })
+
+      expect(wrapper.findAll('.preview-bullet-list__item')).toHaveLength(0)
+      expect(wrapper.text()).not.toContain('Hidden Corp')
+      expect(wrapper.text()).not.toContain('Hidden bullet')
+    })
+
+    it('excludes a hidden bullet child from an otherwise visible entry', () => {
+      const store = makeStore()
+      store.initializeDefaults()
+      const expSection = store.sections.find((s) => s.sectionType === 'experience')!
+      expSection.entries = []
+      expSection.entries.push({
+        id: 'parent',
+        order: 0,
+        parentId: null,
+        locked: false,
+        visible: true,
+        fields: [{ key: 'company', value: 'Visible Corp', order: 0 }],
+      })
+      expSection.entries.push({
+        id: 'b-visible',
+        order: 0,
+        parentId: 'parent',
+        locked: false,
+        visible: true,
+        fields: [{ key: 'text', value: 'Visible bullet', order: 0 }],
+      })
+      expSection.entries.push({
+        id: 'b-hidden',
+        order: 1,
+        parentId: 'parent',
+        locked: false,
+        visible: false,
+        fields: [{ key: 'text', value: 'Hidden bullet', order: 0 }],
+      })
+
+      const wrapper = mount(StandardLayout, {
+        props: { sections: store.sections },
+      })
+
+      const bullets = wrapper.findAll('.preview-bullet-list__item')
+      expect(bullets).toHaveLength(1)
+      expect(bullets[0]!.text()).toBe('Visible bullet')
+      expect(wrapper.text()).not.toContain('Hidden bullet')
+    })
+
+    it('does not render a section whose entries are all hidden', () => {
+      const store = makeStore()
+      store.initializeDefaults()
+      const expSection = store.sections.find((s) => s.sectionType === 'experience')!
+      expSection.entries = []
+      expSection.entries.push({
+        id: 'exp-1',
+        order: 0,
+        parentId: null,
+        locked: false,
+        visible: false,
+        fields: [{ key: 'company', value: 'Hidden Corp', order: 0 }],
+      })
+
+      const wrapper = mount(StandardLayout, {
+        props: { sections: store.sections },
+      })
+
+      const headings = wrapper.findAll('.preview-section__heading')
+      expect(headings.some((h) => h.text() === 'Experience')).toBe(false)
+      expect(wrapper.text()).not.toContain('Hidden Corp')
+    })
+  })
 })

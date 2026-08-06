@@ -42,6 +42,7 @@ describe('toPreviewSections', () => {
       order: 0,
       parentId: null,
       locked: false,
+      visible: true,
       fields: [{ key: 'fullName', value: 'John Doe', order: 0 }],
     })
   })
@@ -79,6 +80,7 @@ describe('toPreviewSections', () => {
       order: 1,
       parentId: 'parent-1',
       locked: false,
+      visible: true,
       fields: [{ key: 'company', value: 'Acme', order: 0 }],
     })
   })
@@ -97,5 +99,37 @@ describe('toPreviewSections', () => {
     const result = toPreviewSections(sections)
     expect(result[0]!.column).toBe('right')
     expect(result[0]!.entries).toEqual([])
+  })
+
+  it('defaults entry visible to true and preserves visible=false (RES-106)', () => {
+    const sections: ResumeFullSection[] = [
+      {
+        id: 'section-4',
+        sectionId: 'experience',
+        column: 'right',
+        order: 0,
+        entries: [
+          {
+            id: 'entry-visible',
+            order: 0,
+            parentId: null,
+            // visible omitted — must default to true
+            fields: [{ key: 'company', value: 'Visible Corp' }],
+          },
+          {
+            id: 'entry-hidden',
+            order: 1,
+            parentId: null,
+            visible: false,
+            fields: [{ key: 'company', value: 'Hidden Corp' }],
+          },
+        ],
+      },
+    ]
+
+    const result = toPreviewSections(sections)
+
+    expect(result[0]!.entries[0]!.visible).toBe(true)
+    expect(result[0]!.entries[1]!.visible).toBe(false)
   })
 })

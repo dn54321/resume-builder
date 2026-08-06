@@ -565,4 +565,135 @@ describe('TwoColumnLayout', () => {
       expect(wrapper.text()).toContain('A great summary.')
     })
   })
+
+  describe('hidden entries (RES-106)', () => {
+    it('excludes a hidden experience entry from the two-column preview', () => {
+      const store = makeStore()
+      store.initializeDefaults()
+      store.setLayout('column2-1')
+      const expSection = store.sections.find((s) => s.sectionType === 'experience')!
+      expSection.entries = []
+      expSection.entries.push({
+        id: 'exp-visible',
+        order: 0,
+        parentId: null,
+        locked: false,
+        visible: true,
+        fields: [{ key: 'company', value: 'Visible Corp', order: 0 }],
+      })
+      expSection.entries.push({
+        id: 'exp-hidden',
+        order: 1,
+        parentId: null,
+        locked: false,
+        visible: false,
+        fields: [{ key: 'company', value: 'Hidden Corp', order: 0 }],
+      })
+
+      const wrapper = mount(TwoColumnLayout, {
+        props: { sections: store.sections },
+      })
+
+      const companies = wrapper.findAll('.two-col-bold')
+      expect(companies).toHaveLength(1)
+      expect(companies[0]!.text()).toBe('Visible Corp')
+      expect(wrapper.text()).not.toContain('Hidden Corp')
+    })
+
+    it('excludes hidden skills from the comma-separated list', () => {
+      const store = makeStore()
+      store.initializeDefaults()
+      store.setLayout('column2-1')
+      const skillSection = store.sections.find((s) => s.sectionType === 'hard_skills')!
+      skillSection.entries = []
+      skillSection.entries.push({
+        id: 's1',
+        order: 0,
+        parentId: null,
+        locked: false,
+        visible: true,
+        fields: [{ key: 'name', value: 'TypeScript', order: 0 }],
+      })
+      skillSection.entries.push({
+        id: 's2',
+        order: 1,
+        parentId: null,
+        locked: false,
+        visible: false,
+        fields: [{ key: 'name', value: 'Rust', order: 0 }],
+      })
+
+      const wrapper = mount(TwoColumnLayout, {
+        props: { sections: store.sections },
+      })
+
+      expect(wrapper.text()).toContain('TypeScript')
+      expect(wrapper.text()).not.toContain('Rust')
+    })
+
+    it('does not render a section whose entries are all hidden', () => {
+      const store = makeStore()
+      store.initializeDefaults()
+      store.setLayout('column2-1')
+      const expSection = store.sections.find((s) => s.sectionType === 'experience')!
+      expSection.entries = []
+      expSection.entries.push({
+        id: 'exp-1',
+        order: 0,
+        parentId: null,
+        locked: false,
+        visible: false,
+        fields: [{ key: 'company', value: 'Hidden Corp', order: 0 }],
+      })
+
+      const wrapper = mount(TwoColumnLayout, {
+        props: { sections: store.sections },
+      })
+
+      const headings = wrapper.findAll('.preview-section__heading')
+      expect(headings.some((h) => h.text() === 'Experience')).toBe(false)
+      expect(wrapper.text()).not.toContain('Hidden Corp')
+    })
+
+    it('excludes hidden bullets from an otherwise visible entry', () => {
+      const store = makeStore()
+      store.initializeDefaults()
+      store.setLayout('column2-1')
+      const expSection = store.sections.find((s) => s.sectionType === 'experience')!
+      expSection.entries = []
+      expSection.entries.push({
+        id: 'parent',
+        order: 0,
+        parentId: null,
+        locked: false,
+        visible: true,
+        fields: [{ key: 'company', value: 'Visible Corp', order: 0 }],
+      })
+      expSection.entries.push({
+        id: 'b-visible',
+        order: 0,
+        parentId: 'parent',
+        locked: false,
+        visible: true,
+        fields: [{ key: 'text', value: 'Visible bullet', order: 0 }],
+      })
+      expSection.entries.push({
+        id: 'b-hidden',
+        order: 1,
+        parentId: 'parent',
+        locked: false,
+        visible: false,
+        fields: [{ key: 'text', value: 'Hidden bullet', order: 0 }],
+      })
+
+      const wrapper = mount(TwoColumnLayout, {
+        props: { sections: store.sections },
+      })
+
+      const bullets = wrapper.findAll('.preview-bullet-list__item')
+      expect(bullets).toHaveLength(1)
+      expect(bullets[0]!.text()).toBe('Visible bullet')
+      expect(wrapper.text()).not.toContain('Hidden bullet')
+    })
+  })
 })

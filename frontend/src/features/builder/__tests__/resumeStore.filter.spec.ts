@@ -137,13 +137,14 @@ describe('useResumeStore - filter', () => {
       const expSection = store.sections.find((s) => s.sectionType === 'experience')!
       expSection.locked = true
       const entryId = crypto.randomUUID()
-      expSection.entries.push({ id: entryId, order: 0, parentId: null, locked: false, fields: [] })
+      expSection.entries.push({ id: entryId, order: 0, parentId: null, locked: false, visible: true, fields: [] })
       for (let i = 0; i < 3; i++) {
         expSection.entries.push({
           id: crypto.randomUUID(),
           order: i,
           parentId: entryId,
           locked: false,
+          visible: true,
           fields: [{ key: 'text', value: `Bullet ${i}`, order: 0 }],
         })
       }
@@ -180,8 +181,8 @@ describe('useResumeStore - filter', () => {
       const entryA = crypto.randomUUID()
       const entryB = crypto.randomUUID()
       expSection.entries.push(
-        { id: entryA, order: 0, parentId: null, locked: false, fields: [] },
-        { id: entryB, order: 1, parentId: null, locked: false, fields: [] },
+        { id: entryA, order: 0, parentId: null, locked: false, visible: true, fields: [] },
+        { id: entryB, order: 1, parentId: null, locked: false, visible: true, fields: [] },
       )
       for (let i = 0; i < 3; i++) {
         expSection.entries.push({
@@ -189,6 +190,7 @@ describe('useResumeStore - filter', () => {
           order: i,
           parentId: entryA,
           locked: false,
+          visible: true,
           fields: [{ key: 'text', value: `A${i}`, order: 0 }],
         })
         expSection.entries.push({
@@ -196,6 +198,7 @@ describe('useResumeStore - filter', () => {
           order: i,
           parentId: entryB,
           locked: false,
+          visible: true,
           fields: [{ key: 'text', value: `B${i}`, order: 0 }],
         })
       }
@@ -243,6 +246,7 @@ describe('useResumeStore - filter', () => {
           order: 0,
           parentId: null,
           locked: true,
+          visible: true,
           fields: [{ key: 'name', value: 'Leadership', order: 0 }],
         },
         {
@@ -250,6 +254,7 @@ describe('useResumeStore - filter', () => {
           order: 1,
           parentId: null,
           locked: false,
+          visible: true,
           fields: [{ key: 'name', value: 'Communication', order: 0 }],
         },
       )
@@ -429,6 +434,7 @@ describe('useResumeStore - filter', () => {
           order: 0,
           parentId: null,
           locked: false,
+          visible: true,
           fields: [],
         })
         // Add 3 bullet children
@@ -438,6 +444,7 @@ describe('useResumeStore - filter', () => {
             order: i,
             parentId: entryId,
             locked: false,
+            visible: true,
             fields: [{ key: 'text', value: `Bullet ${i}`, order: 0 }],
           })
         }
@@ -474,13 +481,14 @@ describe('useResumeStore - filter', () => {
     function addBulletsToSection(sectionType: SectionType, bulletCount: number) {
       const section = store.sections.find((s) => s.sectionType === sectionType)!
       const entryId = crypto.randomUUID()
-      section.entries.push({ id: entryId, order: 0, parentId: null, locked: false, fields: [] })
+      section.entries.push({ id: entryId, order: 0, parentId: null, locked: false, visible: true, fields: [] })
       for (let i = 0; i < bulletCount; i++) {
         section.entries.push({
           id: crypto.randomUUID(),
           order: i,
           parentId: entryId,
           locked: false,
+          visible: true,
           fields: [{ key: 'text', value: `Bullet ${i}`, order: 0 }],
         })
       }
@@ -499,6 +507,7 @@ describe('useResumeStore - filter', () => {
           order: i,
           parentId: null,
           locked: false,
+          visible: true,
           fields: [{ key: 'name', value: name, order: 0 }],
         })
       })
@@ -587,6 +596,7 @@ describe('useResumeStore - filter', () => {
         order: 0,
         parentId: null,
         locked: false,
+        visible: true,
         fields: [{ key: 'text', value: 'A summary', order: 0 }],
       })
       summary.enabled = false

@@ -52,6 +52,11 @@ export class SectionEntryDto {
   @IsOptional()
   locked?: boolean;
 
+  /** Whether the entry is visible in the rendered resume (eye toggle, RES-106). */
+  @IsBoolean()
+  @IsOptional()
+  visible?: boolean;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => SectionFieldDto)

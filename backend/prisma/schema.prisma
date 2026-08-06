@@ -75,6 +75,11 @@ model SectionEntry {
   // Entry-level Tailor-protect flag: a locked sub-item (job, project,
   // skill, …) is never modified or removed by Tailor Resume.
   locked          Boolean @default(false)
+  // Entry-level visibility flag (RES-106): when false the sub-item is
+  // hidden from every resume preview (eye crossed out in the builder).
+  // Independent of `locked` — a hidden item can still be locked, and a
+  // locked item keeps its visibility through Tailor runs.
+  visible         Boolean @default(true)
 
   resumeSection ResumeSection  @relation(fields: [resumeSectionId], references: [id], onDelete: Cascade)
   parent        SectionEntry?  @relation("EntryChildren", fields: [parentId], references: [id], onDelete: SetNull)

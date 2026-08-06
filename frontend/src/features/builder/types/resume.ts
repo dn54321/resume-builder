@@ -26,6 +26,8 @@ export interface SectionEntryState {
   parentId: string | null
   /** Whether the entry is locked — Tailor must not modify/remove it. */
   locked: boolean
+  /** Whether the entry is visible in the rendered resume (eye toggle, RES-106). */
+  visible: boolean
   fields: SectionFieldState[]
 }
 
@@ -55,6 +57,8 @@ export interface ResumePayload {
       order: number
       parentId: string | null
       locked?: boolean
+      /** Optional — defaults to true when absent (RES-106 backward compat). */
+      visible?: boolean
       fields: {
         key: string
         value: string

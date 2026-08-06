@@ -28,6 +28,20 @@
           aria-label="Drag to reorder entry"
         >&#x2630;</span>
         <span class="flex-1 text-[0.8125rem] font-medium text-foreground overflow-hidden text-ellipsis whitespace-nowrap">{{ entryTitle(entry, index) }}</span>
+        <!-- Entry visibility toggle: eye shows the sub-item in the resume, eye crossed out hides it (RES-106) -->
+        <button
+          type="button"
+          class="w-6 h-6 flex items-center justify-center border-none bg-transparent rounded-sm text-xs shrink-0 transition-colors hover:bg-muted/50 hover:text-foreground"
+          :class="entry.visible === false ? 'text-muted-foreground/50' : 'text-foreground'"
+          :title="entry.visible === false ? 'Show entry in resume' : 'Hide entry from resume'"
+          :aria-label="`${entry.visible === false ? 'Show' : 'Hide'} entry`"
+          :aria-pressed="entry.visible !== false"
+          data-testid="entry-eye-toggle"
+          @click.stop="$emit('toggleVisibility', entry.id)"
+        >
+          <Eye v-if="entry.visible !== false" class="w-3.5 h-3.5" />
+          <EyeOff v-else class="w-3.5 h-3.5" />
+        </button>
         <!-- Entry lock toggle: protect this sub-item from Tailor edits -->
         <button
           type="button"
@@ -62,12 +76,13 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { Lock, LockOpen } from '@lucide/vue'
+import { Eye, EyeOff, Lock, LockOpen } from '@lucide/vue'
 
 interface EntryLike {
   id: string
   order: number
   locked?: boolean
+  visible?: boolean
 }
 
 const props = defineProps<{
@@ -80,6 +95,7 @@ const emit = defineEmits<{
   add: []
   remove: [id: string]
   toggleLock: [id: string]
+  toggleVisibility: [id: string]
   reorder: [fromIndex: number, toIndex: number]
 }>()
 

@@ -94,6 +94,7 @@ describe('useResumeStore', () => {
         order: 0,
         parentId: null,
         locked: false,
+        visible: true,
         fields: [
           { key: 'fullName', value: 'Jane Doe', order: 0 },
           { key: 'email', value: 'jane@example.com', order: 1 },
@@ -270,6 +271,7 @@ describe('useResumeStore', () => {
                 order: 0,
                 parentId: null,
                 locked: false,
+                visible: true,
                 fields: [
                   { key: 'firstName', value: 'John', order: 0 },
                   { key: 'lastName', value: 'Doe', order: 1 },
@@ -286,6 +288,7 @@ describe('useResumeStore', () => {
                 order: 0,
                 parentId: null,
                 locked: false,
+                visible: true,
                 fields: [
                   { key: 'company', value: 'Acme', order: 0 },
                 ],
@@ -294,6 +297,7 @@ describe('useResumeStore', () => {
                 order: 1,
                 parentId: null,
                 locked: false,
+                visible: true,
                 fields: [
                   { key: 'company', value: 'Beta', order: 0 },
                 ],
@@ -601,7 +605,7 @@ describe('useResumeStore', () => {
 
       const exp = store.sections.find((s) => s.sectionType === 'experience')!
       const entryId = crypto.randomUUID()
-      exp.entries.push({ id: entryId, order: 0, parentId: null, locked: false, fields: [] })
+      exp.entries.push({ id: entryId, order: 0, parentId: null, locked: false, visible: true, fields: [] })
 
       expect(exp.entries[0]!.locked).toBe(false)
       store.toggleEntryLock('experience', entryId)
@@ -619,8 +623,8 @@ describe('useResumeStore', () => {
       const idA = crypto.randomUUID()
       const idB = crypto.randomUUID()
       exp.entries.push(
-        { id: idA, order: 0, parentId: null, locked: false, fields: [] },
-        { id: idB, order: 1, parentId: null, locked: false, fields: [] },
+        { id: idA, order: 0, parentId: null, locked: false, visible: true, fields: [] },
+        { id: idB, order: 1, parentId: null, locked: false, visible: true, fields: [] },
       )
 
       store.toggleEntryLock('experience', idA)
@@ -649,7 +653,7 @@ describe('useResumeStore', () => {
 
       const exp = store.sections.find((s) => s.sectionType === 'experience')!
       const entryId = crypto.randomUUID()
-      exp.entries.push({ id: entryId, order: 0, parentId: null, locked: false, fields: [] })
+      exp.entries.push({ id: entryId, order: 0, parentId: null, locked: false, visible: true, fields: [] })
 
       store.toggleEntryLock('experience', entryId)
       expect(exp.locked).toBe(false)
@@ -664,7 +668,7 @@ describe('useResumeStore', () => {
 
       const exp = store.sections.find((s) => s.sectionType === 'experience')!
       const entryId = crypto.randomUUID()
-      exp.entries.push({ id: entryId, order: 0, parentId: null, locked: false, fields: [{ key: 'company', value: 'Acme', order: 0 }] })
+      exp.entries.push({ id: entryId, order: 0, parentId: null, locked: false, visible: true, fields: [{ key: 'company', value: 'Acme', order: 0 }] })
       store.toggleEntryLock('experience', entryId)
 
       const payload = store.toPayload()
@@ -703,8 +707,122 @@ describe('useResumeStore', () => {
       store.initializeDefaults()
       const exp = store.sections.find((s) => s.sectionType === 'experience')!
       // Mimic what useSectionEditor.addEntry does.
-      exp.entries.push({ id: crypto.randomUUID(), order: 0, parentId: null, locked: false, fields: [] })
+      exp.entries.push({ id: crypto.randomUUID(), order: 0, parentId: null, locked: false, visible: true, fields: [] })
       expect(exp.entries[0]!.locked).toBe(false)
+    })
+  })
+
+  describe('toggleEntryVisibility (RES-106)', () => {
+    it('toggles the visible flag on an individual entry', () => {
+      const store = useResumeStore()
+      store.initializeDefaults()
+
+      const exp = store.sections.find((s) => s.sectionType === 'experience')!
+      const entryId = crypto.randomUUID()
+      exp.entries.push({ id: entryId, order: 0, parentId: null, locked: false, visible: true, fields: [] })
+
+      expect(exp.entries[0]!.visible).toBe(true)
+      store.toggleEntryVisibility('experience', entryId)
+      expect(exp.entries[0]!.visible).toBe(false)
+
+      store.toggleEntryVisibility('experience', entryId)
+      expect(exp.entries[0]!.visible).toBe(true)
+    })
+
+    it('only toggles the targeted entry, leaving siblings untouched', () => {
+      const store = useResumeStore()
+      store.initializeDefaults()
+
+      const exp = store.sections.find((s) => s.sectionType === 'experience')!
+      const idA = crypto.randomUUID()
+      const idB = crypto.randomUUID()
+      exp.entries.push(
+        { id: idA, order: 0, parentId: null, locked: false, visible: true, fields: [] },
+        { id: idB, order: 1, parentId: null, locked: false, visible: true, fields: [] },
+      )
+
+      store.toggleEntryVisibility('experience', idA)
+
+      expect(exp.entries.find((e) => e.id === idA)!.visible).toBe(false)
+      expect(exp.entries.find((e) => e.id === idB)!.visible).toBe(true)
+    })
+
+    it('is a no-op for unknown section types', () => {
+      const store = useResumeStore()
+      store.initializeDefaults()
+      store.toggleEntryVisibility('unknown' as SectionType, 'whatever')
+      expect(store.sections).toHaveLength(10)
+    })
+
+    it('is a no-op for unknown entry ids', () => {
+      const store = useResumeStore()
+      store.initializeDefaults()
+      store.toggleEntryVisibility('experience', 'missing-entry')
+      expect(store.sections.find((s) => s.sectionType === 'experience')!.entries).toHaveLength(0)
+    })
+
+    it('does not touch the entry lock flag', () => {
+      const store = useResumeStore()
+      store.initializeDefaults()
+
+      const exp = store.sections.find((s) => s.sectionType === 'experience')!
+      const entryId = crypto.randomUUID()
+      exp.entries.push({ id: entryId, order: 0, parentId: null, locked: false, visible: true, fields: [] })
+
+      store.toggleEntryVisibility('experience', entryId)
+      expect(exp.entries[0]!.visible).toBe(false)
+      expect(exp.entries[0]!.locked).toBe(false)
+    })
+  })
+
+  describe('entry visible round-trip (RES-106)', () => {
+    it('serializes entry visible in toPayload and restores it via loadFromPayload', () => {
+      const store = useResumeStore()
+      store.initializeDefaults()
+
+      const exp = store.sections.find((s) => s.sectionType === 'experience')!
+      const entryId = crypto.randomUUID()
+      exp.entries.push({ id: entryId, order: 0, parentId: null, locked: false, visible: true, fields: [{ key: 'company', value: 'Acme', order: 0 }] })
+      store.toggleEntryVisibility('experience', entryId)
+
+      const payload = store.toPayload()
+      const expPayload = payload.sections.find((s) => s.sectionId === 'experience')!
+      expect(expPayload.entries[0]!.visible).toBe(false)
+
+      // Reload and verify the visibility survives.
+      const store2 = useResumeStore()
+      store2.loadFromPayload(payload)
+      const reloaded = store2.sections.find((s) => s.sectionType === 'experience')!
+      expect(reloaded.entries[0]!.visible).toBe(false)
+    })
+
+    it('defaults entry visible to true when the payload omits it (backward compat)', () => {
+      const store = useResumeStore()
+      store.loadFromPayload({
+        layout: 'standard',
+        sections: [
+          {
+            sectionId: 'experience',
+            column: 'right',
+            order: 0,
+            entries: [
+              { order: 0, parentId: null, fields: [{ key: 'company', value: 'Acme', order: 0 }] },
+            ],
+          },
+        ],
+      })
+
+      const exp = store.sections.find((s) => s.sectionType === 'experience')!
+      expect(exp.entries[0]!.visible).toBe(true)
+    })
+
+    it('new entries created via the store default to visible', () => {
+      const store = useResumeStore()
+      store.initializeDefaults()
+      const exp = store.sections.find((s) => s.sectionType === 'experience')!
+      // Mimic what useSectionEditor.addEntry does.
+      exp.entries.push({ id: crypto.randomUUID(), order: 0, parentId: null, locked: false, visible: true, fields: [] })
+      expect(exp.entries[0]!.visible).toBe(true)
     })
   })
 

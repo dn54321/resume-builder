@@ -8,6 +8,7 @@
       @add="addCertification"
       @remove="editor.removeEntry"
       @toggle-lock="editor.toggleEntryLock"
+      @toggle-visibility="editor.toggleEntryVisibility"
       @reorder="editor.reorderEntries"
     >
       <template #fields="{ entry }">

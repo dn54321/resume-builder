@@ -42,6 +42,20 @@
           :class="entry.dimmed ? 'text-muted-foreground/70' : 'text-foreground'"
           placeholder="e.g. Communication"
         />
+        <!-- Entry visibility toggle: eye shows the skill, eye crossed out hides it (RES-106) -->
+        <button
+          type="button"
+          class="w-6 h-6 flex items-center justify-center border-none bg-transparent rounded-sm text-xs shrink-0 transition-colors hover:bg-muted/50 hover:text-foreground"
+          :class="entry.visible === false ? 'text-muted-foreground/50' : 'text-foreground'"
+          :title="entry.visible === false ? 'Show skill in resume' : 'Hide skill from resume'"
+          :aria-label="`${entry.visible === false ? 'Show' : 'Hide'} skill`"
+          :aria-pressed="entry.visible !== false"
+          data-testid="entry-eye-toggle"
+          @click="onToggleVisibility(entry.id)"
+        >
+          <Eye v-if="entry.visible !== false" class="w-3.5 h-3.5" />
+          <EyeOff v-else class="w-3.5 h-3.5" />
+        </button>
         <!-- Entry lock toggle: protect this skill from Tailor edits -->
         <button
           type="button"
@@ -72,7 +86,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Lock, LockOpen } from '@lucide/vue'
+import { Eye, EyeOff, Lock, LockOpen } from '@lucide/vue'
 import { useResumeStore } from '@/features/builder/stores/resume'
 import { useSectionEditor } from '@/features/builder/composables/useSectionEditor'
 
@@ -84,6 +98,7 @@ interface SkillRow {
   id: string
   value: string
   locked: boolean
+  visible: boolean
   dimmed: boolean
 }
 
@@ -97,6 +112,7 @@ const skillEntries = computed<SkillRow[]>(() =>
         id: e.id,
         value,
         locked: e.locked,
+        visible: e.visible,
         dimmed: store.isFiltered && !store.isSkillRelevant('soft_skills', value),
       }
     }),
@@ -131,6 +147,14 @@ function onUpdate(id: string, value: string) {
  */
 function onToggleLock(id: string) {
   editor.toggleEntryLock(id)
+}
+
+/**
+ * Toggle the entry-level visibility (eye) flag.
+ * @param id
+ */
+function onToggleVisibility(id: string) {
+  editor.toggleEntryVisibility(id)
 }
 
 /**

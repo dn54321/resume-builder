@@ -175,4 +175,27 @@ describe('useSectionEditor', () => {
       expect(editor.entries.value).toEqual([])
     })
   })
+
+  describe('toggleEntryVisibility (RES-106)', () => {
+    it('delegates to the store and flips the entry visible flag', () => {
+      const editor = getEditor('experience')
+      const id = editor.addEntry([{ key: 'company', value: 'Acme' }])
+      expect(editor.entries.value[0]!.visible).toBe(true)
+
+      editor.toggleEntryVisibility(id)
+      expect(editor.entries.value[0]!.visible).toBe(false)
+
+      editor.toggleEntryVisibility(id)
+      expect(editor.entries.value[0]!.visible).toBe(true)
+    })
+
+    it('new entries and bullets default to visible', () => {
+      const editor = getEditor('experience')
+      const parentId = editor.addEntry([{ key: 'company', value: 'Acme' }])
+      const bulletId = editor.addBullet(parentId)!
+
+      expect(editor.getEntry(parentId)!.visible).toBe(true)
+      expect(editor.getEntry(bulletId)!.visible).toBe(true)
+    })
+  })
 })

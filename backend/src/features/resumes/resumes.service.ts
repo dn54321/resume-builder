@@ -168,6 +168,7 @@ export class ResumesService {
     return {
       order: entry.order,
       locked: entry.locked ?? false,
+      visible: entry.visible ?? true,
       fields: entry.fields.map((field) => ({
         key: field.key,
         value: field.value,
@@ -255,6 +256,7 @@ export class ResumesService {
           order: entryDto.order,
           parentId: parentId ?? null,
           locked: entryDto.locked ?? false,
+          visible: entryDto.visible ?? true,
         },
       });
 

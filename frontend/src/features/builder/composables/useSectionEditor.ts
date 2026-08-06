@@ -78,6 +78,7 @@ export function useSectionEditor(sectionType: SectionType) {
       order: section.value.entries.length,
       parentId: null,
       locked: false,
+      visible: true,
       fields,
     }
     section.value.entries.push(newEntry)
@@ -174,6 +175,7 @@ export function useSectionEditor(sectionType: SectionType) {
       order: getChildren(parentId).length,
       parentId,
       locked: false,
+      visible: true,
       fields: [{ key: 'text', value: '', order: 0 }],
     }
     section.value.entries.push(bulletEntry)
@@ -229,6 +231,15 @@ export function useSectionEditor(sectionType: SectionType) {
   }
 
   /**
+   * Toggle the entry-level visibility (eye) flag — hidden entries are
+   * excluded from every resume preview.
+   * @param entryId
+   */
+  function toggleEntryVisibility(entryId: string): void {
+    store.toggleEntryVisibility(sectionType, entryId)
+  }
+
+  /**
    *
    * @param parentId
    * @param fromIndex
@@ -269,6 +280,7 @@ export function useSectionEditor(sectionType: SectionType) {
     updateBullet,
     reorderBullets,
     toggleEntryLock,
+    toggleEntryVisibility,
     generateId,
   }
 }
