@@ -80,25 +80,43 @@ else
   echo "[pre.sh] WARNING: no backend/.env in main repo — DB-backed tests will fail"
 fi
 
-# ─── Seed backend/dev.db into the worktree ─────────────────────────
-# backend/dev.db is GITIGNORED (sqlite snapshot). DATABASE_URL=file:./dev.db
-# resolves cwd-relative to backend/dev.db (NOT prisma/dev.db — that 0-byte
-# file is a decoy). Without a populated copy, prisma-schema.spec.ts and
-# every DB-backed test fail with 'no such table: User' until the worker
-# figures out to restore it (observed 2026-08-06: worker 019fd440 reported
-# 0-byte dev.db in ALL worktrees blocking backend verification). Copy the
-# main repo's migrated snapshot so `pnpm test` is green out of the box.
-BACKEND_DB_SRC="${MAIN_REPO_ROOT}/backend/dev.db"
-BACKEND_DB_DST="${ATLAS_WORKTREE}/backend/dev.db"
-if [ -f "$BACKEND_DB_SRC" ] && [ -s "$BACKEND_DB_SRC" ]; then
-  if [ ! -f "$BACKEND_DB_DST" ] || [ ! -s "$BACKEND_DB_DST" ]; then
-    cp "$BACKEND_DB_SRC" "$BACKEND_DB_DST"
-    echo "[pre.sh] Seeded backend/dev.db → worktree (migrated sqlite snapshot)"
-  else
-    echo "[pre.sh] backend/dev.db already present in worktree"
-  fi
+# ─── Apply migrations to the worktree DB (SAFE — no snapshot copy) ───
+# ⚠️ DO NOT copy the main repo's backend/dev.db into worktrees. That file is
+# a live runtime DB (a dev snapshot that drifts from migrations and can
+# contain user data); copying it clobbered real data twice (2026-08-06 — the
+# docker volume's dev.db was overwritten by `docker cp`, wiping the user's
+# resumes). The safe path is `prisma migrate deploy`: it applies only the
+# additive migrations in prisma/migrations/, never wiping existing rows.
+#
+# Worktrees need a DB for prisma-schema.spec.ts + backend tests. Create a
+# FRESH one via migrations (idempotent, additive) rather than seeding from
+# the main repo's drifted snapshot.
+BACKEND_DB_DST="${ATLAS_WORKTREE}/backend/prisma/dev.db"
+if [ ! -f "$BACKEND_DB_DST" ] || [ ! -s "$BACKEND_DB_DST" ]; then
+  echo "[pre.sh] Applying migrations to fresh worktree DB (no snapshot copy)..."
+  ( cd "${ATLAS_WORKTREE}/backend" && DATABASE_URL="file:./prisma/dev.db" timeout 120 pnpm prisma:migrate ) \
+    && echo "[pre.sh] ✓ worktree DB migrated (prisma migrate deploy)" \
+    || echo "[pre.sh] WARNING: prisma migrate deploy failed — DB-backed tests may fail"
 else
-  echo "[pre.sh] WARNING: no non-empty backend/dev.db in main repo — DB tests will fail"
+  echo "[pre.sh] worktree DB present — skipping migrate"
+fi
+
+# ─── Seed the Section catalog (reference data, idempotent) ──────────
+# Migrations create the tables but NOT the Section catalog rows — those are
+# static reference data the resumes service FK-requires (an empty catalog
+# makes every resume save fail with SQLITE_CONSTRAINT). The main repo's
+# dev.db happened to carry them from manual seeding; a fresh migrated DB
+# does not. INSERT OR IGNORE is idempotent and additive — never wipes.
+if [ -f "$BACKEND_DB_DST" ]; then
+  ( cd "${ATLAS_WORKTREE}/backend" && DATABASE_URL="file:./prisma/dev.db" node -e '
+    const { DatabaseSync } = require("node:sqlite");
+    const db = new DatabaseSync(process.env.DATABASE_URL.replace(/^file:/, ""));
+    const cats = [["name_contact","Name & Contact"],["summary","Summary"],["experience","Experience"],["education","Education"],["hard_skills","Hard Skills"],["soft_skills","Soft Skills"],["certifications","Certifications"],["projects","Projects"],["languages","Languages"],["hobbies","Hobbies"],["volunteer","Volunteer"]];
+    const st = db.prepare("INSERT OR IGNORE INTO Section (id, label) VALUES (?, ?)");
+    for (const [id, label] of cats) st.run(id, label);
+    console.log("[pre.sh] ✓ Section catalog seeded (" + db.prepare("SELECT COUNT(*) c FROM Section").get().c + " rows)");
+  ' ) 2>/dev/null \
+    || echo "[pre.sh] WARNING: Section catalog seed failed — resume saves may FK-fail"
 fi
 
 # ─── Copy the generated Prisma client into the worktree ────────────

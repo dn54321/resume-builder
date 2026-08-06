@@ -23,4 +23,10 @@ COPY backend/nest-cli.json backend/tsconfig.json backend/tsconfig.build.json ./
 
 EXPOSE 3000
 
-CMD pnpm run prisma:push && pnpm run start:dev
+# ⚠️ Use `prisma migrate deploy` (additive, safe), NOT `prisma db push`.
+# db push syncs the schema by dropping/recreating tables when columns
+# change, wiping the persisted volume DB (observed 2026-08-06: adding the
+# `visible`/`volunteer` columns reset the backend-db volume, losing user
+# resumes). migrate deploy only applies the additive migrations in
+# prisma/migrations/ — never drops tables, never wipes rows.
+CMD pnpm run prisma:migrate && pnpm run start:dev
