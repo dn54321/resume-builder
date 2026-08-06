@@ -4,12 +4,15 @@
 # buildpack install (which installed the full 329-package devDep tree from
 # the root package.json and OOM'd with status 137).
 #
-# Schema: `type: web` is the service category; `runtime: docker` tells
-# Render to build from the Dockerfile. Build args pass through
-# `dockerBuildArgs`. For Docker services Render runs the image's CMD — no
-# buildCommand, no buildpack install.
+# Schema notes (Render Blueprint spec):
+#   - `type: web` = service category; `runtime: docker` = build from Dockerfile
+#   - Docker services support ONLY: dockerfilePath, dockerContext, dockerCommand
+#   - There is NO build-args field in the Blueprint schema. Build-time env
+#     vars (DATABASE_URL for the Prisma provider, VITE_API_BASE_URL for the
+#     frontend bundle) are set in the Render dashboard per service under
+#     Settings → Environment → "Build Environment Variables".
 #
-# Deploy: New → Blueprint from this repo, then fill the sync:false secrets.
+# Deploy: New → Blueprint from this repo, then fill the secrets below.
 
 services:
   # ─── Backend API (NestJS + Prisma) ──────────────────────────────────
@@ -19,9 +22,8 @@ services:
     repo: https://github.com/dn54321/resume-v3
     dockerfilePath: ./backend/Dockerfile
     dockerContext: .
-    # DATABASE_URL build arg selects the Prisma provider (sqlite vs pg).
-    dockerBuildArgs:
-      DATABASE_URL: ${DATABASE_URL}
+    # ⚠️ Set DATABASE_URL as a BUILD env var in the dashboard (it selects
+    # the Prisma provider: postgresql:// → postgres, file: → sqlite).
     # Render injects PORT; the app binds 0.0.0.0. 401 is the auth-gated
     # health response (a 200 on an unauthenticated GET isn't expected).
     healthCheckPath: /api/v1/resumes
@@ -52,9 +54,8 @@ services:
     repo: https://github.com/dn54321/resume-v3
     dockerfilePath: ./frontend/Dockerfile
     dockerContext: .
-    # VITE_API_BASE_URL must be the backend's public URL (baked at build).
-    dockerBuildArgs:
-      VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+    # ⚠️ Set VITE_API_BASE_URL as a BUILD env var in the dashboard — it is
+    # baked into the JS bundle and must be the backend's public URL.
     # nginx listens on $PORT (envsubst at boot) — Render routes here.
     healthCheckPath: /
     autoDeploy: true
