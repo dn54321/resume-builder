@@ -27,7 +27,7 @@ set -euo pipefail
 
 # ─── Config ─────────────────────────────────────────────────────────────
 DOMAIN="${DOMAIN:?set DOMAIN, e.g. sudo DOMAIN=resumes.example.com EMAIL=you@x.com ./deploy/setup-droplet.sh}"
-EMAIL="${EMAIL:?set EMAIL (Let's Encrypt expiry notices)}"
+EMAIL="${EMAIL:?set EMAIL (needed for TLS cert expiry notices, e.g. you@example.com)}"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="$REPO_DIR/.env.prod"
 SWAP_SIZE_MB="${SWAP_SIZE_MB:-2048}"

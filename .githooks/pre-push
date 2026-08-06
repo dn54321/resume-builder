@@ -63,6 +63,7 @@ fi
 RUN_BACKEND=false
 RUN_FRONTEND=false
 RUN_ATLAS=false
+RUN_SHELL=false
 
 if echo "$CHANGED" | grep -q '^backend/'; then
   RUN_BACKEND=true
@@ -73,12 +74,16 @@ fi
 if echo "$CHANGED" | grep -q '^atlas/'; then
   RUN_ATLAS=true
 fi
+if echo "$CHANGED" | grep -qE '^(deploy/|setup\.sh|\.[a-z]*shrc)'; then
+  RUN_SHELL=true
+fi
 
 # If nothing matched (e.g., root-level config changes), run everything
-if ! $RUN_BACKEND && ! $RUN_FRONTEND && ! $RUN_ATLAS; then
+if ! $RUN_BACKEND && ! $RUN_FRONTEND && ! $RUN_ATLAS && ! $RUN_SHELL; then
   RUN_BACKEND=true
   RUN_FRONTEND=true
   RUN_ATLAS=true
+  RUN_SHELL=true
 fi
 
 # ─── Helpers ─────────────────────────────────────────────────────────
@@ -164,6 +169,15 @@ run_group "FRONTEND" "Frontend" \
 run_group "ATLAS" "Atlas" \
   "lint§npm --prefix atlas run lint" \
   "test§npm --prefix atlas run test"
+
+# ─── Shell scripts ───────────────────────────────────────────────────
+# bash -n catches parse errors like an apostrophe inside ${VAR:?...} that
+# silently swallows the rest of the file (shipped in 0200cec — 'Let\'s' in
+# the EMAIL message broke setup-droplet.sh with 'unexpected EOF' at line
+# 160; only caught when a user ran it on bash 5.2).
+
+run_group "SHELL" "Shell scripts" \
+  "syntax§bash -n deploy/setup-droplet.sh deploy/deploy.sh deploy/backup.sh setup.sh"
 
 # ─── Result ───────────────────────────────────────────────────────────
 
