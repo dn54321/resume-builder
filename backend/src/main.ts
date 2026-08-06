@@ -52,9 +52,7 @@ async function bootstrap() {
   // interface.
   await app.listen(port, '0.0.0.0');
 
-  app
-    .get(Logger)
-    .log(`Server running on http://0.0.0.0:${port}`, 'Bootstrap');
+  app.get(Logger).log(`Server running on http://0.0.0.0:${port}`, 'Bootstrap');
 }
 
 void bootstrap();
