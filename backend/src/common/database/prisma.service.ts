@@ -7,6 +7,8 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { SqlDriverAdapterFactory } from '@prisma/client/runtime/client';
+import { PrismaLibSql } from '@prisma/adapter-libsql';
+import { PrismaPg } from '@prisma/adapter-pg';
 import type { EnvConfig } from '../config/models/env-config.model';
 import type { PrismaClient as PrismaClientType } from '../../generated/prisma/client';
 
@@ -63,16 +65,10 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
     //   postgresql:…       → PostgreSQL via @prisma/adapter-pg (production)
     const isPostgres = /^postgres(ql)?:\/\//.test(databaseUrl);
 
-    let adapter: SqlDriverAdapterFactory | undefined;
+    let adapter: SqlDriverAdapterFactory;
     if (isPostgres) {
-      const [{ PrismaPg }] = await Promise.all([
-        import('@prisma/adapter-pg'),
-      ]);
       adapter = new PrismaPg({ connectionString: databaseUrl });
     } else {
-      const [{ PrismaLibSql }] = await Promise.all([
-        import('@prisma/adapter-libsql'),
-      ]);
       adapter = new PrismaLibSql({ url: databaseUrl });
     }
 
