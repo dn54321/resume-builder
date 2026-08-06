@@ -13,13 +13,12 @@
       <span class="text-sm font-medium text-gray-600">Preview</span>
     </div>
 
-    <!-- Paper area: right padding reserves room for the floating zoom
-         controls so the paper centers in the area LEFT of them — the pill
-         reads as container UI in the corner, never as an overlay on the
-         resume. -->
+    <!-- Paper area: paper is centered in the FULL container (justify-center);
+         the floating zoom controls sit at the corner on top of the edge —
+         UI chrome, not part of the paper's layout box. -->
     <div
       ref="bodyRef"
-      class="live-preview__body flex justify-center items-start overflow-auto py-3 pr-24 flex-1"
+      class="live-preview__body flex justify-center items-start overflow-auto py-3 flex-1"
     >
       <div
         id="resume-preview"
@@ -175,11 +174,10 @@ const bodyRef = ref<HTMLElement | null>(null)
  */
 const scale = computed(() => {
   if (containerWidth.value <= 0) return 0.3 * zoomFactor.value
-  // Reserve room for the floating zoom controls (~96px) on the right so the
-  // auto-fit paper never slides under the pill — the controls stay visually
-  // attached to the container corner, not overlaying the resume.
-  const controlsSpace = 96
-  const availableWidth = containerWidth.value - 24 - controlsSpace
+  // The paper centers in the FULL container width (24px breathing room);
+  // the zoom controls float at the corner as UI chrome and don't shrink
+  // the paper's layout box (which previously off-centered the resume).
+  const availableWidth = containerWidth.value - 24
   const autoFit = Math.min(availableWidth / PAPER_WIDTH_PX, MAX_SCALE)
   return autoFit * zoomFactor.value
 })

@@ -187,9 +187,9 @@ describe('LivePreview', () => {
     const paper = wrapper.find('#resume-preview')
     const style = paper.attributes('style')
     // jsdom's body element reports a clientWidth here, so the auto-fit path
-    // runs: scale = (clientWidth - 24 paper gap - 96 controls space) / 816,
-    // × default zoom 1.0. The exact value depends on jsdom's width — assert
-    // it is a valid positive scale (not the 0.3 unmeasured fallback).
+    // runs: scale = (clientWidth - 24 paper gap) / 816, × default zoom 1.0.
+    // The exact value depends on jsdom's width — assert it is a valid
+    // positive scale (not the 0.3 unmeasured fallback).
     expect(style).toContain('transform: scale(')
     const match = style!.match(/scale\(([\d.]+)\)/)
     const scale = match ? parseFloat(match[1]) : 0
@@ -214,7 +214,7 @@ describe('LivePreview', () => {
     ] as unknown as ResizeObserverEntry[])
     await wrapper.vm.$nextTick()
 
-    // (2000 - 24 - 96) / 816 = 2.3 → capped at MAX_SCALE 1.2
+    // (2000 - 24) / 816 = 2.42 → capped at MAX_SCALE 1.2
     expect(getPaperScale(wrapper)).toBeCloseTo(1.2, 10)
   })
 
