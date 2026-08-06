@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { nextTick } from 'vue'
 import JdModal from '@/features/builder/components/JdModal.vue'
@@ -120,9 +120,13 @@ describe('JdModal', () => {
 
     const textarea = wrapper.find('[data-testid="jd-textarea"]')
     await textarea.setValue('   ')
+    // flushPromises guarantees the v-model update has propagated to localJd
+    // before the click reads it — avoids a rare flake under parallel CI runs.
+    await flushPromises()
 
     const tailorBtn = wrapper.find('[data-testid="jd-modal-tailor"]')
     await tailorBtn.trigger('click')
+    await flushPromises()
     await nextTick()
 
     expect(wrapper.find('[data-testid="jd-modal-error"]').exists()).toBe(true)
