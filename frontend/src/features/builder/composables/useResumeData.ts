@@ -242,7 +242,11 @@ export function useResumeData() {
       // Check sessionStorage first for pending changes that survived a refresh.
       // This is the safety net: if the user edited and refreshed before the
       // debounced auto-save fired, sessionStorage still has the pending state.
-      const pending = readFromSessionStorage(id)
+      // ⚠️ ONLY for an EXISTING resume (id set). A fresh /builder (no id) must
+      // start EMPTY — reading the bare resume_pending_changes key here restored
+      // stale fields from an old session into a brand-new resume (observed:
+      // 'Create New Resume' showed the previous resume's data).
+      const pending = id ? readFromSessionStorage(id) : null
       if (
         pending &&
         typeof pending === 'object' &&
