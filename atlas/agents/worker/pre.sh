@@ -124,6 +124,25 @@ else
   echo "[pre.sh] WARNING: no generated Prisma client in main repo — run pnpm prisma:generate"
 fi
 
+# ─── Install backend dependencies if missing ────────────────────────
+# Worktrees are fresh git checkouts — backend/node_modules is NOT part of
+# the repo, so every worker used to rediscover this ad hoc: run `pnpm
+# install`, hit confusing failures first ('Cannot find module dotenv/config'
+# on prisma db push → 0-byte test-e2e.db → 'no such table: SectionField'
+# in resetE2eDatabase) and burn time diagnosing (observed 2026-08-06:
+# RES-104 worker mislabeled it as the RES-94 migration bug). Install once
+# here so backend tests + e2e work out of the box. ~6s with warm pnpm
+# store; no-op when already installed.
+BACKEND_NM="${ATLAS_WORKTREE}/backend/node_modules"
+if [ ! -d "$BACKEND_NM" ] || [ -z "$(ls -A "$BACKEND_NM" 2>/dev/null)" ]; then
+  echo "[pre.sh] Installing backend dependencies (backend/node_modules missing)..."
+  ( cd "${ATLAS_WORKTREE}/backend" && timeout 300 pnpm install --frozen-lockfile ) \
+    && echo "[pre.sh] ✓ backend deps installed" \
+    || echo "[pre.sh] WARNING: backend pnpm install failed — backend tests/e2e may fail"
+else
+  echo "[pre.sh] backend node_modules present"
+fi
+
 # ─── Verify key tools ───────────────────────────────────────────────
 
 if ! command -v pi &>/dev/null; then
