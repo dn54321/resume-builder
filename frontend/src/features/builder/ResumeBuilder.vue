@@ -187,27 +187,8 @@
       data-testid="unsaved-modal"
     />
 
-    <!-- Mobile FAB: open fullscreen preview -->
-    <!--
-      Floating action button shown only on viewports <1024px once a resume
-      has loaded. It is the sole fullscreen-preview trigger on mobile — the
-      old expand button in LivePreview's header was removed.
-      position: fixed keeps it reachable regardless of scroll position;
-      z-40 sits above page content but below the z-50 dialog overlays.
-    -->
-    <button
-      v-if="fabVisible"
-      class="fullscreen-fab fixed bottom-4 right-4 z-40 inline-flex items-center justify-center size-12 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 active:bg-primary/80 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-      aria-label="Open full screen preview"
-      title="Full screen preview"
-      data-testid="fullscreen-fab"
-      @click="fullscreenOpen = true"
-    >
-      <Eye class="size-5" />
-    </button>
-
-    <!-- Fullscreen preview modal (opened by the mobile FAB) -->
-    <FullscreenPreview v-model:open="fullscreenOpen" />
+    <!-- Fullscreen preview modal removed (the mobile FAB that opened it was
+         removed — the inline preview is sufficient on all viewports). -->
   </div>
 </template>
 
@@ -225,8 +206,7 @@ import AnonymousBanner from '@/features/builder/components/AnonymousBanner.vue'
 import LivePreview from '@/features/builder/components/LivePreview.vue'
 import PdfExportButton from '@/features/builder/components/PdfExportButton.vue'
 import ConfirmModal from '@/features/builder/components/ConfirmModal.vue'
-import FullscreenPreview from '@/features/builder/components/FullscreenPreview.vue'
-import { Eye, Wand2 } from '@lucide/vue'
+import { Wand2 } from '@lucide/vue'
 import { useTailor } from '@/features/builder/composables/useTailor'
 import type { SectionType } from '@/features/builder/types/resume'
 
@@ -238,24 +218,6 @@ const { isTailoring, tailorError, bulletCap, tailorResume, resetFilter } = useTa
 
 const selectedSectionId = ref<string | null>(null)
 const jdModalOpen = ref(false)
-
-// ─── Mobile fullscreen FAB ───────────────────────────────────────
-//
-// On viewports <1024px a floating action button (fixed bottom-right) opens
-// the FullscreenPreview modal. It replaces the old expand button that used
-// to live in LivePreview's header (removed). Reactive matchMedia
-// keeps the FAB in sync when the viewport is resized across the breakpoint.
-const fullscreenOpen = ref(false)
-const isMobile = ref(false)
-
-let mobileMediaQuery: MediaQueryList | null = null
-let mobileMediaQueryListener: ((event: MediaQueryListEvent) => void) | null = null
-
-/**
- * FAB is visible only below 1024px AND once a resume has loaded —
- * `store.sections` is empty while loadResume() is still in flight.
- */
-const fabVisible = computed(() => isMobile.value && store.sections.length > 0)
 
 // ─── 2:1 column layout feature flag ──────────────────────────────
 //
@@ -512,29 +474,12 @@ function onDragHandlePointerUp(event: PointerEvent) {
 
 onMounted(() => {
   window.addEventListener('beforeunload', onBeforeUnload)
-
-  // Reactive mobile viewport detection for the fullscreen FAB.
-  // Guarded so tests (jsdom has no matchMedia) and SSR degrade to desktop
-  // (FAB hidden) instead of crashing.
-  if (typeof window.matchMedia === 'function') {
-    mobileMediaQuery = window.matchMedia('(max-width: 1023px)')
-    isMobile.value = mobileMediaQuery.matches
-    mobileMediaQueryListener = (event) => {
-      isMobile.value = event.matches
-    }
-    mobileMediaQuery.addEventListener('change', mobileMediaQueryListener)
-  }
 })
 
 onUnmounted(() => {
   window.removeEventListener('beforeunload', onBeforeUnload)
   if (savedTimer) clearTimeout(savedTimer)
   teardownAutoSave()
-  if (mobileMediaQuery && mobileMediaQueryListener) {
-    mobileMediaQuery.removeEventListener('change', mobileMediaQueryListener)
-    mobileMediaQuery = null
-    mobileMediaQueryListener = null
-  }
 })
 
 // ─── Unsaved changes navigation guard — INTENTIONALLY DISABLED (RES-105) ──
