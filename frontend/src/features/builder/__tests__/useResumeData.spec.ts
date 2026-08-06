@@ -1168,10 +1168,10 @@ describe('useResumeData', () => {
       // Name edit → store mutation → autosave scheduled (1.5s debounce)
       store.name = 'Autosaved Name'
       await nextTick()
-      expect(localStorage.getItem('resume_data')).toBeNull() // not saved yet
+      expect(localStorage.getItem(`resume_data_${store.id}`)).toBeNull() // not saved yet
 
       await vi.advanceTimersByTimeAsync(2000)
-      const stored = JSON.parse(localStorage.getItem('resume_data')!)
+      const stored = JSON.parse(localStorage.getItem(`resume_data_${store.id}`)!)
       expect(stored.name).toBe('Autosaved Name')
 
       teardownAutoSave()
@@ -1204,7 +1204,7 @@ describe('useResumeData', () => {
       await nextTick()
 
       await vi.advanceTimersByTimeAsync(2000)
-      const stored = JSON.parse(localStorage.getItem('resume_data')!)
+      const stored = JSON.parse(localStorage.getItem(`resume_data_${store.id}`)!)
       const storedSummary = stored.sections.find(
         (s: { sectionId: string }) => s.sectionId === 'summary',
       )
@@ -1232,7 +1232,7 @@ describe('useResumeData', () => {
       await nextTick()
 
       await vi.advanceTimersByTimeAsync(2000)
-      const stored = JSON.parse(localStorage.getItem('resume_data')!)
+      const stored = JSON.parse(localStorage.getItem(`resume_data_${store.id}`)!)
       const hobbies = stored.sections.find(
         (s: { sectionId: string }) => s.sectionId === 'hobbies',
       )
@@ -1259,7 +1259,7 @@ describe('useResumeData', () => {
       await nextTick()
 
       await vi.advanceTimersByTimeAsync(2000)
-      const stored = JSON.parse(localStorage.getItem('resume_data')!)
+      const stored = JSON.parse(localStorage.getItem(`resume_data_${store.id}`)!)
       const summary = stored.sections.find(
         (s: { sectionId: string }) => s.sectionId === 'summary',
       )
