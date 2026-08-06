@@ -1,6 +1,17 @@
 # resume-v3
 
 A resume-building application with a NestJS backend and Vue 3 frontend.
+Build resumes in a live-preview builder, tailor them to any job description,
+and export polished PDFs.
+
+## Screenshots
+
+| | |
+|---|---|
+| ![Dashboard](docs/screenshots/dashboard.png) | ![Builder](docs/screenshots/builder.png) |
+| Two-pane dashboard: resume list + live preview | Section-based builder with live preview |
+| ![Tailor Resume](docs/screenshots/tailor-modal.png) | ![Home](docs/screenshots/home.png) |
+| Job Description modal — the Tailor entry point | Landing page |
 
 ## Architecture
 
@@ -13,6 +24,9 @@ resume-v3/
 ├── frontend/         # Vue 3 + Vite SPA
 │   ├── src/          # Application source
 │   └── e2e/          # Playwright E2E tests
+├── atlas/            # Ticket agent system (orchestrator, workers, boss)
+├── e2e/              # Shared Playwright E2E suite (real backend + DB)
+├── docs/             # Screenshots and project docs
 └── .github/
     └── workflows/    # CI/CD pipelines
 ```
@@ -22,12 +36,61 @@ resume-v3/
 This project is developed through **agentic loops and flows** — most code is
 written, tested, and reviewed by AI agents, not humans.
 
-The [ticket agent system](./AGENTS.md#ticket-agent-system) (`./agent.sh`)
+The [ticket agent system](./AGENTS.md#ticket-agent-system) (`./atlas/atlas.sh`)
 spawns parallel AI workers that implement [Linear](https://linear.app)
 tickets in isolated git worktrees. Each worker runs a headless `pi` session
 that reads the ticket description, dependency graph, and any PR review
 context, then implements the feature end-to-end — writing code, running
 tests, committing, pushing, and opening a pull request.
+
+### Security: agents run in a contained WSL container
+
+All agent processes — the orchestrator, workers, and the boss — run inside
+the project's **WSL (Windows Subsystem for Linux) container**, isolated from
+the host operating system. This containment provides several security
+properties:
+
+- **Process isolation** — agents cannot reach host processes, services, or
+  files outside the WSL filesystem; their blast radius is the container.
+- **Filesystem confinement** — agent file access is limited to the container
+  mount; host directories are only reachable via explicit, read-only-ish
+  bind mounts where required.
+- **Network scoping** — agent-originated traffic flows through the container
+  network namespace; hosts and LAN services are not directly addressable.
+- **Clean teardown** — the container is disposable; terminating it removes
+  agent state, logs, and any intermediate artifacts.
+
+This is defense-in-depth on top of the agents' own restrictions (isolated
+git worktrees, per-ticket ports, scoped API keys). Treat the container as a
+**containment boundary, not a trust boundary** — secrets are still stored
+scoped (see Environment Variables) and never shared across agents.
+
+### Running Atlas (the agent system)
+
+To launch the multi-agent ticket system:
+
+```bash
+cd atlas
+./atlas.sh
+```
+
+**Prerequisites / tools you need:**
+
+| Tool | Why | Where from |
+|------|-----|------------|
+| `pi` | The agent runtime (each agent is a `pi` session) | npm global: `npm i -g @earendil-works/pi-coding-agent` |
+| Node.js ≥ 22 | Runtime for pi, the orchestrator, and the app | nvm / nodejs.org |
+| `tsx` | Runs the orchestrator TypeScript directly | `cd atlas && pnpm install` |
+| `tmux` | The dashboard/banner/boss pane layout | apt: `sudo apt install tmux` |
+| Linear API key | Fetch tickets, transition states | Linear settings → API keys (`LINEAR_API_KEY`) |
+| GitHub PAT | Create PRs, scan comments, webhooks | GitHub → Developer settings → classic PAT, `repo` scope (`GITHUB_PAT_KEY`) |
+| ngrok token | Expose the webhook server to GitHub | ngrok dashboard (`NGROK_AUTHTOKEN`) |
+| imgbb key | Host PR screenshots | api.imgbb.com (`IMGBB_API_KEY`) |
+
+Configure secrets in `atlas/.env.agent` (see `atlas/.env.agent.template`) and
+tuning in `atlas/atlas.config.yaml` (worker count, strategies, intervals).
+See [`atlas/AGENTS.md`](atlas/AGENTS.md) and
+[`atlas/ARCHITECTURE.md`](atlas/ARCHITECTURE.md) for the full protocol.
 
 ### How it works
 
