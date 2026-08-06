@@ -95,9 +95,23 @@ else
 fi
 
 # ─── 3. Secrets (.env.prod) ─────────────────────────────────────────────
-if [ -f "$ENV_FILE" ]; then
-  log "Preserving existing $ENV_FILE (secrets are never regenerated)"
-else
+# Every var docker-compose.prod.yml requires with ${VAR:?} must be present
+# with a real (non-placeholder) value. A placeholder value starts with '<'
+# (template tokens like <RANDOM:32> / <ENC:AES-256> / <your-domain>); real
+# generated values never do.
+REQUIRED_VARS="POSTGRES_PASSWORD DATABASE_URL FRONTEND_URL VITE_API_BASE_URL RESUME_FIELD_ENCRYPTION_KEY SESSION_ENCRYPTION_KEY"
+
+# Returns 0 if the env file is present AND every required var has a real
+# value; 1 otherwise.
+env_file_usable() {
+  local missing="" v
+  for v in $REQUIRED_VARS; do
+    grep -qE "^${v}=[^<].+" "$ENV_FILE" 2>/dev/null || missing="$missing $v"
+  done
+  [ -z "$missing" ]
+}
+
+generate_env_file() {
   log "Generating $ENV_FILE from .env.prod.template …"
   [ -f "$REPO_DIR/.env.prod.template" ] || die "missing .env.prod.template — is the repo checked out at $REPO_DIR?"
 
@@ -120,8 +134,27 @@ else
       { print }
     ' "$REPO_DIR/.env.prod.template" > "$ENV_FILE"
   chmod 600 "$ENV_FILE"
-  log "Generated .env.prod — keep it safe (contains DB password + encryption keys)"
+  log "Generated .env.prod (DB password + 2 encryption keys + URLs) — back it up, never regenerate"
+}
+
+if [ -f "$ENV_FILE" ] && env_file_usable; then
+  log "Preserving existing $ENV_FILE (secrets are never regenerated)"
+else
+  if [ -f "$ENV_FILE" ]; then
+    warn "$ENV_FILE exists but is empty or still holds template placeholders (a copied template or a stray empty file)."
+    warn "It never contained real secrets, so regenerating is safe (no database volume exists yet)."
+  fi
+  rm -f "$ENV_FILE"
+  generate_env_file
 fi
+
+# Fail loudly HERE instead of letting docker compose report confusing
+# 'required variable X is missing a value' interpolation errors later.
+MISSING=""
+for v in $REQUIRED_VARS; do
+  grep -qE "^${v}=[^<].+" "$ENV_FILE" 2>/dev/null || MISSING="$MISSING $v"
+done
+[ -z "$MISSING" ] || die "generated $ENV_FILE is incomplete — missing:$MISSING (template drift? update .env.prod.template)"
 
 # ─── 4. nginx site + TLS ────────────────────────────────────────────────
 SITE_CONF=/etc/nginx/sites-available/resume-builder
