@@ -32,7 +32,7 @@ import {
   unregisterWebhooks,
 } from '../integrations/github/client';
 import { getConfig } from './config';
-import { getRepoRoot, removeWorktree, hasMeaningfulWork, isBranchMergedTo } from '../git/operations';
+import { getRepoRoot, removeWorktree, hasMeaningfulWork, isBranchMergedTo, hasMergeInProgress, abortInProgressMerge } from '../git/operations';
 import type { GraphNode } from './types';
 
 // ─── Globals ────────────────────────────────────────────────────────
@@ -758,6 +758,25 @@ async function scanPRs(): Promise<void> {
 }
 
 async function checkAgentHealth(): Promise<void> {
+  // ⚠️ RES-110 — sweep the main repo for a stale in-progress merge BEFORE
+  // anything else. A conflicted merge left by a crashed worker or a manual
+  // boss git op blocks EVERY push (the pre-push hook lints the whole tree)
+  // and stalls the board (observed: RES-103). Abort it here so a stale
+  // MERGE_HEAD can never survive a full 15s health cycle. mergeToBranch also
+  // aborts pre-flight + on conflict; this sweep is the last-resort net for
+  // merges started outside the orchestrator.
+  try {
+    const repoRoot = getRepoRoot();
+    if (hasMergeInProgress(repoRoot)) {
+      const cleared = abortInProgressMerge(repoRoot);
+      log(`Cleared stale in-progress merge in the main repo: ${cleared.note}`);
+      await tellBoss(`🧹 Cleared stale in-progress merge in the main repo (${cleared.note}) — tree restored clean.`);
+    }
+  } catch {
+    // Bare/broken repo — pool.healthCheck below reports it and mergeToBranch
+    // returns a clean retryable error (RES-99). Don't crash the health tick.
+  }
+
   await pool.healthCheck();
 
   // OS-level boss liveness: probe the boss process (pid + startTime) so a
@@ -1097,7 +1116,8 @@ export async function startOrchestrator(): Promise<void> {
   killStaleOrchestrators();
 
   // State dir
-  const stateDir = path.join(getRepoRoot(), 'atlas', 'state');
+  const repoRoot = getRepoRoot();
+  const stateDir = path.join(repoRoot, 'atlas', 'state');
   setStateDir(stateDir);
   fs.mkdirSync(stateDir, { recursive: true });
   fs.mkdirSync(path.join(stateDir, 'logs'), { recursive: true });
@@ -1114,6 +1134,20 @@ export async function startOrchestrator(): Promise<void> {
   });
   paneManager.init();
   log('Pane scripts written (banner.sh, worker-pane.sh, dashboard-watch.sh)');
+
+  // ⚠️ RES-110 — clear any stale in-progress merge left by a previous run
+  // BEFORE workers can merge. A conflicted merge that was never aborted
+  // leaves .git/MERGE_HEAD + conflict markers in the main repo; every push
+  // then fails at the pre-push hook and the whole board stalls (observed:
+  // RES-103 — the boss had to abort ×3 by hand after a restart).
+  try {
+    if (hasMergeInProgress(repoRoot)) {
+      const cleared = abortInProgressMerge(repoRoot);
+      log(`Cleared stale in-progress merge from a previous run: ${cleared.note}`);
+    }
+  } catch (err) {
+    log(`Could not clear stale merge state: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   // Signal that the orchestrator has written the required scripts.
   // atlas.sh waits for this file (with timeout) before creating tmux panes.

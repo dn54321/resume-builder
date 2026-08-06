@@ -209,3 +209,13 @@ changes lost).
    work first: `git diff --cached > /tmp/boss-staged.patch`, then
    `git apply /tmp/boss-staged.patch --include='atlas/**'` after the abort
    to restore only your files.
+4. **RES-110 (2026-08-06):** `mergeToBranch` now auto-aborts conflicted
+   merges via `abortInProgressMerge` (git/operations.ts) — it preserves
+   staged/unstaged work on non-conflicted files, aborts, restores, and
+   returns a retryable "Merge conflict detected … tree restored clean"
+   error so the ticket re-queues with the conflict details instead of
+   leaving MERGE_HEAD + markers to block every push (RES-103). The
+   orchestrator also clears stale MERGE_HEAD at startup and on the 15s
+   health sweep. You should NEVER need to abort a merge by hand anymore —
+   if you see conflict markers in the main repo, the auto-abort is broken;
+   file a ticket, don't patch around it.
