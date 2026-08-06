@@ -13,10 +13,9 @@
       :entries="editor.entries.value.filter((e) => !e.parentId)"
       add-label="Add Project"
       :entry-title="entryTitle"
+      :show-entry-toggles="false"
       @add="addProject"
       @remove="onRemoveProject"
-      @toggle-lock="editor.toggleEntryLock"
-      @toggle-visibility="editor.toggleEntryVisibility"
       @reorder="editor.reorderEntries"
     >
       <template #fields="{ entry, index: entryIndex }">
@@ -79,6 +78,8 @@
               @remove="editor.removeBullet"
               @update="(idx: number, val: string) => onBulletUpdate(entry.id, idx, val)"
               @reorder="(from: number, to: number) => editor.reorderBullets(entry.id, from, to)"
+              @toggle-lock="editor.toggleEntryLock"
+              @toggle-visibility="editor.toggleEntryVisibility"
             >
               <template #bullet="{ index: bulletIndex }">
                 <span
@@ -152,6 +153,8 @@ function bulletStates(parentId: string, entryIndex: number): BulletState[] {
     .map((b, i) => ({
       id: b.id,
       value: b.fields.find((f) => f.key === 'text')?.value ?? '',
+      locked: b.locked,
+      visible: b.visible,
       dimmed: store.isFiltered && !store.isBulletRelevant('projects', entryIndex, i),
     }))
 }

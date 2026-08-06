@@ -773,6 +773,25 @@ describe('useResumeStore', () => {
       expect(exp.entries[0]!.visible).toBe(false)
       expect(exp.entries[0]!.locked).toBe(false)
     })
+
+    it('toggles visibility on a bullet (child) entry independently of its parent', () => {
+      const store = useResumeStore()
+      store.initializeDefaults()
+
+      const exp = store.sections.find((s) => s.sectionType === 'experience')!
+      const parentId = crypto.randomUUID()
+      const bulletId = crypto.randomUUID()
+      exp.entries.push(
+        { id: parentId, order: 0, parentId: null, locked: false, visible: true, fields: [] },
+        { id: bulletId, order: 0, parentId, locked: false, visible: true, fields: [] },
+      )
+
+      store.toggleEntryVisibility('experience', bulletId)
+
+      // The bullet is hidden; the parent job stays visible.
+      expect(exp.entries.find((e) => e.id === bulletId)!.visible).toBe(false)
+      expect(exp.entries.find((e) => e.id === parentId)!.visible).toBe(true)
+    })
   })
 
   describe('entry visible round-trip (RES-106)', () => {
