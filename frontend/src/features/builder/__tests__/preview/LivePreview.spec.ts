@@ -186,23 +186,36 @@ describe('LivePreview', () => {
 
     const paper = wrapper.find('#resume-preview')
     const style = paper.attributes('style')
-    // jsdom reports clientWidth 0 on mount, so the 0.3 fallback applies;
-    // scale = 0.3 × default zoom (1.0)
-    expect(style).toContain('transform: scale(0.3')
+    // jsdom's body element reports a clientWidth here, so the auto-fit path
+    // runs: scale = (clientWidth - 24 paper gap - 96 controls space) / 816,
+    // × default zoom 1.0. The exact value depends on jsdom's width — assert
+    // it is a valid positive scale (not the 0.3 unmeasured fallback).
+    expect(style).toContain('transform: scale(')
+    const match = style!.match(/scale\(([\d.]+)\)/)
+    const scale = match ? parseFloat(match[1]) : 0
+    expect(scale).toBeGreaterThan(0)
+    expect(scale).toBeLessThanOrEqual(1.2)
     expect(style).toContain(')')
   })
 
-  it('caps scale at 1.0 when container is wide enough', () => {
+  it('caps scale at 1.0 when container is wide enough', async () => {
     const store = makeStore()
     store.initializeDefaults()
     store.layout = 'standard'
 
     const wrapper = mountLivePreview()
+    await wrapper.vm.$nextTick()
 
-    const paper = wrapper.find('#resume-preview')
-    const style = paper.attributes('style')
-    // jsdom has no layout: containerWidth falls back to 0 → 0.3 scale
-    expect(style).toContain('transform: scale(0.3')
+    // Simulate a very wide pane: auto-fit would exceed MAX_SCALE → capped.
+    const ro = MockResizeObserver.instances[0]
+    expect(ro).toBeTruthy()
+    ro.trigger([
+      { contentRect: { width: 2000 } },
+    ] as unknown as ResizeObserverEntry[])
+    await wrapper.vm.$nextTick()
+
+    // (2000 - 24 - 96) / 816 = 2.3 → capped at MAX_SCALE 1.2
+    expect(getPaperScale(wrapper)).toBeCloseTo(1.2, 10)
   })
 
   it('uses minimum scale 0.3 when containerWidth is non-positive', () => {

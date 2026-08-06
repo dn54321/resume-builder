@@ -13,10 +13,13 @@
       <span class="text-sm font-medium text-gray-600">Preview</span>
     </div>
 
-    <!-- Paper area -->
+    <!-- Paper area: right padding reserves room for the floating zoom
+         controls so the paper centers in the area LEFT of them — the pill
+         reads as container UI in the corner, never as an overlay on the
+         resume. -->
     <div
       ref="bodyRef"
-      class="live-preview__body flex justify-center items-start overflow-auto py-3 flex-1"
+      class="live-preview__body flex justify-center items-start overflow-auto py-3 pr-24 flex-1"
     >
       <div
         id="resume-preview"
@@ -172,8 +175,11 @@ const bodyRef = ref<HTMLElement | null>(null)
  */
 const scale = computed(() => {
   if (containerWidth.value <= 0) return 0.3 * zoomFactor.value
-  // Add some padding (24px) so the scaled paper isn't flush against edges
-  const availableWidth = containerWidth.value - 24
+  // Reserve room for the floating zoom controls (~96px) on the right so the
+  // auto-fit paper never slides under the pill — the controls stay visually
+  // attached to the container corner, not overlaying the resume.
+  const controlsSpace = 96
+  const availableWidth = containerWidth.value - 24 - controlsSpace
   const autoFit = Math.min(availableWidth / PAPER_WIDTH_PX, MAX_SCALE)
   return autoFit * zoomFactor.value
 })
