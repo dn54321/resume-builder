@@ -14,7 +14,11 @@ set -euo pipefail
 : "${DROPLET_USER:?set DROPLET_USER (e.g. root)}"
 : "${DROPLET_HOST:?set DROPLET_HOST (droplet IP or hostname)}"
 REPO_DIR="${REPO_DIR:-~/resume-v3}"
-DEPLOY_BRANCH="${DEPLOY_BRANCH:-release/v1.0.0}"
+# Default to the NEWEST remote release branch (release/v1.0.1 beats
+# release/v1.0.0) so manual deploys can't silently target an old line.
+# Override with DEPLOY_BRANCH=release/v1.0.1 if you need a specific one.
+DEFAULT_BRANCH="$(git ls-remote --heads origin 'release/*' 2>/dev/null | sed 's#.*refs/heads/##' | sort -V | tail -1 || true)"
+DEPLOY_BRANCH="${DEPLOY_BRANCH:-${DEFAULT_BRANCH:-release/v1.0.0}}"
 
 echo "==> Deploying $DEPLOY_BRANCH to $DROPLET_USER@$DROPLET_HOST:$REPO_DIR"
 

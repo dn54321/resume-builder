@@ -176,7 +176,7 @@ pnpm test:e2e      # E2E tests (Playwright)
 
 ## CI/CD
 
-Pull requests trigger the [E2E Tests](.github/workflows/e2e.yml) workflow, which runs backend and frontend E2E suites in parallel on every push. Pushes to the **release branch** (`release/v1.0.0`) trigger the [Deploy to Droplet](.github/workflows/deploy.yml) workflow, which rebuilds and restarts the production stack on the server — pushes to `master` never deploy.
+Pull requests trigger the [E2E Tests](.github/workflows/e2e.yml) workflow, which runs backend and frontend E2E suites in parallel on every push. Pushes to **any release branch** (`release/*` — e.g. `release/v1.0.0`, `release/v1.0.1`, `release/v2.0.0`) trigger the [Deploy to Droplet](.github/workflows/deploy.yml) workflow, which rebuilds and restarts the production stack on the server — pushes to `master` never deploy.
 
 ## Deploying to a DigitalOcean Droplet
 

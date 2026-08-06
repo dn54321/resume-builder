@@ -2,25 +2,31 @@ name: Deploy to Droplet
 
 on:
   push:
-    # Deploy ONLY when the release branch changes. This repo's default
-    # branch is `master` — pushes there (and PRs) never deploy. Bump this
-    # exact name when you cut the next release line (e.g. release/v1.1.0).
-    branches: [release/v1.0.0]
+    # ANY release line deploys: release/v1.0.0, release/v1.0.1,
+    # release/v2.0.0… Cutting a new release branch needs zero changes here.
+    # Pushes to `master` and PRs never deploy. The job derives the exact
+    # branch from the pushed ref (github.ref_name) instead of hard-coding
+    # it, so release-branch bumps can't silently stop deploying.
+    branches: [release/**]
   workflow_dispatch:
 
 jobs:
   deploy:
     name: Build & deploy on the droplet
     runs-on: ubuntu-latest
-    # Never run two deploys at once (a fast-forward pull + compose up are
-    # not safe to interleave)
+    # Never run two deploys at once (git hard-sync + compose up are not
+    # safe to interleave)
     concurrency: droplet-deploy
+    # Only release branches deploy — a manual dispatch from master skips.
+    if: startsWith(github.ref, 'refs/heads/release/')
     steps:
       - name: Deploy via SSH
         env:
           DROPLET_HOST: ${{ secrets.DROPLET_HOST }}
           DROPLET_USER: ${{ secrets.DROPLET_USER }}
           DROPLET_SSH_KEY: ${{ secrets.DROPLET_SSH_KEY }}
+          # e.g. release/v1.0.1 — whatever branch this run was triggered on
+          DEPLOY_BRANCH: ${{ github.ref_name }}
         run: |
           set -euo pipefail
           [ -n "$DROPLET_HOST" ] || { echo "missing secret DROPLET_HOST" >&2; exit 1; }
@@ -41,10 +47,10 @@ jobs:
             # safe and guarantees we build EXACTLY what the push contains —
             # even after a force-push or a stray commit on the droplet.
             # Never add `git clean` here (it would delete .env.prod).
-            git fetch origin release/v1.0.0
-            git checkout -f release/v1.0.0
-            git reset --hard origin/release/v1.0.0
-            echo "Deploying release/v1.0.0 @ $(git log -1 --oneline)"
+            git fetch origin '"$DEPLOY_BRANCH"'
+            git checkout -f '"$DEPLOY_BRANCH"'
+            git reset --hard origin/'"$DEPLOY_BRANCH"'
+            echo "Deploying '"$DEPLOY_BRANCH"' @ $(git log -1 --oneline)"
             docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
             docker image prune -f
             docker compose --env-file .env.prod -f docker-compose.prod.yml ps --status running
