@@ -336,6 +336,36 @@ describe('HybridEngine', () => {
     expect(unlockedSection?.entries.length).toBeLessThanOrEqual(2);
   });
 
+  // ── Locked entries (RES-97) ───────────────────────────────
+
+  it('keeps locked entries through the hybrid pipeline even when the LLM re-rank drops everything else', async () => {
+    // Worst-case LLM: drops every UNLOCKED entry it is given. The locked
+    // entry must still survive the keyword pre-filter AND the re-rank.
+    llmMatchSpy.mockImplementation((request: TailorRequest) =>
+      Promise.resolve({
+        sections: request.resume.sections.map((s) => ({
+          sectionId: s.sectionId,
+          entries: s.entries.filter((e) => e.locked === true),
+        })),
+      }),
+    );
+
+    const jd = 'React developer';
+    const entries = [
+      { ...bulletEntry(0, 'Managed coffee supply chain'), locked: true },
+      bulletEntry(1, 'Built React dashboards'),
+      bulletEntry(2, 'Planned office potlucks'),
+    ];
+
+    const result = await engine.match(makeRequest(jd, entries));
+
+    // Only the locked entry survives — it passed the keyword pre-filter
+    // (keyword engine's locked pass-through) and the hostile LLM re-rank.
+    expect(result.sections[0].entries.map((e) => e.fields[0].value)).toEqual([
+      'Managed coffee supply chain',
+    ]);
+  });
+
   // ── Order preservation ─────────────────────────────────────
 
   it('preserves entry order through hybrid pipeline', async () => {

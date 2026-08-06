@@ -186,6 +186,10 @@ Example response:
       }
 
       const passThrough: SectionEntryDto[] = [];
+      // Locked sub-items (RES-97) always pass through unfiltered — they are
+      // never sent to the LLM for ranking, never selected or dropped, and
+      // never counted against the bullet cap.
+      const lockedPassThrough: SectionEntryDto[] = [];
       const categorized: Array<{
         entry: SectionEntryDto;
         label: string;
@@ -194,7 +198,9 @@ Example response:
       }> = [];
 
       for (const entry of section.entries) {
-        if (this.isBulletEntry(entry)) {
+        if (entry.locked === true) {
+          lockedPassThrough.push(entry);
+        } else if (this.isBulletEntry(entry)) {
           categorized.push({
             entry,
             label: this.getEntryLabel(entry),
@@ -244,8 +250,14 @@ Example response:
         .filter((_, i) => selectedSet.has(i))
         .map((c) => c.entry);
 
-      // Combine pass-through + selected, sorted by original order
-      const allEntries = [...passThrough, ...selectedEntries];
+      // Combine locked pass-through + pass-through + selected, sorted by
+      // original order. Locked sub-items are included unconditionally — the
+      // LLM never decides their fate (RES-97).
+      const allEntries = [
+        ...lockedPassThrough,
+        ...passThrough,
+        ...selectedEntries,
+      ];
       allEntries.sort((a, b) => a.order - b.order);
 
       sections.push({
