@@ -265,6 +265,16 @@ test.describe('Dashboard two-pane preview (RES-87)', () => {
 test.describe('Resume card actions (RES-89 / RES-84)', () => {
   const ORIGINAL_PREFIX = 'Card Original'
 
+  // Reset the e2e database at the START of this describe so it is
+  // self-sufficient when run in isolation (e.g. `playwright test
+  // dashboard-core -g "<single test>"`). Without this, the Section catalog
+  // (reference data required by ResumeSection.sectionId's FK) is only
+  // seeded by OTHER specs' beforeAll hooks — running this describe alone
+  // made every resume POST fail with SQLITE_CONSTRAINT: FOREIGN KEY.
+  test.beforeAll(() => {
+    resetE2eDatabase()
+  })
+
   /**
    * Each test gets its own user so seeded resumes never accumulate across
    * tests in this describe (the dashboard assertions expect exactly one).
@@ -324,6 +334,99 @@ test.describe('Resume card actions (RES-89 / RES-84)', () => {
     const resumes = await list.json()
     expect(resumes).toHaveLength(1)
     expect(resumes[0]!.name).toBe(renamed)
+  })
+
+  test('rename → open in builder → experience bullets intact (RES-112 regression)', async ({
+    page,
+  }) => {
+    // RES-112: renaming a resume from the dashboard used to wipe every
+    // experience bullet (a replace-style update). The seeded resume carries
+    // two experience bullets — they MUST survive the rename + builder load.
+    const { resumeId, original } = await signupAndSeedOneResume(page)
+    const renamed = `Renamed Resume ${Date.now()}`
+
+    // 1. Rename via the ⋮ dropdown
+    const card = page.locator('.resume-card', { hasText: original }).first()
+    await card.locator('[data-testid="resume-menu-trigger"]').click()
+    await expect(page.locator('[data-testid="menu-rename"]')).toBeVisible()
+    await page.locator('[data-testid="menu-rename"]').click()
+    const nameInput = page.locator('.resume-card__name-input').first()
+    await expect(nameInput).toBeVisible({ timeout: 5_000 })
+    await nameInput.fill(renamed)
+    await nameInput.press('Enter')
+    await expect(
+      page.locator('.resume-card__name', { hasText: renamed }),
+    ).toBeVisible({ timeout: 10_000 })
+
+    // 2. Open the renamed resume in the builder via ⋮ → Edit in Builder
+    const renamedCard = page
+      .locator('.resume-card', { hasText: renamed })
+      .first()
+    await renamedCard.locator('[data-testid="resume-menu-trigger"]').click()
+    const editItem = page.locator('[data-testid="menu-edit-builder"]')
+    await expect(editItem).toBeVisible({ timeout: 5_000 })
+    await editItem.click()
+    await page.waitForURL('**/builder/**', { timeout: 15_000 })
+
+    // The builder loaded THAT resume — renamed name is shown
+    await expect(page.locator('input[aria-label="Resume name"]')).toHaveValue(
+      renamed,
+      { timeout: 10_000 },
+    )
+
+    // 3. Open the Experience section and assert both bullets survived
+    const experienceRow = page
+      .locator('li')
+      .filter({ has: page.locator('[data-testid="section-eye-toggle"]') })
+      .filter({ hasText: 'Experience' })
+    await experienceRow.locator('label').first().click()
+
+    // The job entry accordion starts collapsed — expand it to reveal the
+    // company/title fields and the bullet list beneath.
+    const jobToggle = page.locator('[aria-label^="Toggle Engineer at"]')
+    await expect(jobToggle).toBeVisible({ timeout: 10_000 })
+    await jobToggle.click()
+
+    const bulletInputs = page.locator('input[aria-label^="Bullet point"]')
+    await expect(bulletInputs).toHaveCount(2, { timeout: 10_000 })
+    await expect(bulletInputs.nth(0)).toHaveValue(
+      'Built the first mechanical general-purpose computer',
+    )
+    await expect(bulletInputs.nth(1)).toHaveValue(
+      'Wrote the first algorithm intended for machine processing',
+    )
+    // Job fields survive too
+    await expect(page.getByPlaceholder('Acme Corp')).toHaveValue(
+      'Analytical Engines',
+    )
+    await expect(page.getByPlaceholder('Software Engineer')).toHaveValue(
+      'Engineer',
+    )
+
+    // 3b. The live preview pane must also render both bullets (the user's
+    // view of the renamed resume — not just the stored rows).
+    const preview = page.locator('#resume-preview').first()
+    await expect(
+      preview.getByText('Built the first mechanical general-purpose computer'),
+    ).toBeVisible({ timeout: 10_000 })
+    await expect(
+      preview.getByText('Wrote the first algorithm intended for machine processing'),
+    ).toBeVisible()
+
+    // 4. Database at rest: name renamed, bullets still stored (2 children)
+    const listAfter = await page.request.get(`${API_BASE}/resumes`)
+    const resumesAfter = await listAfter.json()
+    expect(resumesAfter).toHaveLength(1)
+    expect(resumesAfter[0]!.name).toBe(renamed)
+    const full = await page.request.get(`${API_BASE}/resumes/${resumeId}`)
+    const fullBody = await full.json()
+    const experience = fullBody.sections.find(
+      (s: { sectionId: string }) => s.sectionId === 'experience',
+    )
+    const flatEntries = experience.entries
+    expect(
+      flatEntries.filter((e: { parentId: string | null }) => e.parentId),
+    ).toHaveLength(2)
   })
 
   test('duplicate a resume via the ⋮ dropdown (persisted to the database)', async ({
