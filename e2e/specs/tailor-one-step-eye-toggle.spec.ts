@@ -30,7 +30,7 @@ test.describe('Tailor Resume one-step + eye-toggle feedback', () => {
     // ── 1. Experience: one matching bullet + one non-matching ─────────
     const expRow = page
       .locator('li')
-      .filter({ has: page.locator('[data-testid="section-lock-toggle"]') })
+      .filter({ has: page.locator('[data-testid="section-eye-toggle"]') })
       .filter({ hasText: 'Experience' })
     await expRow.locator('label').first().click()
 
@@ -51,7 +51,7 @@ test.describe('Tailor Resume one-step + eye-toggle feedback', () => {
     // ── 2. Projects: only a non-matching bullet ────────────────────────
     const projectsRow = page
       .locator('li')
-      .filter({ has: page.locator('[data-testid="section-lock-toggle"]') })
+      .filter({ has: page.locator('[data-testid="section-eye-toggle"]') })
       .filter({ hasText: 'Projects' })
     await projectsRow.locator('label').first().click()
 

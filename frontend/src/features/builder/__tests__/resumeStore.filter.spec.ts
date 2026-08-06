@@ -474,12 +474,13 @@ describe('useResumeStore - filter', () => {
     function addBulletsToSection(sectionType: SectionType, bulletCount: number) {
       const section = store.sections.find((s) => s.sectionType === sectionType)!
       const entryId = crypto.randomUUID()
-      section.entries.push({ id: entryId, order: 0, parentId: null, fields: [] })
+      section.entries.push({ id: entryId, order: 0, parentId: null, locked: false, fields: [] })
       for (let i = 0; i < bulletCount; i++) {
         section.entries.push({
           id: crypto.randomUUID(),
           order: i,
           parentId: entryId,
+          locked: false,
           fields: [{ key: 'text', value: `Bullet ${i}`, order: 0 }],
         })
       }
@@ -497,6 +498,7 @@ describe('useResumeStore - filter', () => {
           id: crypto.randomUUID(),
           order: i,
           parentId: null,
+          locked: false,
           fields: [{ key: 'name', value: name, order: 0 }],
         })
       })
@@ -584,6 +586,7 @@ describe('useResumeStore - filter', () => {
         id: crypto.randomUUID(),
         order: 0,
         parentId: null,
+        locked: false,
         fields: [{ key: 'text', value: 'A summary', order: 0 }],
       })
       summary.enabled = false
