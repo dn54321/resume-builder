@@ -20,10 +20,12 @@ FROM node:22-alpine AS build
 
 WORKDIR /app
 
-# pnpm — pinned via package.json's packageManager field so corepack uses a
-# known version instead of fetching pnpm@latest over the network every build
-# (Render: flaky registry fetches + OOM on large installs).
-RUN corepack enable
+# pnpm — installed globally via npm (NOT corepack). `corepack enable`
+# makes the pnpm shim DOWNLOAD pnpm@<packageManager> from the npm registry
+# at build time — on Render that download OOMs/times out ('Corepack is
+# about to download …' then status 137). A global npm install is a cached
+# layer: no runtime fetch, pinned version, works offline.
+RUN npm install -g pnpm@11.20.0
 
 # Cap the Node heap for the TypeScript compile below — `nest build` (tsc)
 # on Render's RAM-limited containers can exceed the default heap and get
@@ -67,7 +69,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-RUN corepack enable
+RUN npm install -g pnpm@11.20.0
 
 # Install ONLY production deps fresh in the runtime image (no 571MB
 # devDeps copy — that bloats the image and the copy itself can OOM on
