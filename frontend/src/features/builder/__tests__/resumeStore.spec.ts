@@ -195,7 +195,7 @@ describe('useResumeStore', () => {
   })
 
   describe('reorderSections', () => {
-    it('reorders enabled sections and appends disabled at end', () => {
+    it('reorders listed sections into their slots while hidden sections keep their position (RES-109)', () => {
       const store = useResumeStore()
       store.initializeDefaults()
       // Disable some
@@ -205,28 +205,104 @@ describe('useResumeStore', () => {
       const newOrder: SectionType[] = ['experience', 'education', 'hard_skills', 'summary', 'projects', 'certifications', 'languages', 'soft_skills']
       store.reorderSections(newOrder)
 
-      // Enabled sections in requested order, disabled at end
+      // Listed (enabled) sections are placed, in the requested order, into
+      // the slots the listed sections occupied. Unlisted hidden sections
+      // (name_contact at 0, hobbies at 9) keep their positions — they are
+      // NEVER pushed to the end (RES-109).
       const ordered = store.sections.map((s) => s.sectionType)
-      expect(ordered).toEqual([...newOrder, 'name_contact', 'hobbies'])
+      expect(ordered).toEqual(['name_contact', ...newOrder, 'hobbies'])
 
-      // Orders updated: enabled have orders 0..7, disabled have 8..9
+      // Orders are contiguous 0..9
       for (let i = 0; i < store.sections.length; i++) {
         expect(store.sections[i]!.order).toBe(i)
       }
     })
 
-    it('places unordered enabled sections after reordered ones', () => {
+    it('applies a full reorder verbatim — hidden sections included (RES-109)', () => {
+      const store = useResumeStore()
+      store.initializeDefaults()
+      // Hide a mid-list section — it must still participate in the order
+      store.toggleSection('education')
+
+      const fullOrder: SectionType[] = [
+        'hobbies',
+        'languages',
+        'certifications',
+        'projects',
+        'soft_skills',
+        'hard_skills',
+        'experience',
+        'education',
+        'summary',
+        'name_contact',
+      ]
+      store.reorderSections(fullOrder)
+
+      // The full order (hidden sections included) is applied exactly
+      expect(store.sections.map((s) => s.sectionType)).toEqual(fullOrder)
+      for (let i = 0; i < store.sections.length; i++) {
+        expect(store.sections[i]!.order).toBe(i)
+      }
+      // The hidden section is still hidden
+      expect(store.isSectionEnabled('education')).toBe(false)
+    })
+
+    it('keeps unlisted sections in their slots for partial orders (RES-109)', () => {
       const store = useResumeStore()
       store.initializeDefaults()
 
-      store.reorderSections(['hard_skills', 'projects'])
+      // Partial order: only these two types are listed. Every other section
+      // keeps its current position — unlisted sections are never pushed to
+      // the end (RES-109).
+      store.reorderSections(['projects', 'experience'])
 
-      // All 10 sections preserved; hard_skills and projects first, rest follow
+      // projects (was slot 6) and experience (was slot 2) trade slots; the
+      // other eight sections stay exactly where they were.
+      expect(store.sections.map((s) => s.sectionType)).toEqual([
+        'name_contact',
+        'summary',
+        'projects',
+        'education',
+        'hard_skills',
+        'soft_skills',
+        'experience',
+        'certifications',
+        'languages',
+        'hobbies',
+      ])
+
+      // All 10 sections preserved and still enabled
       expect(store.sections).toHaveLength(10)
-      expect(store.sections[0]!.sectionType).toBe('hard_skills')
-      expect(store.sections[1]!.sectionType).toBe('projects')
-      // Rest are still enabled and appended after the reordered ones
       expect(store.sections.map((s) => s.enabled).every(Boolean)).toBe(true)
+    })
+
+    it('ignores unknown or duplicate types in the requested order', () => {
+      const store = useResumeStore()
+      store.initializeDefaults()
+
+      store.reorderSections([
+        'hobbies',
+        'hobbies', // duplicate — deduped
+        'unknown' as SectionType, // unknown — ignored
+        'name_contact',
+      ])
+
+      // hobbies (slot 9) and name_contact (slot 0) trade slots — the two
+      // mentioned sections are placed, in the requested order, into the slots
+      // they occupy; duplicates and unknown types are ignored; the other
+      // eight sections keep their positions.
+      expect(store.sections.map((s) => s.sectionType)).toEqual([
+        'hobbies',
+        'summary',
+        'experience',
+        'education',
+        'hard_skills',
+        'soft_skills',
+        'projects',
+        'certifications',
+        'languages',
+        'name_contact',
+      ])
     })
   })
 
@@ -238,6 +314,48 @@ describe('useResumeStore', () => {
 
       expect(store.enabledSections).toHaveLength(9)
       expect(store.enabledSections).not.toContain('hobbies' as SectionType)
+    })
+
+    it('orderedSectionTypes keeps hidden sections interleaved by order (RES-109)', () => {
+      const store = useResumeStore()
+      store.initializeDefaults()
+
+      // Hide mid-list sections (summary at 1, languages at 8)
+      store.toggleSection('summary')
+      store.toggleSection('languages')
+
+      // Hidden sections stay exactly where they are — NOT pushed to the end
+      expect(store.orderedSectionTypes).toEqual([...SECTION_TYPES])
+
+      // enabledSections still excludes them (preview only renders enabled)
+      expect(store.enabledSections).toHaveLength(8)
+      expect(store.enabledSections).not.toContain('summary' as SectionType)
+      expect(store.enabledSections).not.toContain('languages' as SectionType)
+    })
+
+    it('orderedSectionTypes reflects a reorder with hidden sections kept in place (RES-109)', () => {
+      const store = useResumeStore()
+      store.initializeDefaults()
+      store.toggleSection('soft_skills') // hide mid-list section (slot 5)
+
+      // Move experience (slot 2) above name_contact (slot 0) via the full
+      // interleaved order — soft_skills (hidden) keeps its slot.
+      const fullOrder: SectionType[] = [
+        'experience',
+        'name_contact',
+        'summary',
+        'education',
+        'hard_skills',
+        'soft_skills',
+        'projects',
+        'certifications',
+        'languages',
+        'hobbies',
+      ]
+      store.reorderSections(fullOrder)
+
+      expect(store.orderedSectionTypes).toEqual(fullOrder)
+      expect(store.enabledSections).not.toContain('soft_skills' as SectionType)
     })
 
     it('leftColumnSections / rightColumnSections filter by column', () => {
