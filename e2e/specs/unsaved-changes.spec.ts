@@ -1,6 +1,13 @@
 /**
- * Unsaved changes guard — critical path: data loss prevention.
- * If this fails, users lose work and trust is destroyed.
+ * Autosave + immediate navigation (RES-105) — critical path: data loss prevention.
+ *
+ * The "Unsaved Changes" confirmation modal is INTENTIONALLY DISABLED (RES-105):
+ * every field edit autosaves (1.5s debounce + immediate sessionStorage safety
+ * net), so navigating away mid-edit must be immediate AND lossless.
+ *
+ * Each test uses a UNIQUE user (single resume per user) — the backend's
+ * PUT /resumes upsert targets the user's oldest resume, so multi-resume
+ * users would make the DB assertions non-deterministic.
  *
  * Tests the full stack: browser → frontend → backend → database.
  */
@@ -10,23 +17,39 @@ import { resetE2eDatabase } from '../helpers/db-reset'
 const BACKEND_PORT = parseInt(process.env.AGENT_PORT || '3000', 10)
 const API_BASE = `http://localhost:${BACKEND_PORT}/api/v1`
 
-test.describe('Unsaved changes guard', () => {
-  const email = `unsaved-${Date.now()}@test.com`
-  const password = 'TestPass123!'
+const PASSWORD = 'TestPass123!'
 
+test.describe('Autosave + immediate navigation (RES-105)', () => {
   test.beforeAll(async ({ request }) => {
     resetE2eDatabase()
-
-    const res = await request.post(`${API_BASE}/auth/signup`, {
-      data: { email, password },
-    })
-    expect(res.status()).toBe(201)
   })
 
-  async function loginAndCreateResume(page: any): Promise<void> {
+  /**
+   * Sign up a fresh user and return their unique email — each test gets its
+   * own account so resume persistence assertions stay deterministic.
+   * @param request
+   */
+  async function createUser(request: import('@playwright/test').APIRequestContext) {
+    const email = `autosave-nav-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@test.com`
+    const res = await request.post(`${API_BASE}/auth/signup`, {
+      data: { email, password: PASSWORD },
+    })
+    expect(res.status()).toBe(201)
+    return email
+  }
+
+  /**
+   * Login and open the builder for the given user.
+   * @param page
+   * @param email
+   */
+  async function loginAndCreateResume(
+    page: import('@playwright/test').Page,
+    email: string,
+  ): Promise<void> {
     await page.goto('/login')
     await page.fill('#login-email', email)
-    await page.fill('#login-password', password)
+    await page.fill('#login-password', PASSWORD)
     await page.click('button[type="submit"]')
     await page.waitForURL('**/dashboard', { timeout: 15_000 })
 
@@ -38,96 +61,81 @@ test.describe('Unsaved changes guard', () => {
       .click()
     await page.waitForURL('**/builder/**', { timeout: 15_000 })
 
-    // Set resume name — blur commits the name and triggers the autosave
-    // (the sole save mechanism), which persists it immediately.
     const nameInput = page.locator('input[aria-label="Resume name"]')
-    await nameInput.fill('Unsaved Test Resume')
+    await expect(nameInput).toBeVisible({ timeout: 10_000 })
+  }
+
+  test('navigating away mid-edit is immediate — no unsaved-changes modal (RES-105)', async ({
+    page,
+    request,
+  }) => {
+    const email = await createUser(request)
+    await loginAndCreateResume(page, email)
+
+    // Edit the resume name (mid-edit, dirty) — do NOT wait for autosave
+    const nameInput = page.locator('input[aria-label="Resume name"]')
+    await nameInput.fill('Mid-Edit Name')
+
+    // Navigate away right away — if the old modal guard were still active
+    // this click would be suspended and the URL would never reach /dashboard.
+    await page.getByRole('link', { name: 'My Resumes' }).click()
+
+    // Lands on the dashboard immediately — navigation was NOT blocked
+    await page.waitForURL('**/dashboard', { timeout: 10_000 })
+    await expect(page.locator('h1').first()).toContainText('My Resumes')
+
+    // And no "Unsaved Changes" dialog was ever shown
+    const modal = page.getByRole('dialog', { name: 'Unsaved Changes' })
+    await expect(modal).toHaveCount(0)
+  })
+
+  test('mid-edit navigation does not lose data — autosave persists the edit (RES-105)', async ({
+    page,
+    request,
+  }) => {
+    const email = await createUser(request)
+    await loginAndCreateResume(page, email)
+
+    const nameInput = page.locator('input[aria-label="Resume name"]')
+    await nameInput.fill('Persisted After Nav')
+
+    // Navigate away immediately after the edit (before the debounce fires).
+    // The blur-commit saves synchronously and the sessionStorage safety net
+    // captured the state — but the URL must change WITHOUT any modal.
+    await page.getByRole('link', { name: 'My Resumes' }).click()
+    await page.waitForURL('**/dashboard', { timeout: 10_000 })
+
+    // The edit must survive. Poll the database until the backend holds the
+    // new name (the debounced PUT can still be in flight).
+    await expect(async () => {
+      const list = await page.request.get(`${API_BASE}/resumes`)
+      const resumes = await list.json()
+      expect(resumes[0]!.name).toBe('Persisted After Nav')
+    }).toPass({ timeout: 15_000 })
+  })
+
+  test('navigating away with a clean state works without any modal', async ({
+    page,
+    request,
+  }) => {
+    const email = await createUser(request)
+    await loginAndCreateResume(page, email)
+
+    // Save the resume name — blur commits and triggers the autosave (the
+    // sole save mechanism), which persists it immediately → clean state.
+    const nameInput = page.locator('input[aria-label="Resume name"]')
+    await nameInput.fill('Clean State Resume')
     await nameInput.blur()
     await expect(page.locator('[data-testid="toolbar-saved-msg"]')).toBeVisible(
       { timeout: 10_000 },
     )
-  }
 
-  test('shows unsaved changes dialog when navigating away with dirty state', async ({
-    page,
-  }) => {
-    await loginAndCreateResume(page)
-
-    // Edit the resume name (but don't save) — this makes it dirty
-    const nameInput = page.locator('input[aria-label="Resume name"]')
-    await nameInput.fill('Changed But Not Saved')
-
-    // Try to navigate away by clicking a nav link
+    // Navigate away — should just work, no modal
     await page.getByRole('link', { name: 'My Resumes' }).click()
-
-    // Unsaved changes modal should appear. ConfirmModal renders a reka-ui
-    // dialog — it does not forward data-testid, so target it by role/name.
-    const modal = page.getByRole('dialog', { name: 'Unsaved Changes' })
-    await expect(modal).toBeVisible({ timeout: 5000 })
-    await expect(modal).toContainText('Unsaved Changes')
-  })
-
-  test('clicking "Stay" keeps user on builder with edits intact', async ({
-    page,
-  }) => {
-    await loginAndCreateResume(page)
-
-    // Make a dirty edit
-    const nameInput = page.locator('input[aria-label="Resume name"]')
-    await nameInput.fill('Dirty Edit')
-    // The name field triggers dirty state on input
-
-    // Try to navigate away
-    await page.getByRole('link', { name: 'My Resumes' }).click()
-
-    // Modal appears
-    const modal = page.getByRole('dialog', { name: 'Unsaved Changes' })
-    await expect(modal).toBeVisible({ timeout: 5000 })
-
-    // Click "Stay"
-    await modal.getByRole('button', { name: 'Stay' }).click()
-
-    // Should still be on builder
-    await expect(page.locator('input[aria-label="Resume name"]')).toHaveValue(
-      'Dirty Edit',
-    )
-  })
-
-  test('clicking "Leave" navigates away', async ({ page }) => {
-    await loginAndCreateResume(page)
-
-    // Make a dirty edit
-    const nameInput = page.locator('input[aria-label="Resume name"]')
-    await nameInput.fill('Leaving Edit')
-
-    // Try to navigate away
-    await page.getByRole('link', { name: 'My Resumes' }).click()
-
-    // Modal appears
-    const modal = page.getByRole('dialog', { name: 'Unsaved Changes' })
-    await expect(modal).toBeVisible({ timeout: 5000 })
-
-    // Click "Leave"
-    await modal.getByRole('button', { name: 'Leave' }).click()
-
-    // Should navigate to dashboard
-    await page.waitForURL('**/dashboard', { timeout: 10_000 })
-    await expect(page.locator('h1').first()).toContainText('My Resumes')
-  })
-
-  test('no warning after save (clean state)', async ({ page }) => {
-    await loginAndCreateResume(page)
-
-    // Resume is already saved, so no dirty state
-    // Navigate away should just work
-    await page.getByRole('link', { name: 'My Resumes' }).click()
-
-    // Should navigate to dashboard without modal
     await page.waitForURL('**/dashboard', { timeout: 10_000 })
     await expect(page.locator('h1').first()).toContainText('My Resumes')
 
-    // Modal should NOT have appeared
     const modal = page.getByRole('dialog', { name: 'Unsaved Changes' })
-    await expect(modal).not.toBeVisible()
+    await expect(modal).toHaveCount(0)
   })
 })
