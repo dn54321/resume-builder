@@ -75,7 +75,16 @@ jobs:
             git checkout -f '"$DEPLOY_BRANCH"'
             git reset --hard origin/'"$DEPLOY_BRANCH"'
             echo "Deploying '"$DEPLOY_BRANCH"' @ $(git log -1 --oneline)"
-            docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+            # Self-hosted Postgres unless .env.prod opts out (USE_EXTERNAL_DB=1).
+            # COMPOSE_FILES is intentionally unquoted so it word-splits into
+            # multiple -f args (values contain no spaces).
+            EXTERNAL_DB="$(grep ^USE_EXTERNAL_DB= .env.prod | tail -1 | cut -d= -f2)"
+            if [ "${EXTERNAL_DB:-0}" = "1" ]; then
+              COMPOSE_FILES="-f docker-compose.prod.yml"
+            else
+              COMPOSE_FILES="-f docker-compose.prod.yml -f docker-compose.prod.local-db.yml"
+            fi
+            docker compose --env-file .env.prod $COMPOSE_FILES up -d --build
             docker image prune -f
-            docker compose --env-file .env.prod -f docker-compose.prod.yml ps --status running
+            docker compose --env-file .env.prod $COMPOSE_FILES ps --status running
           '
