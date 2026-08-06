@@ -40,15 +40,21 @@ die()  { printf '\033[1;31m[setup ✗]\033[0m %s\n' "$*" >&2; exit 1; }
 [ "$(id -u)" -eq 0 ] || die "run as root: sudo $0"
 
 log "Checking DNS for $DOMAIN …"
-PUBLIC_IP="$(curl -4 -fsSL --max-time 10 https://api.ipify.org || true)"
-DOMAIN_IP="$(getent ahostsv4 "$DOMAIN" | awk '{print $1; exit}' || true)"
-if [ -n "$PUBLIC_IP" ] && [ -n "$DOMAIN_IP" ] && [ "$PUBLIC_IP" != "$DOMAIN_IP" ]; then
-  warn "$DOMAIN resolves to $DOMAIN_IP but this droplet's IP is $PUBLIC_IP — TLS issuance will fail."
+# DNS preflight is a WARNING HELPER ONLY — it must never abort the
+# bootstrap. Every probe is failure-tolerant (2>/dev/null + || true) and
+# every reference uses ${VAR:-} so `set -u` can never trip here (observed
+# on a fresh Ubuntu VM: 'PUBLIC_IP: unbound variable' despite the
+# assignments above — environment-specific, but the check doesn't need to
+# exist in a form that can crash the install).
+PUBLIC_IP="$(curl -4 -fsSL --max-time 10 https://api.ipify.org 2>/dev/null || true)"
+DOMAIN_IP="$(getent ahostsv4 "$DOMAIN" 2>/dev/null | awk '{print $1; exit}' || true)"
+if [ -n "${PUBLIC_IP:-}" ] && [ -n "${DOMAIN_IP:-}" ] && [ "${PUBLIC_IP:-}" != "${DOMAIN_IP:-}" ]; then
+  warn "$DOMAIN resolves to ${DOMAIN_IP:-?} but this droplet's IP is ${PUBLIC_IP:-?} — TLS issuance will fail."
   warn "Point an A record at this droplet first, then re-run."
-elif [ -z "$DOMAIN_IP" ]; then
+elif [ -z "${DOMAIN_IP:-}" ]; then
   warn "$DOMAIN does not resolve yet — TLS issuance will fail. Point DNS first, then re-run."
 else
-  log "DNS OK ($DOMAIN → $DOMAIN_IP)"
+  log "DNS OK ($DOMAIN → ${DOMAIN_IP:-?})"
 fi
 
 # ─── 1. System: swap / firewall / hardening ─────────────────────────────
@@ -132,7 +138,7 @@ if [ -d "/etc/letsencrypt/live/$DOMAIN" ]; then
   certbot --nginx -d "$DOMAIN" --redirect >/dev/null 2>&1 || true
   systemctl reload nginx
 else
-  if [ -n "$DOMAIN_IP" ] && { [ -z "$PUBLIC_IP" ] || [ "$PUBLIC_IP" = "$DOMAIN_IP" ]; }; then
+  if [ -n "${DOMAIN_IP:-}" ] && { [ -z "${PUBLIC_IP:-}" ] || [ "${PUBLIC_IP:-}" = "${DOMAIN_IP:-}" ]; }; then
     log "Issuing Let's Encrypt certificate for $DOMAIN …"
     certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL" --redirect
   else
