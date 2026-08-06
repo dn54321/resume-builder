@@ -403,6 +403,42 @@ test.describe('Resume card actions (RES-89 / RES-84)', () => {
     expect(resumes[0]!.name).toBe(original)
   })
 
+  test('edit a resume in the builder via the ⋮ dropdown (RES-100)', async ({
+    page,
+  }) => {
+    const { original } = await signupAndSeedOneResume(page)
+
+    const card = page.locator('.resume-card', { hasText: original }).first()
+
+    // Single-click still previews — it must NOT navigate to the builder
+    await card.click()
+    await expect(page.locator('[data-testid="preview-body"]')).toBeVisible({
+      timeout: 15_000,
+    })
+    expect(page.url()).toContain('/dashboard')
+
+    // Open the card's action dropdown and choose Edit in Builder
+    await card.locator('[data-testid="resume-menu-trigger"]').click()
+    const editItem = page.locator('[data-testid="menu-edit-builder"]')
+    await expect(editItem).toBeVisible({ timeout: 5_000 })
+    await expect(editItem).toContainText('Edit in Builder')
+    await editItem.click()
+
+    // Navigates into the builder for THAT resume
+    await page.waitForURL('**/builder/**', { timeout: 15_000 })
+    const resumeId = page.url().split('/builder/')[1]
+    expect(resumeId).toBeTruthy()
+    await expect(
+      page.locator('input[aria-label="Resume name"]'),
+    ).toBeVisible({ timeout: 10_000 })
+
+    // Database state: the resume still exists, nothing was duplicated/deleted
+    const list = await page.request.get(`${API_BASE}/resumes`)
+    const resumes = await list.json()
+    expect(resumes).toHaveLength(1)
+    expect(resumes[0]!.id).toBe(resumeId)
+  })
+
   test('duplicate failure shows an inline error and keeps the list intact', async ({
     page,
   }) => {

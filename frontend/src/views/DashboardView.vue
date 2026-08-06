@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { useAuth } from '@/features/auth/composables/useAuth'
 import { useApi, ApiRequestError } from '@/shared/composables/useApi'
 import ConfirmModal from '@/shared/components/ConfirmModal.vue'
-import { Ellipsis, Pencil, Copy, Trash2, FileText } from '@lucide/vue'
+import { Ellipsis, Pencil, SquarePen, Copy, Trash2, FileText } from '@lucide/vue'
 import StandardLayout from '@/features/builder/components/preview/StandardLayout.vue'
 import TwoColumnLayout from '@/features/builder/components/preview/TwoColumnLayout.vue'
 import {
@@ -225,6 +225,15 @@ async function handleCreateResume(): Promise<void> {
       error.value = 'Something went wrong'
     }
   }
+}
+
+/**
+ * Open a resume in the Builder editor. This is the dashboard's second
+ * entry point into `/builder/:id` (the first is Create New Resume).
+ * @param {ResumeSummary} resume - The resume to edit
+ */
+function handleEditResume(resume: ResumeSummary): void {
+  router.push(`/builder/${resume.id}`)
 }
 
 /**
@@ -468,6 +477,7 @@ async function handleConfirmDelete(): Promise<void> {
             tabindex="0"
             :aria-pressed="selectedResumeId === resume.id"
             @click="selectResume(resume)"
+            @dblclick="handleEditResume(resume)"
             @keydown.enter="selectResume(resume)"
             @keydown.space.prevent="selectResume(resume)"
           >
@@ -478,7 +488,7 @@ async function handleConfirmDelete(): Promise<void> {
               </h3>
 
               <!-- Inline rename input -->
-              <div v-else class="resume-card__name-edit" @click.stop @keydown.stop>
+              <div v-else class="resume-card__name-edit" @click.stop @dblclick.stop @keydown.stop>
                 <input
                   v-model="editValue"
                   :data-id="resume.id"
@@ -492,18 +502,26 @@ async function handleConfirmDelete(): Promise<void> {
                 <span v-if="renameLoading" class="rename-spinner" />
               </div>
 
-              <!-- Card actions: Rename / Duplicate / Delete -->
+              <!-- Card actions: Edit in Builder / Rename / Duplicate / Delete -->
               <DropdownMenu>
                 <DropdownMenuTrigger
                   class="resume-card__menu-btn"
                   data-testid="resume-menu-trigger"
                   :aria-label="`Options for ${resume.name || 'Untitled'}`"
                   @click.stop
+                  @dblclick.stop
                   @keydown.stop
                 >
                   <Ellipsis class="size-4" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" class="w-44">
+                  <DropdownMenuItem
+                    data-testid="menu-edit-builder"
+                    @select="handleEditResume(resume)"
+                  >
+                    <SquarePen class="size-4" />
+                    Edit in Builder
+                  </DropdownMenuItem>
                   <DropdownMenuItem
                     data-testid="menu-rename"
                     @select="startEditing(resume)"

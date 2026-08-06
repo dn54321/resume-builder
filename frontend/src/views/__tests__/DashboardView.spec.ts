@@ -738,7 +738,7 @@ describe('DashboardView', () => {
     expect(menuBtns.length).toBe(2)
   })
 
-  it('renders Rename, Duplicate and Delete options in the dropdown', async () => {
+  it('renders Edit in Builder, Rename, Duplicate and Delete options in the dropdown', async () => {
     createAuthenticatedStore()
     mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
 
@@ -750,16 +750,139 @@ describe('DashboardView', () => {
 
     await openCardMenu(wrapper, 0)
 
+    const editItem = document.querySelector('[data-testid="menu-edit-builder"]')
     const renameItem = document.querySelector('[data-testid="menu-rename"]')
     const duplicateItem = document.querySelector('[data-testid="menu-duplicate"]')
     const deleteItem = document.querySelector('[data-testid="menu-delete"]')
 
+    expect(editItem).not.toBeNull()
     expect(renameItem).not.toBeNull()
     expect(duplicateItem).not.toBeNull()
     expect(deleteItem).not.toBeNull()
+    expect(editItem!.textContent).toContain('Edit in Builder')
     expect(renameItem!.textContent).toContain('Rename')
     expect(duplicateItem!.textContent).toContain('Duplicate')
     expect(deleteItem!.textContent).toContain('Delete')
+
+    // Edit in Builder sits above Rename in the menu
+    expect(editItem!.compareDocumentPosition(renameItem!) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy()
+
+    wrapper.unmount()
+  })
+
+  // ── Edit in Builder (RES-100) ──────────────────────────────
+
+  it('navigates to the builder when Edit in Builder is chosen from the menu', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    const pushSpy = vi.spyOn(router, 'push')
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    await openCardMenu(wrapper, 0)
+    clickMenuItem('menu-edit-builder')
+    await flushPromises()
+
+    // Navigates to /builder/:id for the clicked resume (same pattern as
+    // handleCreateResume) — no preview fetch is triggered.
+    expect(pushSpy).toHaveBeenCalledWith('/builder/resume-1')
+    const previewFetchCalls = mockFetch.mock.calls.filter(
+      (call: unknown[]) =>
+        typeof call[0] === 'string' && call[0].includes('/api/v1/resumes/resume-1'),
+    )
+    expect(previewFetchCalls.length).toBe(0)
+
+    wrapper.unmount()
+  })
+
+  it('navigates to the builder for the correct resume when opened from a non-first card', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    const pushSpy = vi.spyOn(router, 'push')
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    // Open the menu on the second card (name: null → Untitled)
+    await openCardMenu(wrapper, 1)
+    clickMenuItem('menu-edit-builder')
+    await flushPromises()
+
+    expect(pushSpy).toHaveBeenCalledWith('/builder/resume-2')
+
+    wrapper.unmount()
+  })
+
+  it('opens the builder when a resume card is double-clicked', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    const pushSpy = vi.spyOn(router, 'push')
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
+    await cards[0]!.trigger('dblclick')
+    await flushPromises()
+
+    expect(pushSpy).toHaveBeenCalledWith('/builder/resume-1')
+
+    wrapper.unmount()
+  })
+
+  it('does not open the builder when double-clicking the inline rename input', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    const pushSpy = vi.spyOn(router, 'push')
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    await openCardMenu(wrapper, 0)
+    clickMenuItem('menu-rename')
+    await flushPromises()
+
+    // Double-clicking inside the rename editor must not bubble to the card
+    const input = wrapper.find('.resume-card__name-input')
+    expect(input.exists()).toBe(true)
+    await input.trigger('dblclick')
+    await flushPromises()
+
+    expect(pushSpy).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('does not open the builder when double-clicking the ⋮ menu trigger', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    const pushSpy = vi.spyOn(router, 'push')
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    const trigger = wrapper.findAll('[data-testid="resume-menu-trigger"]')[0]!
+    await trigger.trigger('dblclick')
+    await flushPromises()
+
+    expect(pushSpy).not.toHaveBeenCalled()
 
     wrapper.unmount()
   })
