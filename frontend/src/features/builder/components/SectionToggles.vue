@@ -35,20 +35,9 @@
           <EyeOff v-else class="w-4 h-4" />
         </button>
 
-        <!-- Lock toggle: protect section from Tailor edits -->
-        <button
-          type="button"
-          class="w-7 h-7 flex items-center justify-center border-none bg-transparent rounded-sm text-sm cursor-pointer transition-colors hover:bg-muted/50 hover:text-foreground"
-          :class="section.locked ? 'text-muted-foreground/50' : 'text-foreground'"
-          :title="section.locked ? 'Unlock section' : 'Lock section (protect from Tailor)'"
-          :aria-label="`${section.locked ? 'Unlock' : 'Lock'} ${section.label}`"
-          :aria-pressed="section.locked"
-          data-testid="section-lock-toggle"
-          @click.stop="emit('toggleLock', section.type)"
-        >
-          <Lock v-if="section.locked" class="w-4 h-4" />
-          <LockOpen v-else class="w-4 h-4" />
-        </button>
+        <!-- Lock toggle was removed from section rows — the
+             Tailor-protect lock now lives on individual sub-items inside
+             the editors. The eye (visibility) toggle stays on sections. -->
 
         <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions, vuejs-accessibility/click-events-have-key-events, vuejs-accessibility/label-has-for -->
         <label class="flex items-center gap-2 flex-1 cursor-pointer" @click.prevent="onLabelClick(section)">
@@ -84,7 +73,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Eye, EyeOff, Lock, LockOpen } from '@lucide/vue'
+import { Eye, EyeOff } from '@lucide/vue'
 import {
   SECTION_TYPES,
   SECTION_LABELS,
@@ -95,8 +84,6 @@ import {
 const props = withDefaults(defineProps<{
   layout: LayoutType
   enabledSections: SectionType[]
-  /** Sections protected from Tailor edits. */
-  lockedSections?: SectionType[]
   /** Display order of enabled sections (from store, respects drag-and-drop reordering) */
   orderedSectionTypes?: SectionType[]
   columnAssignments: Record<SectionType, 'left' | 'right'>
@@ -104,13 +91,11 @@ const props = withDefaults(defineProps<{
   /** When false (default), the column assignment dropdowns are hidden behind the ?layout=True feature flag. */
   showTwoColumn?: boolean
 }>(), {
-  lockedSections: () => [],
   showTwoColumn: false,
 })
 
 const emit = defineEmits<{
   toggle: [sectionType: SectionType]
-  toggleLock: [sectionType: SectionType]
   setColumn: [sectionType: SectionType, column: 'left' | 'right']
   reorder: [orderedTypes: SectionType[]]
   select: [sectionType: SectionType]
@@ -139,7 +124,6 @@ interface OrderedSection {
   type: SectionType
   label: string
   enabled: boolean
-  locked: boolean
   column: 'left' | 'right'
 }
 
@@ -150,7 +134,6 @@ const orderedSections = computed<OrderedSection[]>(() => {
     type,
     label: SECTION_LABELS[type],
     enabled: props.enabledSections.includes(type),
-    locked: props.lockedSections.includes(type),
     column: props.columnAssignments[type] ?? 'right',
   }))
 })

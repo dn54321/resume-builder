@@ -43,6 +43,8 @@ interface SectionEntryRow {
   resumeSectionId: string;
   order: number;
   parentId: string | null;
+  /** Optional in test rows — legacy fixtures omit it and the service defaults to false. */
+  locked?: boolean;
   fields: SectionFieldRow[];
   children: SectionEntryRow[];
 }
@@ -1517,6 +1519,7 @@ describe('ResumesService', () => {
               {
                 id: 'entry-1',
                 order: 0,
+                locked: false,
                 fields: [
                   {
                     id: 'f-1',
@@ -1951,6 +1954,412 @@ describe('ResumesService', () => {
       await expect(
         service.update(resumeId, userId, { layout: 'compact' }),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('entry-level locked (RES-97)', () => {
+    /**
+     * Configure the $transaction mock so sectionEntry.create is captured.
+     * @param entryCreate - Spy on sectionEntry.create
+     */
+    function mockCreateFlow(entryCreate: jest.Mock) {
+      mockPrisma.$transaction.mockImplementation(
+        async (cb: TransactionCallback<ResumeTreeRow>) => {
+          const tx = {
+            resume: {
+              create: jest.fn().mockResolvedValue({
+                id: resumeId,
+                userId,
+                name: null,
+                layout: 'standard',
+              }),
+              findUnique: jest.fn().mockResolvedValue(makeResumeResponse()),
+            },
+            resumeSection: {
+              create: jest.fn().mockResolvedValue({ id: 'rs-1' }),
+            },
+            sectionEntry: { create: entryCreate },
+            sectionField: { create: jest.fn().mockResolvedValue({}) },
+          };
+          const result = cb(tx);
+          return result instanceof Promise ? result : Promise.resolve(result);
+        },
+      );
+
+      mockCrypto.encryptField.mockImplementation((value: string) =>
+        makeEncryptedField(value),
+      );
+      mockCrypto.decryptField.mockImplementation(
+        (encrypted: string, _iv: string, _authTag: string) =>
+          encrypted.replace('enc_', ''),
+      );
+    }
+
+    it('persists entry locked=true when creating a resume', async () => {
+      const entryCreate = jest.fn().mockResolvedValue({
+        id: 'entry-1',
+        resumeSectionId: 'rs-1',
+        order: 0,
+        parentId: null,
+      });
+      mockCreateFlow(entryCreate);
+
+      const dto: CreateResumeDto = {
+        layout: 'standard',
+        sections: [
+          {
+            sectionId: 'summary',
+            column: 'right',
+            order: 0,
+            entries: [
+              {
+                order: 0,
+                locked: true,
+                fields: [{ key: 'title', value: 'Software Engineer' }],
+                children: [],
+              },
+            ],
+          },
+        ],
+      };
+
+      await service.create(userId, dto);
+
+      expect(entryCreate).toHaveBeenCalledWith({
+        data: {
+          resumeSectionId: 'rs-1',
+          order: 0,
+          parentId: null,
+          locked: true,
+        },
+      });
+    });
+
+    it('defaults entry locked to false when the DTO omits it', async () => {
+      const entryCreate = jest.fn().mockResolvedValue({
+        id: 'entry-1',
+        resumeSectionId: 'rs-1',
+        order: 0,
+        parentId: null,
+      });
+      mockCreateFlow(entryCreate);
+
+      const dto: CreateResumeDto = {
+        layout: 'standard',
+        sections: [
+          {
+            sectionId: 'summary',
+            column: 'right',
+            order: 0,
+            entries: [
+              {
+                order: 0,
+                fields: [{ key: 'title', value: 'Software Engineer' }],
+                children: [],
+              },
+            ],
+          },
+        ],
+      };
+
+      await service.create(userId, dto);
+
+      expect(entryCreate).toHaveBeenCalledWith({
+        data: {
+          resumeSectionId: 'rs-1',
+          order: 0,
+          parentId: null,
+          locked: false,
+        },
+      });
+    });
+
+    it('persists locked on nested child entries during create', async () => {
+      const entryCreate = jest
+        .fn()
+        .mockResolvedValueOnce({
+          id: 'parent-1',
+          resumeSectionId: 'rs-1',
+          order: 0,
+          parentId: null,
+        })
+        .mockResolvedValueOnce({
+          id: 'child-1',
+          resumeSectionId: 'rs-1',
+          order: 0,
+          parentId: 'parent-1',
+        });
+      mockCreateFlow(entryCreate);
+
+      const dto: CreateResumeDto = {
+        layout: 'standard',
+        sections: [
+          {
+            sectionId: 'experience',
+            column: 'right',
+            order: 0,
+            entries: [
+              {
+                order: 0,
+                fields: [{ key: 'company', value: 'Acme' }],
+                children: [
+                  {
+                    order: 0,
+                    locked: true,
+                    fields: [{ key: 'text', value: 'Bullet' }],
+                    children: [],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      await service.create(userId, dto);
+
+      interface EntryCreateCall {
+        data: {
+          resumeSectionId: string;
+          order: number;
+          parentId: string | null;
+          locked?: boolean;
+        };
+      }
+      const childCall = (
+        entryCreate.mock.calls as unknown as EntryCreateCall[][]
+      ).find(([arg]) => arg.data.parentId !== null);
+      expect(childCall).toBeDefined();
+      expect(childCall![0].data.locked).toBe(true);
+    });
+
+    it('carries entry locked through duplicate', async () => {
+      const sourceRow = makeResumeResponse({
+        sections: [
+          {
+            id: 'rs-1',
+            resumeId,
+            sectionId: 'summary',
+            column: 'right',
+            order: 0,
+            locked: false,
+            entries: [
+              {
+                id: 'entry-1',
+                resumeSectionId: 'rs-1',
+                order: 0,
+                parentId: null,
+                locked: true,
+                fields: [
+                  {
+                    id: 'field-1',
+                    sectionEntryId: 'entry-1',
+                    key: 'title',
+                    value: 'enc_Software Engineer',
+                    iv: 'iv_Software Engineer',
+                    authTag: 'tag_Software Engineer',
+                    order: 0,
+                  },
+                ],
+                children: [],
+              },
+            ],
+          },
+        ],
+      });
+      mockPrisma.resume.findUnique.mockResolvedValue(sourceRow);
+      mockCrypto.decryptField.mockImplementation(
+        (encrypted: string, _iv: string, _authTag: string) =>
+          encrypted.replace('enc_', ''),
+      );
+      mockCrypto.encryptField.mockImplementation((value: string) =>
+        makeEncryptedField(value),
+      );
+
+      const entryCreate = jest.fn().mockResolvedValue({
+        id: 'entry-copy',
+        resumeSectionId: 'rs-copy',
+        order: 0,
+        parentId: null,
+      });
+      mockPrisma.$transaction.mockImplementation(
+        async (cb: TransactionCallback<ResumeTreeRow>) => {
+          const tx = {
+            resume: {
+              create: jest.fn().mockResolvedValue({
+                id: 'resume-copy',
+                userId,
+                name: 'Copy of',
+                layout: 'standard',
+              }),
+              findUnique: jest
+                .fn()
+                .mockResolvedValue(
+                  makeResumeResponse({ id: 'resume-copy', name: 'Copy of' }),
+                ),
+            },
+            resumeSection: {
+              create: jest.fn().mockResolvedValue({
+                id: 'rs-copy',
+                resumeId: 'resume-copy',
+                sectionId: 'summary',
+                column: 'right',
+                order: 0,
+                locked: false,
+              }),
+            },
+            sectionEntry: { create: entryCreate },
+            sectionField: { create: jest.fn().mockResolvedValue({}) },
+          };
+          const result = cb(tx);
+          return result instanceof Promise ? result : Promise.resolve(result);
+        },
+      );
+
+      await service.duplicate(resumeId, userId);
+
+      expect(entryCreate).toHaveBeenCalledWith({
+        data: {
+          resumeSectionId: 'rs-copy',
+          order: 0,
+          parentId: null,
+          locked: true,
+        },
+      });
+    });
+
+    it('persists entry locked=true during update', async () => {
+      const existingResume: ResumeRow = {
+        id: resumeId,
+        userId,
+        name: null,
+        layout: 'standard',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      const existingSections = [{ id: 'rs-old-1' }];
+      const entryCreate = jest.fn().mockResolvedValue({
+        id: 'entry-new',
+        resumeSectionId: 'rs-new',
+        order: 0,
+        parentId: null,
+      });
+
+      mockPrisma.$transaction.mockImplementation(
+        async (cb: TransactionCallback<ResumeTreeRow>) => {
+          const tx = {
+            resume: {
+              findUnique: jest
+                .fn()
+                .mockResolvedValueOnce(existingResume)
+                .mockResolvedValueOnce(makeResumeResponse()),
+              update: jest.fn().mockResolvedValue({}),
+            },
+            resumeSection: {
+              findMany: jest.fn().mockResolvedValue(existingSections),
+              deleteMany: jest.fn().mockResolvedValue({}),
+              create: jest.fn().mockResolvedValue({
+                id: 'rs-new',
+                resumeId,
+                sectionId: 'summary',
+                column: 'right',
+                order: 0,
+              }),
+            },
+            sectionEntry: {
+              deleteMany: jest.fn().mockResolvedValue({}),
+              create: entryCreate,
+            },
+            sectionField: {
+              create: jest.fn().mockResolvedValue({}),
+            },
+          };
+          const result = cb(tx);
+          return result instanceof Promise ? result : Promise.resolve(result);
+        },
+      );
+
+      mockCrypto.decryptField.mockImplementation(
+        (encrypted: string, _iv: string, _authTag: string) =>
+          encrypted.replace('enc_', ''),
+      );
+      mockCrypto.encryptField.mockImplementation((value: string) =>
+        makeEncryptedField(value),
+      );
+
+      const dto: UpdateResumeDto = {
+        sections: [
+          {
+            sectionId: 'summary',
+            column: 'right',
+            order: 0,
+            entries: [
+              {
+                order: 0,
+                locked: true,
+                fields: [{ key: 'title', value: 'Software Engineer' }],
+                children: [],
+              },
+            ],
+          },
+        ],
+      };
+
+      await service.update(resumeId, userId, dto);
+
+      expect(entryCreate).toHaveBeenCalledWith({
+        data: {
+          resumeSectionId: 'rs-new',
+          order: 0,
+          parentId: null,
+          locked: true,
+        },
+      });
+    });
+
+    it('returns entry locked flag in the decrypted tree', async () => {
+      const dbResume = makeResumeResponse({
+        sections: [
+          {
+            id: 'rs-1',
+            resumeId,
+            sectionId: 'summary',
+            column: 'right',
+            order: 0,
+            locked: false,
+            entries: [
+              {
+                id: 'entry-1',
+                resumeSectionId: 'rs-1',
+                order: 0,
+                parentId: null,
+                locked: true,
+                fields: [
+                  {
+                    id: 'field-1',
+                    sectionEntryId: 'entry-1',
+                    key: 'title',
+                    value: 'enc_Software Engineer',
+                    iv: 'iv_Software Engineer',
+                    authTag: 'tag_Software Engineer',
+                    order: 0,
+                  },
+                ],
+                children: [],
+              },
+            ],
+          },
+        ],
+      });
+      mockPrisma.resume.findUnique.mockResolvedValue(dbResume);
+      mockCrypto.decryptField.mockImplementation(
+        (encrypted: string, _iv: string, _authTag: string) =>
+          encrypted.replace('enc_', ''),
+      );
+
+      const result = await service.findOne(resumeId, userId);
+
+      expect(result.sections[0].entries[0].locked).toBe(true);
     });
   });
 });

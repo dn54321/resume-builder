@@ -7,6 +7,7 @@
       :entry-title="entryTitle"
       @add="addEducation"
       @remove="editor.removeEntry"
+      @toggle-lock="editor.toggleEntryLock"
       @reorder="editor.reorderEntries"
     >
       <template #fields="{ entry }">

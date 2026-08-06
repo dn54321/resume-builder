@@ -92,6 +92,7 @@ async function run(): Promise<void> {
         "resumeSectionId" TEXT NOT NULL,
         "order" INTEGER NOT NULL,
         "parentId" TEXT,
+        "locked" BOOLEAN NOT NULL DEFAULT false,
         CONSTRAINT "SectionEntry_resumeSectionId_fkey" FOREIGN KEY ("resumeSectionId") REFERENCES "ResumeSection" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
         CONSTRAINT "SectionEntry_parentId_fkey" FOREIGN KEY ("parentId") REFERENCES "SectionEntry" ("id") ON DELETE SET NULL ON UPDATE CASCADE
       )
@@ -219,6 +220,12 @@ async function run(): Promise<void> {
     const parent = await prisma.sectionEntry.create({
       data: { resumeSectionId: rs.id, order: 0 },
     });
+    assert(parent.locked === false, 'SectionEntry.locked defaults to false');
+    const lockedParent = await prisma.sectionEntry.update({
+      where: { id: parent.id },
+      data: { locked: true },
+    });
+    assert(lockedParent.locked === true, 'SectionEntry.locked can be set to true');
     const child = await prisma.sectionEntry.create({
       data: { resumeSectionId: rs.id, order: 1, parentId: parent.id },
     });
