@@ -46,10 +46,9 @@ async function bootstrap() {
   );
 
   // Bind to 0.0.0.0 so the app is reachable from outside the container
-  // (Render, Docker port mapping, etc.). NestJS's default (no host arg) is
-  // localhost/127.0.0.1 — the app would start but Render would report
-  // 'No open ports detected' because nothing listens on the external
-  // interface.
+  // (Docker port mapping — the host nginx proxies /api/v1 here).
+  // NestJS's default (no host arg) binds localhost/127.0.0.1, which would
+  // make the container unreachable from the host proxy.
   await app.listen(port, '0.0.0.0');
 
   app.get(Logger).log(`Server running on http://0.0.0.0:${port}`, 'Bootstrap');

@@ -176,7 +176,78 @@ pnpm test:e2e      # E2E tests (Playwright)
 
 ## CI/CD
 
-Pull requests trigger the [E2E Tests](.github/workflows/e2e.yml) workflow, which runs backend and frontend E2E suites in parallel on every push.
+Pull requests trigger the [E2E Tests](.github/workflows/e2e.yml) workflow, which runs backend and frontend E2E suites in parallel on every push. Pushes to the **release branch** (`release/v1.0.0`) trigger the [Deploy to Droplet](.github/workflows/deploy.yml) workflow, which rebuilds and restarts the production stack on the server — pushes to `master` never deploy.
+
+## Deploying to a DigitalOcean Droplet
+
+The production target is a single Droplet running the whole stack in Docker:
+Postgres 16, the NestJS backend, and the Vue frontend behind an nginx reverse
+proxy with auto-renewing Let's Encrypt TLS. Everything lives in
+`docker-compose.prod.yml` + `deploy/`.
+
+```
+Internet ── 80/443 ── host nginx (TLS, certbot) ──┬─ /api/v1/* → backend  :3000
+                                                 └─ /*        → frontend :80
+```
+
+Single-origin layout: the browser only talks to `https://<domain>`, so auth
+cookies work with no CORS/SameSite gymnastics (`FRONTEND_URL` ==
+`VITE_API_BASE_URL` == the domain).
+
+### 1. Create the droplet
+
+- **Size**: 1 GB RAM / 1 vCPU is the target size — the idle stack sits at
+  ~500 MB (Postgres ~180 MB, backend ~250 MB, two nginx ~25 MB, dockerd
+  ~60 MB). Build stages are heap-capped at 768 MB and ride the 2 GB swap
+  the setup script adds.
+- **Region**: anywhere; add your SSH key so deploys can connect.
+
+### 2. Point DNS
+
+Create an `A` record for your domain → the droplet's public IP. TLS issuance
+needs this before the bootstrap runs.
+
+### 3. Run the bootstrap
+
+```bash
+ssh root@<droplet-ip>
+git clone git@github.com:dn54321/resume-v3.git && cd resume-v3
+sudo DOMAIN=resumes.example.com EMAIL=you@example.com ./deploy/setup-droplet.sh
+```
+
+This idempotent script:
+
+1. Creates 2G swap, enables ufw (22/80/443) and fail2ban
+2. Installs Docker CE + the compose plugin
+3. Generates `.env.prod` (DB password + independent encryption keys;
+   **never overwrites** an existing one — regenerating keys makes stored
+   data undecryptable)
+4. Installs the host nginx reverse proxy (`deploy/nginx/resume-builder.conf`)
+   and issues a Let's Encrypt certificate (auto-renewed by a systemd timer)
+5. Builds & starts the stack, waits for all healthchecks to pass
+
+### 4. Deploy updates
+
+**Automatic** — add these GitHub repo secrets and every push to the
+**release branch** deploys (pushes to `master` never do):
+
+| Secret | Value |
+|--------|-------|
+| `DROPLET_HOST` | droplet IP or hostname |
+| `DROPLET_USER` | `root` (or your sudo user) |
+| `DROPLET_SSH_KEY` | private key matching the droplet's authorized keys |
+
+**Manual** — `DROPLET_USER=root DROPLET_HOST=<ip> ./deploy/deploy.sh`
+
+### Backups
+
+```bash
+crontab -e   # add:
+0 3 * * * /root/resume-v3/deploy/backup.sh >> /var/log/resume-backup.log 2>&1
+```
+
+Keeps 14 daily `pg_dump` snapshots in `backups/` (restore instructions in
+the script header).
 
 ## Tech Stack
 
@@ -185,7 +256,7 @@ Pull requests trigger the [E2E Tests](.github/workflows/e2e.yml) workflow, which
 | Framework | NestJS 11              | Vue 3.5               |
 | Language  | TypeScript 5.7         | TypeScript 6.0        |
 | Runtime   | Node.js 24+            | Node.js 22+           |
-| Database  | SQLite (Prisma 7)      | —                     |
+| Database  | SQLite (dev) / PostgreSQL 16 (prod) | —         |
 | Tests     | Jest 30 + supertest    | Vitest 4 + Playwright |
 | Linting   | ESLint 9 + Prettier    | ESLint 10 + oxlint    |
 | Formatting| Prettier               | oxfmt                 |

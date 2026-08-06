@@ -1,0 +1,51 @@
+name: Deploy to Droplet
+
+on:
+  push:
+    # Deploy ONLY when the release branch changes. This repo's default
+    # branch is `master` — pushes there (and PRs) never deploy. Bump this
+    # exact name when you cut the next release line (e.g. release/v1.1.0).
+    branches: [release/v1.0.0]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Build & deploy on the droplet
+    runs-on: ubuntu-latest
+    # Never run two deploys at once (a fast-forward pull + compose up are
+    # not safe to interleave)
+    concurrency: droplet-deploy
+    steps:
+      - name: Deploy via SSH
+        env:
+          DROPLET_HOST: ${{ secrets.DROPLET_HOST }}
+          DROPLET_USER: ${{ secrets.DROPLET_USER }}
+          DROPLET_SSH_KEY: ${{ secrets.DROPLET_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          [ -n "$DROPLET_HOST" ] || { echo "missing secret DROPLET_HOST" >&2; exit 1; }
+          [ -n "$DROPLET_USER" ] || { echo "missing secret DROPLET_USER" >&2; exit 1; }
+          [ -n "$DROPLET_SSH_KEY" ] || { echo "missing secret DROPLET_SSH_KEY" >&2; exit 1; }
+
+          mkdir -p ~/.ssh
+          echo "$DROPLET_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$DROPLET_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+          ssh -o BatchMode=yes "$DROPLET_USER@$DROPLET_HOST" '
+            set -euo pipefail
+            cd ~/resume-v3
+            # Hard-sync to the release branch: the droplet is a single-
+            # purpose deploy box (all state lives in .env.prod + the pgdata
+            # volume, both gitignored), so resetting tracked files is always
+            # safe and guarantees we build EXACTLY what the push contains —
+            # even after a force-push or a stray commit on the droplet.
+            # Never add `git clean` here (it would delete .env.prod).
+            git fetch origin release/v1.0.0
+            git checkout -f release/v1.0.0
+            git reset --hard origin/release/v1.0.0
+            echo "Deploying release/v1.0.0 @ $(git log -1 --oneline)"
+            docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+            docker image prune -f
+            docker compose --env-file .env.prod -f docker-compose.prod.yml ps --status running
+          '

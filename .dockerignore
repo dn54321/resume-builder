@@ -5,3 +5,21 @@ dist
 *.db-journal
 .env
 .env.agent
+.env.*
+
+# Not needed in the build context — excluding them keeps docker builds fast
+# (the context is uploaded to the daemon on every build, including on the
+# droplet).
+atlas
+e2e
+docs
+milestones
+.agents
+.githooks
+.github
+coverage
+playwright-report
+test-results
+backups
+*.sql.gz
+*.md

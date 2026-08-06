@@ -11,6 +11,9 @@ frontend/public/screenshots/
 **/__screenshots__/
 frontend/resume.pdf
 
+# Production DB backups (created by deploy/backup.sh on the droplet)
+backups/
+
 # Atlas agent system state
 atlas/state/
 # NOTE: no trailing slash — atlas/.pi is a SYMLINK (→ ../.pi) and a

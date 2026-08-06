@@ -7,10 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **DigitalOcean droplet deployment** — production compose stack
+  (`docker-compose.prod.yml`: Postgres 16 + backend + frontend, loopback-only
+  ports, log rotation), host nginx reverse proxy with Let's Encrypt TLS
+  (`deploy/nginx/resume-builder.conf`), one-shot idempotent droplet bootstrap
+  (`deploy/setup-droplet.sh`: swap, ufw, fail2ban, Docker, secrets, cert),
+  SSH auto-deploy on push to the release branch (`.github/workflows/deploy.yml`), manual
+  redeploy (`deploy/deploy.sh`), and Postgres backup with 14-day retention
+  (`deploy/backup.sh`).
+- **Sized for a 1GB RAM droplet** — build-stage Node heaps capped at 768MB
+  (were 2048MB), backend runtime heap capped at 512MB, Postgres tuned
+  (64MB shared_buffers, 50 max connections). `render.yaml` removed; the
+  Render `$PORT` envsubst hack is gone from the frontend image.
+- **Frontend nginx config as a real file** (`frontend/nginx.conf`) — gzip,
+  immutable asset caching, no-cache index.html; replaces the Render
+  `$PORT` envsubst printf hack. Backend boots via the local prisma bin
+  instead of a pnpm indirection.
+
 ### Fixed
-- **Render deployment** — pnpm installed via npm (no corepack runtime
-  download that OOM'd builds), backend binds `0.0.0.0` (Render port
-  detection), frontend nginx listens on `$PORT`, Node heap capped.
+- **Build & runtime reliability** — pnpm installed via npm (no corepack
+  runtime download that OOM'd builds), backend binds `0.0.0.0` (container
+  port mapping), Node heap capped for RAM-constrained hosts.
 
 ### Added
 - **Multi-engine database support** — the backend works with either

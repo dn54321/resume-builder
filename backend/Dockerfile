@@ -22,19 +22,19 @@ WORKDIR /app
 
 # pnpm — installed globally via npm (NOT corepack). `corepack enable`
 # makes the pnpm shim DOWNLOAD pnpm@<packageManager> from the npm registry
-# at build time — on Render that download OOMs/times out ('Corepack is
-# about to download …' then status 137). A global npm install is a cached
-# layer: no runtime fetch, pinned version, works offline.
+# at build time ('Corepack is about to download …') — a network fetch that
+# fails/times out on constrained build hosts. A global npm install is a
+# cached layer: no runtime fetch, pinned version, works offline.
 RUN npm install -g pnpm@11.20.0
 
-# Cap the Node heap for the TypeScript compile below — `nest build` (tsc)
-# on Render's RAM-limited containers can exceed the default heap and get
-# SIGKILL'd (status 137 = OOM). 2048MB is enough for this app's size.
-ENV NODE_OPTIONS="--max-old-space-size=2048"
+# Cap the Node heap for the TypeScript compile below — on a 1GB droplet
+# the default heap can exceed physical RAM and get SIGKILL'd (status 137
+# = OOM). 768MB fits this app's compile comfortably (dist is ~2MB).
+ENV NODE_OPTIONS="--max-old-space-size=768"
 
-# Reduce memory pressure during install: limited concurrency. Render build
-# containers are RAM-limited; `pnpm install --frozen-lockfile` of the full
-# dep tree regularly hits OOM (status 137 = SIGKILL by the OOM killer).
+# Reduce memory pressure during install: limited concurrency. The full
+# dep tree install has hit OOM (status 137) on RAM-constrained hosts;
+# one child at a time keeps the spike flat.
 COPY backend/pnpm-workspace.yaml ./
 COPY backend/package.json backend/pnpm-lock.yaml ./
 
@@ -73,9 +73,9 @@ RUN npm install -g pnpm@11.20.0
 
 # Install ONLY production deps fresh in the runtime image (no 571MB
 # devDeps copy — that bloats the image and the copy itself can OOM on
-# Render). prisma is a prod dep so `prisma migrate deploy` works at boot.
-# prisma:generate in the build stage already produced the client into
-# dist/src/generated, so the runtime never regenerates it.
+# RAM-constrained hosts). prisma is a prod dep so `prisma migrate deploy`
+# works at boot. prisma:generate in the build stage already produced the
+# client into dist/src/generated, so the runtime never regenerates it.
 COPY backend/package.json backend/pnpm-lock.yaml backend/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile --prod --child-concurrency=1 --network-concurrency=4
 COPY --from=build /app/dist ./dist
@@ -91,9 +91,8 @@ COPY backend/prisma.config.ts ./prisma.config.ts
 RUN mkdir -p /app/data && chown -R node:node /app
 USER node
 
-# Render injects a PORT env (e.g. 10000); the app binds to it via config
-# (PORT default 3000). EXPOSE is informational for local use; on Render the
-# runtime PORT env wins. The entry honors $PORT — do not hardcode 3000.
+# The app binds 0.0.0.0:PORT (PORT default 3000) — the droplet's host nginx
+# routes /api/v1 to this container. EXPOSE is informational.
 EXPOSE 3000
 
 # ⚠️ migrate deploy (additive, safe) — never `db push` (drops tables).
@@ -101,4 +100,6 @@ EXPOSE 3000
 # frontend origin so the browser can call this API cross-origin.
 # Entry: nest build emits dist/src/main.js (tsconfig outDir ./dist keeps
 # the src/ prefix — verified; do NOT use dist/main.js).
-CMD ["sh", "-c", "pnpm run prisma:migrate && node dist/src/main.js"]
+# prisma runs from the local node_modules bin (it's a prod dep) — no pnpm
+# indirection at boot.
+CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && node dist/src/main.js"]
