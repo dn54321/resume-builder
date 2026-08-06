@@ -322,10 +322,12 @@ interface ImportMeta {
 
 ## Dependencies to Add (from Spec)
 
-| Package        | Purpose                        |
-| -------------- | ------------------------------ |
-| `jspdf`        | Client-side PDF generation     |
-| `html2canvas`  | Render DOM to canvas for PDF   |
+| Package            | Purpose                                            |
+| ------------------ | -------------------------------------------------- |
+| `jspdf`            | Client-side PDF generation                          |
+| `html2canvas-pro`  | Render DOM to canvas for PDF (drop-in fork of       |
+|                    | html2canvas; parses oklch/lab/lch colors that       |
+|                    | Tailwind v4 emits — RES-111)                       |
 
 ## Security
 

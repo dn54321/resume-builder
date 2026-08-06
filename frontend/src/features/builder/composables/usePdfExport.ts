@@ -1,8 +1,15 @@
 import { ref } from 'vue'
 import { jsPDF } from 'jspdf'
-import html2canvas from 'html2canvas'
+import html2canvas from 'html2canvas-pro'
 
 /**
+ * html2canvas-pro (a drop-in fork of html2canvas) is used instead of the
+ * original package because it parses CSS Color Module Level 4 functions
+ * (oklch / oklab / lab / lch / color()). Tailwind v4 emits oklch(...)
+ * colors by default; html2canvas 1.x throws
+ * "Attempting to parse an unsupported color function \"oklch\"" during
+ * capture, which broke PDF export entirely (RES-111).
+ *
  * Composables that use html2canvas internally must set the html2canvas
  * implementation at import time. For testing, we provide a way to inject
  * a mock.
