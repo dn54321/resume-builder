@@ -587,6 +587,7 @@ describe('useResumeData', () => {
         order: 0,
         parentId: null,
         locked: false,
+        visible: true,
         fields: [
           { key: 'fullName', value: '', order: 0 },
           { key: 'email', value: '', order: 1 },
