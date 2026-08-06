@@ -645,6 +645,39 @@ describe('DashboardView', () => {
     expect(style).toContain('scale(0.3)')
   })
 
+  it('renders dashboard preview zoom controls (RES-115 parity)', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockFullResumeStandard))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
+    await cards[0]!.trigger('click')
+    await flushPromises()
+
+    const controls = wrapper.find('[data-testid="dashboard-preview-zoom-controls"]')
+    expect(controls.exists()).toBe(true)
+    expect(wrapper.find('[data-testid="dashboard-preview-zoom-in"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="dashboard-preview-zoom-out"]').exists()).toBe(true)
+    // Default 100% indicator
+    expect(wrapper.find('[data-testid="dashboard-preview-zoom-value"]').text()).toContain('100')
+
+    // Zoom in → 110%
+    await wrapper.find('[data-testid="dashboard-preview-zoom-in"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="dashboard-preview-zoom-value"]').text()).toContain('110')
+
+    // Zoom out → back to 100%
+    await wrapper.find('[data-testid="dashboard-preview-zoom-out"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="dashboard-preview-zoom-value"]').text()).toContain('100')
+  })
+
   it('wraps the paper in a box sized to the scaled footprint (no clipping)', async () => {
     createAuthenticatedStore()
     mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))

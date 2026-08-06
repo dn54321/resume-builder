@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { useAuth } from '@/features/auth/composables/useAuth'
 import { useApi, ApiRequestError } from '@/shared/composables/useApi'
 import ConfirmModal from '@/shared/components/ConfirmModal.vue'
-import { Ellipsis, Pencil, SquarePen, Copy, Trash2, FileText } from '@lucide/vue'
+import { Ellipsis, Pencil, SquarePen, Copy, Trash2, FileText, ZoomIn, ZoomOut } from '@lucide/vue'
 import StandardLayout from '@/features/builder/components/preview/StandardLayout.vue'
 import TwoColumnLayout from '@/features/builder/components/preview/TwoColumnLayout.vue'
 import {
@@ -112,15 +112,66 @@ const previewSections = computed<ResumeSectionState[]>(() =>
 const previewPaneRef = ref<HTMLElement | null>(null)
 const containerWidth = ref(0)
 
+// ─── Dashboard preview zoom (mirrors RES-115 builder zoom) ────────
+// The user asked for zoom controls on the dashboard resume preview too.
+// Same range/steps/persistence as the builder's LivePreview.
+const MIN_ZOOM = 0.5
+const MAX_ZOOM = 1.5
+const ZOOM_STEP = 0.1
+const ZOOM_STORAGE_KEY = 'resume-dashboard:preview-zoom'
+
+function clampZoom(value: number): number {
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value))
+}
+
+function loadInitialZoom(): number {
+  try {
+    const raw = window.sessionStorage?.getItem(ZOOM_STORAGE_KEY)
+    if (raw) {
+      const parsed = parseFloat(raw)
+      if (!Number.isNaN(parsed)) return clampZoom(parsed)
+    }
+  } catch {
+    // storage unavailable — default to 100%
+  }
+  return 1
+}
+
+function persistZoom() {
+  try {
+    window.sessionStorage?.setItem(ZOOM_STORAGE_KEY, String(zoomFactor.value))
+  } catch {
+    // storage unavailable — zoom still works for the session
+  }
+}
+
+function setZoom(value: number) {
+  zoomFactor.value = clampZoom(value)
+  persistZoom()
+}
+
+function zoomIn() {
+  setZoom(zoomFactor.value + ZOOM_STEP)
+}
+
+function zoomOut() {
+  setZoom(zoomFactor.value - ZOOM_STEP)
+}
+
+const zoomFactor = ref(loadInitialZoom())
+const zoomPercent = computed(() => Math.round(zoomFactor.value * 100))
+
 /**
- * Scale the 816px-wide paper so it fits the preview pane with padding.
+ * Scale the 816px-wide paper so it fits the preview pane with padding,
+ * multiplied by the user's zoom factor (50%–150%).
  * Falls back to 0.3 before the pane width has been measured (jsdom, SSR).
  */
 const previewScale = computed(() => {
-  if (containerWidth.value <= 0) return 0.3
-  const availableWidth = containerWidth.value - PADDING
-  const s = availableWidth / PAPER_WIDTH_PX
-  return Math.min(MAX_SCALE, Math.max(MIN_SCALE, s))
+  const base =
+    containerWidth.value <= 0
+      ? 0.3
+      : Math.min(MAX_SCALE, Math.max(MIN_SCALE, (containerWidth.value - PADDING) / PAPER_WIDTH_PX))
+  return Math.min(MAX_SCALE * MAX_ZOOM, Math.max(MIN_SCALE * MIN_ZOOM, base * zoomFactor.value))
 })
 
 /**
@@ -645,6 +696,45 @@ async function handleConfirmDelete(): Promise<void> {
             />
             </div>
           </div>
+
+          <!-- Zoom controls (floating bottom-right; right offset clears the
+               preview scrollbar) -->
+          <div
+            class="dashboard-preview__zoom-controls absolute bottom-3 right-6 z-10 inline-flex items-center gap-0.5 rounded-full border border-border bg-surface/95 p-1 shadow-md"
+            role="group"
+            aria-label="Preview zoom"
+            data-testid="dashboard-preview-zoom-controls"
+          >
+            <button
+              class="inline-flex items-center justify-center size-8 rounded-full text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+              type="button"
+              :disabled="zoomFactor <= MIN_ZOOM"
+              aria-label="Zoom out"
+              title="Zoom out"
+              data-testid="dashboard-preview-zoom-out"
+              @click="zoomOut"
+            >
+              <ZoomOut class="size-4" />
+            </button>
+            <span
+              class="inline-block min-w-10 text-center text-xs font-semibold tabular-nums text-foreground select-none"
+              aria-live="polite"
+              data-testid="dashboard-preview-zoom-value"
+            >
+              {{ zoomPercent }}%
+            </span>
+            <button
+              class="inline-flex items-center justify-center size-8 rounded-full text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+              type="button"
+              :disabled="zoomFactor >= MAX_ZOOM"
+              aria-label="Zoom in"
+              title="Zoom in"
+              data-testid="dashboard-preview-zoom-in"
+              @click="zoomIn"
+            >
+              <ZoomIn class="size-4" />
+            </button>
+          </div>
         </div>
       </section>
     </div>
@@ -1021,6 +1111,7 @@ html.dark .dashboard-preview-error {
 /* ── Scaled paper ───────────────────────── */
 
 .dashboard-preview-body {
+  position: relative; /* anchor for the floating zoom controls */
   flex: 1;
   min-height: 0;
   overflow-y: auto;
