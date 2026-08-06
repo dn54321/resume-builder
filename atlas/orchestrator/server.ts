@@ -384,6 +384,53 @@ async function assignToIdleWorker(node: GraphNode): Promise<void> {
 
 // ─── Worker Completion ──────────────────────────────────────────────
 
+/**
+ * If the node's branch is already merged to the target AND the worktree
+ * holds meaningful work beyond the base, complete the ticket as done
+ * (no-op) instead of re-queueing. Mirrors the orphan sweep in
+ * checkAgentHealth; used by onWorkerComplete's killed/exit paths to close
+ * the race where a worker merges then dies before reporting IDLE — a
+ * re-queue there spawns a redundant re-verification worker (observed:
+ * RES-113 → worker-15 after the merge landed).
+ * @param node - the ticket node
+ * @returns true when the ticket was completed as already-merged
+ */
+async function tryCompleteIfMerged(node: GraphNode): Promise<{ completed: boolean }> {
+  const config = getConfig();
+  const target = config.strategy.branches.direct_push;
+  const baseBranch = config.strategy.branches.worktree_base;
+  const merged = node.state.worktreePath
+    ? isBranchMergedTo(node.state.worktreePath, node.state.branch, target)
+    : false;
+  // ⚠️ isBranchMergedTo alone is NOT sufficient: an EMPTY worktree (the
+  // ticket was never implemented — branch tip == base, nothing committed)
+  // trivially satisfies 'branch is an ancestor of master', falsely
+  // completing tickets whose work was never done (observed: RES-94
+  // completed with the migration fix never implemented). Only complete
+  // as merged when the worktree actually HAS meaningful work beyond the
+  // base branch.
+  const hasWork = node.state.worktreePath
+    ? hasMeaningfulWork(node.state.worktreePath, baseBranch)
+    : false;
+  if (!merged || !hasWork) {
+    return { completed: false };
+  }
+  log(`Completing ${node.ticket.identifier} (work already merged to ${target})`);
+  node.state.status = 'done';
+  node.state.finishedAt = new Date().toISOString();
+  node.state.workerName = null;
+  node.state.pid = null;
+  node.state.paneId = null;
+  node.state.agentId = null;
+  recordCompletedWork('worker');
+  await transitionTicket(node.ticket.id, config.linear.transitions.on_done);
+  await tellBoss(`✅ ${node.ticket.identifier}: completed (work already merged to ${target})`);
+  for (const rootId of epicGraphs.keys()) {
+    await maybeCompleteEpic(rootId);
+  }
+  return { completed: true };
+}
+
 async function onWorkerComplete(
   node: GraphNode,
   exitCode: number,
@@ -490,7 +537,19 @@ async function onWorkerComplete(
       }
     }
   } else if (exitCode === 143 || exitCode === 137) {
-    // Killed externally
+    // Killed externally. ⚠️ Race guard (boss/fix-requeue-race): a worker that
+    // merged its work then died (pane killed, exit 143/137) BEFORE reporting
+    // IDLE must NOT be re-queued — otherwise a fresh worker spawns, re-verifies
+    // the already-merged branch, and no-op completes, burning a full worker
+    // cycle (observed: RES-113 spawned worker-15 after the merge landed). The
+    // health sweep (checkAgentHealth) has this exact merged+hasWork check but
+    // only runs every 15s — onWorkerComplete re-queues + spawns instantly,
+    // racing it. Check merged state here so killed-after-merge workers complete
+    // as done instead of re-queueing.
+    const mergedResult = await tryCompleteIfMerged(node);
+    if (mergedResult.completed) {
+      return;
+    }
     node.state.status = 'pending';
     node.state.pid = null;
     node.state.error = `Worker killed (signal ${exitCode - 128}) — will resume`;
@@ -500,6 +559,12 @@ async function onWorkerComplete(
     const config = getConfig();
     const maxRetries = config.agents.worker.retry_limit ?? 2;
     if (node.state.retryCount <= maxRetries) {
+      // Same race guard as the killed path: if the work is already merged and
+      // meaningful, complete as done instead of re-queueing a redundant worker.
+      const mergedResult = await tryCompleteIfMerged(node);
+      if (mergedResult.completed) {
+        return;
+      }
       node.state.status = 'pending';
       node.state.pid = null;
       node.state.error = `Worker exited with code ${exitCode} (retry ${node.state.retryCount}/${maxRetries})`;
