@@ -16,11 +16,11 @@ WORKDIR /app
 ARG VITE_API_BASE_URL
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable
 
 # Manifests first for layer caching
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --child-concurrency=1 --network-concurrency=4
 
 # Config + source
 COPY frontend/index.html \

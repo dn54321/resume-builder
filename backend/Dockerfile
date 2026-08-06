@@ -20,21 +20,18 @@ FROM node:22-alpine AS build
 
 WORKDIR /app
 
-# pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# pnpm — pinned via package.json's packageManager field so corepack uses a
+# known version instead of fetching pnpm@latest over the network every build
+# (Render: flaky registry fetches + OOM on large installs).
+RUN corepack enable
 
-# DATABASE_URL build arg selects the Prisma provider for `prisma generate`
-# (set-db-provider.js rewrites schema.prisma: sqlite for file:/libsql:,
-# postgresql for postgresql://). Defaults to the sqlite dev path so a bare
-# `docker build` still works; production builds pass their real URL.
-ARG DATABASE_URL=file:./prisma/db/dev.db
-ENV DATABASE_URL=$DATABASE_URL
-
-# Copy manifests first for layer caching
+# Reduce memory pressure during install: limited concurrency. Render build
+# containers are RAM-limited; `pnpm install --frozen-lockfile` of the full
+# dep tree regularly hits OOM (status 137 = SIGKILL by the OOM killer).
 COPY backend/pnpm-workspace.yaml ./
 COPY backend/package.json backend/pnpm-lock.yaml ./
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --child-concurrency=1 --network-concurrency=4
 
 # Prisma schema + scripts (client is generated AFTER src is copied — the
 # generated output lands in src/generated and would be clobbered otherwise)
@@ -44,6 +41,13 @@ COPY backend/scripts ./scripts
 # Copy source + config and compile
 COPY backend/src ./src
 COPY backend/nest-cli.json backend/tsconfig.json backend/tsconfig.build.json ./
+
+# DATABASE_URL build arg selects the Prisma provider for `prisma generate`
+# (set-db-provider.js rewrites schema.prisma: sqlite for file:/libsql:,
+# postgresql for postgresql://). Defaults to the sqlite dev path so a bare
+# `docker build` still works; production builds pass their real URL.
+ARG DATABASE_URL=file:./prisma/db/dev.db
+ENV DATABASE_URL=$DATABASE_URL
 
 # Generate the client with the provider selected by DATABASE_URL (ARG above),
 # patch for CJS, then compile. Order matters: generate writes src/generated,
@@ -58,7 +62,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable
 
 # Carry the FULL node_modules from build (Prisma CLI is needed for
 # `prisma migrate deploy` at boot; the compiled dist is independent of
@@ -78,6 +82,9 @@ COPY backend/prisma.config.ts ./prisma.config.ts
 RUN mkdir -p /app/data && chown -R node:node /app
 USER node
 
+# Render injects a PORT env (e.g. 10000); the app binds to it via config
+# (PORT default 3000). EXPOSE is informational for local use; on Render the
+# runtime PORT env wins. The entry honors $PORT — do not hardcode 3000.
 EXPOSE 3000
 
 # ⚠️ migrate deploy (additive, safe) — never `db push` (drops tables).
