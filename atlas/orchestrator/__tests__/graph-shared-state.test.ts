@@ -22,6 +22,7 @@ vi.mock('../../git/operations', () => ({
   getDefaultBranch: vi.fn(() => 'master'),
   branchName: vi.fn((id: string) => `ticket/${id.toLowerCase()}`),
   isBranchMergedTo: vi.fn(() => false),
+  getRepoRoot: vi.fn(() => '/repo'),
 }));
 vi.mock('../state', () => ({
   loadState: vi.fn(() => null),
@@ -31,7 +32,7 @@ vi.mock('../state', () => ({
 vi.mock('../config', () => ({
   getConfig: vi.fn(() => ({
     agents: { worker: { retry_limit: 2 } },
-    strategy: { branches: { worktree_base: 'master' } },
+    strategy: { branches: { worktree_base: 'master', direct_push: 'master' } },
   })),
 }));
 
@@ -100,5 +101,92 @@ describe('Graph — shared ticket state across epics', () => {
     const ready = graphB.nodes.size === 0 ? [] : [...graphB.nodes.values()]
       .filter((n) => n.state.status === 'pending');
     expect(ready.map((n) => n.ticket.identifier)).not.toContain('RES-97');
+  });
+
+  it('done ticket with pruned worktree stays done when branch is merged to target', async () => {
+    // Regression (observed: RES-87/97/98 re-assigned after every restart):
+    // pruneWorktree() removes the worktree AFTER a successful merge, so done
+    // tickets routinely have NO worktree on disk. buildGraph() used to reset
+    // any 'done' ticket with a missing worktree to pending → launchReady()
+    // spawned a worker → the worker re-verified the already-merged branch
+    // and no-op completed. Wasteful re-work on every restart.
+    const isBranchMergedTo = vi.mocked((await import('../../git/operations')).isBranchMergedTo);
+    isBranchMergedTo.mockReturnValue(true);
+
+    const existingState = {
+      tickets: {
+        'RES-96': {
+          identifier: 'RES-96',
+          status: 'done',
+          branch: 'ticket/res-96',
+          worktreePath: '/tmp/atlas-test-state/worktrees/RES-96', // pruned — does not exist
+          logPath: '/tmp/atlas-test-state/logs/RES-96.log',
+          pid: null,
+          prUrl: null,
+          startedAt: null,
+          finishedAt: new Date().toISOString(),
+          error: null,
+          assignedPort: null,
+          retryCount: 0,
+          workerName: null,
+          agentId: null,
+          paneId: null,
+        },
+      },
+    };
+    mockedFetch.mockImplementation(async (identifier: string) => {
+      if (identifier === 'RES-99') return makeTicket('RES-99');
+      if (identifier === 'RES-96') return makeTicket('RES-96', 'id-RES-99');
+      return null;
+    });
+    mockedChildren.mockImplementation(async (parentId: string) => {
+      if (parentId === 'id-RES-99') return [makeTicket('RES-96', 'id-RES-99')];
+      return [];
+    });
+
+    const graph = await buildGraph('RES-99', existingState as any);
+    expect(graph.nodes.get('RES-96')!.state.status).toBe('done');
+  });
+
+  it('done ticket with pruned worktree resets to pending when branch is NOT merged', async () => {
+    // The reset-to-pending path must be preserved for genuine stale state:
+    // a ticket marked done whose branch is NOT an ancestor of the target is
+    // not actually complete — reset so it re-queues.
+    const isBranchMergedTo = vi.mocked((await import('../../git/operations')).isBranchMergedTo);
+    isBranchMergedTo.mockReturnValue(false);
+
+    const existingState = {
+      tickets: {
+        'RES-95': {
+          identifier: 'RES-95',
+          status: 'done',
+          branch: 'ticket/res-95',
+          worktreePath: '/tmp/atlas-test-state/worktrees/RES-95', // does not exist
+          logPath: '/tmp/atlas-test-state/logs/RES-95.log',
+          pid: null,
+          prUrl: null,
+          startedAt: null,
+          finishedAt: new Date().toISOString(),
+          error: null,
+          assignedPort: null,
+          retryCount: 0,
+          workerName: null,
+          agentId: null,
+          paneId: null,
+        },
+      },
+    };
+    mockedFetch.mockImplementation(async (identifier: string) => {
+      if (identifier === 'RES-99') return makeTicket('RES-99');
+      if (identifier === 'RES-95') return makeTicket('RES-95', 'id-RES-99');
+      return null;
+    });
+    mockedChildren.mockImplementation(async (parentId: string) => {
+      if (parentId === 'id-RES-99') return [makeTicket('RES-95', 'id-RES-99')];
+      return [];
+    });
+
+    const graph = await buildGraph('RES-99', existingState as any);
+    expect(graph.nodes.get('RES-95')!.state.status).toBe('pending');
   });
 });
