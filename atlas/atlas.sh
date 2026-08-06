@@ -160,13 +160,18 @@ fi
 
 # Pane 0: Dashboard (left, full height)
 log "Creating dashboard pane..."
+# Run the watch loop under BASH explicitly — tmux launches the command via the
+# login shell (fish), and fish SYNTAX-HIGHLIGHTS the child's stdout, wrapping
+# the dashboard content in cyan/blue escape codes (the 'whole dashboard is
+# blue' bug). bash doesn't colorize, so the dashboard stays plain.
 tmux new-session -d -s "$SESSION_NAME" -c "$SCRIPT_DIR" \
-  "$DASHBOARD_WATCH $SCRIPT_DIR/state/dashboard.txt" || die "tmux new-session failed"
+  "bash $DASHBOARD_WATCH $SCRIPT_DIR/state/dashboard.txt" || die "tmux new-session failed"
 
 # Pane %1: Banner (right, top, 3 lines) — PERSISTENT, NEVER KILLED
 log "Creating banner pane..."
+# bash explicitly (see dashboard pane note — fish colorizes child stdout).
 tmux split-window -h -t "$SESSION_NAME:0" -c "$SCRIPT_DIR" \
-  "$BANNER_SCRIPT $MAX_WORKERS $FIFO_DIR" || die "tmux split-window for banner failed"
+  "bash $BANNER_SCRIPT $MAX_WORKERS $FIFO_DIR" || die "tmux split-window for banner failed"
 
 BANNER_PANE=$(tmux display-message -p -t "$SESSION_NAME:0.1" '#{pane_id}' 2>/dev/null) || true
 echo "$BANNER_PANE" > "$SCRIPT_DIR/state/panes/banner.pane"
