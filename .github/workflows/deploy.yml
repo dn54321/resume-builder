@@ -1,5 +1,14 @@
 name: Deploy to Droplet
 
+# ⚠️ WARNING — this run script is DESTRUCTIVE if executed locally.
+# It writes $DROPLET_SSH_KEY over ~/.ssh/id_ed25519 (GitHub-runners only
+# receive the secret). Never `eval` it, never source it, never copy-paste
+# it into a local shell. Real incident: a local simulation of this script
+# overwrote the machine's real SSH private key with the literal text
+# "dummy" (2026-08-06) — the key had to be regenerated and re-registered
+# on GitHub + the droplet. To inspect what the remote will receive, only
+# READ the file / substitute variables in a throwaway dir.
+
 on:
   push:
     # ANY release line deploys: release/v1.0.0, release/v1.0.1,
