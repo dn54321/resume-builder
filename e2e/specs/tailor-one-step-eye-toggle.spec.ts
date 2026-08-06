@@ -1,24 +1,26 @@
 /**
- * Tailor Resume UX — RES-98.
+ * Tailor Resume UX — RES-108.
  *
- * The JD modal's button is now "Tailor Resume" and runs tailoring in ONE
- * step (no separate Save). While the match runs a themed overlay animation
- * plays, and afterwards the section eye toggles flip to mirror the strategy
- * result: relevant sections stay/ become visible (eye on), sections whose
- * content is entirely non-relevant get hidden (eye off). Reset Filter
- * restores the pre-tailor visibility.
+ * Tailor must ONLY toggle section sub-items (and bullet points) — it must
+ * NEVER toggle whole sections. Hiding/showing a section is exclusively the
+ * user's choice via the section eye toggle. After a tailor run:
+ *   - the section eyes are untouched (relevant OR irrelevant sections keep
+ *     their user-chosen visibility),
+ *   - non-matching bullets are dimmed at sub-item level,
+ *   - Reset Filter restores every bullet's pre-tailor visibility without
+ *     touching the section eyes.
  *
- * Locked sections are covered by tailor-locked-sections.spec.ts (RES-92).
+ * Locked entries are covered by tailor-locked-sections.spec.ts (RES-97).
  */
 import { test, expect } from '@playwright/test'
 import { resetE2eDatabase } from '../helpers/db-reset'
 
-test.describe('Tailor Resume one-step + eye-toggle feedback', () => {
+test.describe('Tailor Resume hides sub-items only, never whole sections', () => {
   test.beforeAll(() => {
     resetE2eDatabase()
   })
 
-  test('modal runs tailoring in one step, overlay animates, eyes flip per match, reset restores', async ({
+  test('tailor dims non-matching bullets but leaves every section eye untouched; reset restores bullets', async ({
     page,
   }) => {
     await page.goto('/builder')
@@ -99,22 +101,26 @@ test.describe('Tailor Resume one-step + eye-toggle feedback', () => {
     await expect(overlay).toHaveCount(0)
     await expect(page.locator('[data-testid="filtered-badge"]')).toBeVisible()
 
-    // ── 5. Eye toggles reflect the strategy result ─────────────────────
-    // Experience has a surviving bullet → relevant → eye ON.
+    // ── 5. Section eyes are UNTOUCHED (RES-108) ────────────────────────
+    // Experience has a surviving bullet → still visible (eye stays on).
     await expect(expRow.locator('[data-testid="section-eye-toggle"]')).toHaveAttribute(
       'aria-pressed',
       'true',
     )
-    // Projects has zero surviving bullets → irrelevant → eye OFF.
+    // Projects has ZERO surviving bullets → the section is NOT hidden —
+    // Tailor never toggles whole sections; only its bullets are dimmed.
     await expect(projectsRow.locator('[data-testid="section-eye-toggle"]')).toHaveAttribute(
       'aria-pressed',
-      'false',
+      'true',
     )
-    // The non-matching bullet inside the relevant section is dimmed.
+    // Sub-item level: the non-matching bullet inside Experience is dimmed.
     const bullet2Row = expBlock.getByLabel('Bullet point 2').locator('xpath=..')
     await expect(bullet2Row).toHaveClass(/opacity-45/)
+    // The non-matching project bullet is dimmed too.
+    const projectBulletRow = projectsBlock.getByLabel('Bullet point 1').locator('xpath=..')
+    await expect(projectBulletRow).toHaveClass(/opacity-45/)
 
-    // ── 6. Reset Filter restores original visibility ───────────────────
+    // ── 6. Reset Filter restores bullet visibility, eyes stay untouched ─
     await page.locator('[data-testid="toolbar-reset-btn"]').click()
     await expect(page.locator('[data-testid="filtered-badge"]')).toHaveCount(0)
     await expect(expRow.locator('[data-testid="section-eye-toggle"]')).toHaveAttribute(
@@ -126,5 +132,6 @@ test.describe('Tailor Resume one-step + eye-toggle feedback', () => {
       'true',
     )
     await expect(bullet2Row).not.toHaveClass(/opacity-45/)
+    await expect(projectBulletRow).not.toHaveClass(/opacity-45/)
   })
 })
