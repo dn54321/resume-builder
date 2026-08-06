@@ -1199,6 +1199,9 @@ describe('useResumeData', () => {
         order: 0,
         parentId: null,
         locked: false,
+        // RES-106: SectionEntryState.visible is required — the fixture must
+        // match the type (entry is visible by default).
+        visible: true,
         fields: [{ key: 'text', value: 'Hello world', order: 0 }],
       })
       await nextTick()
