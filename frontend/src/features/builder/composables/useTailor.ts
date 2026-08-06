@@ -46,9 +46,9 @@ export function useTailor() {
         '/api/v1/resumes/tailor',
         payload,
       )
-      // applyTailorFilter skips locked sections (they keep their current
-      // visibility regardless of keyword matches) and never touches the
-      // `locked` flag itself — it persists across tailor and reset.
+      // RES-108: applyTailorFilter records the sub-item/bullet visibility
+      // from the match and never touches section eyes or section locks —
+      // Tailor operates at sub-item level only.
       store.applyTailorFilter(response)
     } catch (err: unknown) {
       if (err instanceof ApiRequestError) {

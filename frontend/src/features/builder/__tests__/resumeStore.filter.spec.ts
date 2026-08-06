@@ -72,67 +72,31 @@ describe('useResumeStore - filter', () => {
     })
   })
 
-  describe('locked sections', () => {
-    it('skips bullet indices for a locked section when applying filter', () => {
+  describe('section-level lock is obsolete for Tailor (RES-108)', () => {
+    it('records filter indices even for a section flagged locked at section level', () => {
       store.initializeDefaults()
       const exp = store.sections.find((s) => s.sectionType === 'experience')!
       exp.locked = true
 
       store.applyTailorFilter(createMockTailorResponse())
 
-      // Locked section must not appear in the filtered indices, so all its
-      // bullets stay visible.
-      expect(store.filteredBulletIndices['experience']).toBeUndefined()
-      // Unlocked sections are still filtered.
+      // RES-108: Tailor operates at sub-item level only — a legacy
+      // section-level lock no longer shields the section's bullets.
+      expect(store.filteredBulletIndices['experience']).toHaveLength(2)
       expect(store.filteredBulletIndices['projects']).toHaveLength(1)
     })
 
-    it('clears filtered hard skills when hard_skills is locked', () => {
+    it('records filtered skills even for a locked skill section', () => {
       store.initializeDefaults()
       const hard = store.sections.find((s) => s.sectionType === 'hard_skills')!
       hard.locked = true
 
       store.applyTailorFilter(createMockTailorResponse())
 
-      expect(store.filteredHardSkills).toEqual([])
+      expect(store.filteredHardSkills).toEqual(['react', 'typescript'])
     })
 
-    it('clears filtered soft skills when soft_skills is locked', () => {
-      store.initializeDefaults()
-      const soft = store.sections.find((s) => s.sectionType === 'soft_skills')!
-      soft.locked = true
-
-      store.applyTailorFilter(createMockTailorResponse())
-
-      expect(store.filteredSoftSkills).toEqual([])
-    })
-
-    it('keeps every bullet of a locked section relevant', () => {
-      store.initializeDefaults()
-      const exp = store.sections.find((s) => s.sectionType === 'experience')!
-      exp.locked = true
-
-      store.applyTailorFilter(createMockTailorResponse())
-
-      // Even though the response filters experience bullets to [0,2] and [0],
-      // the locked section ignores the filter entirely.
-      expect(store.isBulletRelevant('experience', 0, 1)).toBe(true)
-      expect(store.isBulletRelevant('experience', 1, 0)).toBe(true)
-      expect(store.isBulletRelevant('experience', 5, 0)).toBe(true)
-    })
-
-    it('keeps every skill of a locked skill section relevant', () => {
-      store.initializeDefaults()
-      const hard = store.sections.find((s) => s.sectionType === 'hard_skills')!
-      hard.locked = true
-
-      store.applyTailorFilter(createMockTailorResponse())
-
-      expect(store.isSkillRelevant('hard_skills', 'Python')).toBe(true)
-      expect(store.isSkillRelevant('hard_skills', 'anything')).toBe(true)
-    })
-
-    it('reports all bullets visible for a locked section', () => {
+    it('filters bullets inside a section flagged locked at section level', () => {
       store.initializeDefaults()
       const expSection = store.sections.find((s) => s.sectionType === 'experience')!
       expSection.locked = true
@@ -148,14 +112,23 @@ describe('useResumeStore - filter', () => {
         })
       }
 
-      store.applyTailorFilter(createMockTailorResponse())
+      store.applyTailorFilter({
+        filteredBulletIndices: {
+          experience: [{ entryOrder: 0, bulletIndices: [0] }],
+        },
+        filteredHardSkills: [],
+        filteredSoftSkills: [],
+      })
 
+      // Sub-item/bullet locks (RES-97/RES-106) still protect content; a
+      // section-level lock does not.
       const count = store.getFilteredBulletCount('experience')
       expect(count.total).toBe(3)
-      expect(count.visible).toBe(3)
+      expect(count.visible).toBe(1)
+      expect(store.isBulletRelevant('experience', 0, 1)).toBe(false)
     })
 
-    it('resetTailorFilter does not unlock sections', () => {
+    it('resetTailorFilter leaves the inert section-level locked flag untouched', () => {
       store.initializeDefaults()
       const exp = store.sections.find((s) => s.sectionType === 'experience')!
       exp.locked = true
@@ -163,7 +136,8 @@ describe('useResumeStore - filter', () => {
       store.applyTailorFilter(createMockTailorResponse())
       store.resetTailorFilter()
 
-      // Lock state persists after reset — only the filter state is cleared.
+      // The field is inert data (kept for saved-resume compat) — reset only
+      // clears filter state.
       expect(store.isFiltered).toBe(false)
       expect(exp.locked).toBe(true)
     })
@@ -458,14 +432,15 @@ describe('useResumeStore - filter', () => {
     })
   })
 
-  // ─── RES-98: eye-toggle feedback after tailoring ──────────────────
+  // ─── RES-108: Tailor never toggles whole sections ─────────────────
   //
-  // Tailoring flips the section eye toggles (the `enabled` flag) to mirror
-  // the matching result: sections with relevant content stay/ become
-  // visible, sections whose content is entirely non-relevant get hidden.
-  // Reset Filter restores the pre-tailor visibility. Locked sections are
-  // never toggled (RES-92).
-  describe('eye-toggle feedback (RES-98)', () => {
+  // Tailor operates at sub-item/bullet level ONLY. It never sets
+  // `section.enabled` — the section eye toggle is exclusively the user's
+  // choice. Sections whose content is entirely non-relevant keep their eye
+  // state; their bullets are hidden instead. Reset Filter clears the
+  // sub-item filter state, which restores bullet visibility; section eyes
+  // are never touched and need no restoring.
+  describe('section eye is never toggled by Tailor (RES-108)', () => {
     /**
      * Add a top-level entry with N child bullets to a section.
      * @param sectionType
@@ -504,9 +479,10 @@ describe('useResumeStore - filter', () => {
       })
     }
 
-    it('hides a bullet section whose content is entirely non-relevant', () => {
+    it('never hides a section whose content is entirely non-relevant — hides its bullets instead', () => {
       store.initializeDefaults()
       addBulletsToSection('experience', 2)
+      const exp = store.sections.find((s) => s.sectionType === 'experience')!
 
       store.applyTailorFilter({
         filteredBulletIndices: {
@@ -516,8 +492,11 @@ describe('useResumeStore - filter', () => {
         filteredSoftSkills: [],
       })
 
-      const exp = store.sections.find((s) => s.sectionType === 'experience')!
-      expect(exp.enabled).toBe(false)
+      // The section stays visible (user-only eye choice)...
+      expect(exp.enabled).toBe(true)
+      // ...but every non-relevant bullet is hidden.
+      expect(store.isBulletRelevant('experience', 0, 0)).toBe(false)
+      expect(store.isBulletRelevant('experience', 0, 1)).toBe(false)
     })
 
     it('keeps a bullet section visible when at least one bullet is relevant', () => {
@@ -534,11 +513,14 @@ describe('useResumeStore - filter', () => {
 
       const exp = store.sections.find((s) => s.sectionType === 'experience')!
       expect(exp.enabled).toBe(true)
+      expect(store.isBulletRelevant('experience', 0, 0)).toBe(true)
+      expect(store.isBulletRelevant('experience', 0, 1)).toBe(false)
     })
 
-    it('shows a skill section when at least one skill is relevant', () => {
+    it('never flips a skill section eye — non-matching skills are hidden instead', () => {
       store.initializeDefaults()
       addSkillsToSection('hard_skills', ['react', 'python'])
+      const hard = store.sections.find((s) => s.sectionType === 'hard_skills')!
 
       store.applyTailorFilter({
         filteredBulletIndices: {},
@@ -546,22 +528,10 @@ describe('useResumeStore - filter', () => {
         filteredSoftSkills: [],
       })
 
-      const hard = store.sections.find((s) => s.sectionType === 'hard_skills')!
+      // Eye untouched even though only one of two skills survived...
       expect(hard.enabled).toBe(true)
-    })
-
-    it('hides a skill section when no skills are relevant', () => {
-      store.initializeDefaults()
-      addSkillsToSection('hard_skills', ['python', 'java'])
-
-      store.applyTailorFilter({
-        filteredBulletIndices: {},
-        filteredHardSkills: [],
-        filteredSoftSkills: [],
-      })
-
-      const hard = store.sections.find((s) => s.sectionType === 'hard_skills')!
-      expect(hard.enabled).toBe(false)
+      expect(store.isSkillRelevant('hard_skills', 'react')).toBe(true)
+      expect(store.isSkillRelevant('hard_skills', 'python')).toBe(false)
     })
 
     it('leaves empty sections untouched', () => {
@@ -596,14 +566,12 @@ describe('useResumeStore - filter', () => {
       expect(summary.enabled).toBe(false)
     })
 
-    it('never toggles locked sections', () => {
+    it('never toggles the eye of a section flagged locked at section level either', () => {
       store.initializeDefaults()
       addBulletsToSection('experience', 2)
       const exp = store.sections.find((s) => s.sectionType === 'experience')!
       exp.locked = true
 
-      // Even though the filter says nothing survives, the locked section
-      // keeps its eye state (RES-92).
       store.applyTailorFilter({
         filteredBulletIndices: {
           experience: [{ entryOrder: 0, bulletIndices: [] }],
@@ -612,35 +580,18 @@ describe('useResumeStore - filter', () => {
         filteredSoftSkills: [],
       })
 
+      // No section ever gets its eye toggled by Tailor (RES-108).
       expect(exp.enabled).toBe(true)
     })
 
-    it('re-enables a relevant section the user had disabled', () => {
-      store.initializeDefaults()
-      addBulletsToSection('experience', 1)
-      const exp = store.sections.find((s) => s.sectionType === 'experience')!
-      exp.enabled = false
-
-      store.applyTailorFilter({
-        filteredBulletIndices: {
-          experience: [{ entryOrder: 0, bulletIndices: [0] }],
-        },
-        filteredHardSkills: [],
-        filteredSoftSkills: [],
-      })
-
-      // Relevant content → eye flips on, even though the user had it off.
-      expect(exp.enabled).toBe(true)
-    })
-
-    it('resetTailorFilter restores the pre-tailor eye states', () => {
+    it('user section eye choices survive a Tailor run untouched', () => {
       store.initializeDefaults()
       addBulletsToSection('experience', 2)
       addSkillsToSection('hard_skills', ['python'])
       const exp = store.sections.find((s) => s.sectionType === 'experience')!
       const hard = store.sections.find((s) => s.sectionType === 'hard_skills')!
 
-      // User's pre-tailor choices: experience hidden, hard skills shown
+      // User's choices: experience hidden, hard skills shown
       exp.enabled = false
       hard.enabled = true
 
@@ -652,23 +603,42 @@ describe('useResumeStore - filter', () => {
         filteredSoftSkills: [],
       })
 
-      // After tailoring: experience relevant → on; hard skills irrelevant → off
-      expect(exp.enabled).toBe(true)
-      expect(hard.enabled).toBe(false)
-
-      store.resetTailorFilter()
-
-      // Reset restores the ORIGINAL visibility
+      // Tailor never re-enables a hidden section or hides a shown one.
       expect(exp.enabled).toBe(false)
       expect(hard.enabled).toBe(true)
     })
 
-    it('a second tailor run does not overwrite the original snapshot', () => {
+    it('resetTailorFilter leaves eye states untouched and restores bullet visibility', () => {
+      store.initializeDefaults()
+      addBulletsToSection('experience', 2)
+      const exp = store.sections.find((s) => s.sectionType === 'experience')!
+      exp.enabled = false
+
+      store.applyTailorFilter({
+        filteredBulletIndices: {
+          experience: [{ entryOrder: 0, bulletIndices: [0] }],
+        },
+        filteredHardSkills: [],
+        filteredSoftSkills: [],
+      })
+
+      // Sub-items filtered; eye stays exactly as the user left it.
+      expect(store.isBulletRelevant('experience', 0, 1)).toBe(false)
+      expect(exp.enabled).toBe(false)
+
+      store.resetTailorFilter()
+
+      // Reset restores sub-item visibility; the eye is untouched throughout.
+      expect(store.isBulletRelevant('experience', 0, 1)).toBe(true)
+      expect(exp.enabled).toBe(false)
+    })
+
+    it('a second tailor run never touches the section eye', () => {
       store.initializeDefaults()
       addBulletsToSection('experience', 2)
       const exp = store.sections.find((s) => s.sectionType === 'experience')!
 
-      // First run: nothing survives → experience hidden
+      // First run: nothing survives → all bullets hidden, eye stays on
       store.applyTailorFilter({
         filteredBulletIndices: {
           experience: [{ entryOrder: 0, bulletIndices: [] }],
@@ -676,9 +646,10 @@ describe('useResumeStore - filter', () => {
         filteredHardSkills: [],
         filteredSoftSkills: [],
       })
-      expect(exp.enabled).toBe(false)
+      expect(exp.enabled).toBe(true)
+      expect(store.isBulletRelevant('experience', 0, 0)).toBe(false)
 
-      // Second run with a new JD: a bullet now survives → experience shown
+      // Second run with a new JD: a bullet now survives
       store.applyTailorFilter({
         filteredBulletIndices: {
           experience: [{ entryOrder: 0, bulletIndices: [0] }],
@@ -686,30 +657,16 @@ describe('useResumeStore - filter', () => {
         filteredHardSkills: [],
         filteredSoftSkills: [],
       })
-      expect(exp.enabled).toBe(true)
-
-      // Reset still restores the state before ANY tailoring of the session
-      store.resetTailorFilter()
+      expect(store.isBulletRelevant('experience', 0, 0)).toBe(true)
       expect(exp.enabled).toBe(true)
     })
 
-    it('resetTailorFilter does not unlock sections', () => {
-      store.initializeDefaults()
-      addBulletsToSection('experience', 1)
-      const exp = store.sections.find((s) => s.sectionType === 'experience')!
-      exp.locked = true
-
-      store.applyTailorFilter(createMockTailorResponse())
-      store.resetTailorFilter()
-
-      expect(exp.locked).toBe(true)
-    })
-
-    it('does not serialize tailor-flipped eye states while filtered (ephemeral)', () => {
+    it('serializes live eye states unchanged while filtered', () => {
       store.initializeDefaults()
       addBulletsToSection('experience', 2)
       addSkillsToSection('hard_skills', ['python'])
       const hard = store.sections.find((s) => s.sectionType === 'hard_skills')!
+      hard.enabled = false
 
       store.applyTailorFilter({
         filteredBulletIndices: {
@@ -719,15 +676,13 @@ describe('useResumeStore - filter', () => {
         filteredSoftSkills: [],
       })
 
-      // Live state shows the tailored flips (hard skills eye off)...
-      expect(hard.enabled).toBe(false)
-
-      // ...but the payload still carries the user's pre-tailor choice
-      // (all sections enabled by default), so save/reload never persists
-      // hidden sections with no Reset path.
+      // Tailor never flips eyes, so the payload always carries the live
+      // (user-chosen) enabled flags — no ephemeral-state juggling needed.
       const payload = store.toPayload()
       const hardPayload = payload.sections.find((s) => s.sectionId === 'hard_skills')!
-      expect(hardPayload.enabled).toBe(true)
+      expect(hardPayload.enabled).toBe(false)
+      const expPayload = payload.sections.find((s) => s.sectionId === 'experience')!
+      expect(expPayload.enabled).toBe(true)
     })
 
     it('serializes a manual eye toggle made during a filter session', () => {
@@ -737,44 +692,25 @@ describe('useResumeStore - filter', () => {
 
       store.applyTailorFilter({
         filteredBulletIndices: {
-          experience: [{ entryOrder: 0, bulletIndices: [] }],
-        },
-        filteredHardSkills: [],
-        filteredSoftSkills: [],
-      })
-
-      // Tailor hides experience; the user manually re-enables it (eye on)
-      expect(exp.enabled).toBe(false)
-      store.toggleSection('experience')
-      expect(exp.enabled).toBe(true)
-
-      // The manual choice is the new persistent value
-      const payload = store.toPayload()
-      const expPayload = payload.sections.find((s) => s.sectionId === 'experience')!
-      expect(expPayload.enabled).toBe(true)
-
-      // Reset still restores to the snapshot the user overwrote (true)
-      store.resetTailorFilter()
-      expect(exp.enabled).toBe(true)
-    })
-
-    it('serializes live eye states again after reset', () => {
-      store.initializeDefaults()
-      addBulletsToSection('experience', 1)
-
-      store.applyTailorFilter({
-        filteredBulletIndices: {
           experience: [{ entryOrder: 0, bulletIndices: [0] }],
         },
         filteredHardSkills: [],
         filteredSoftSkills: [],
       })
-      store.resetTailorFilter()
 
-      // After reset the payload reflects the live (restored) state
+      // The user manually hides the section mid-session — their choice is
+      // the persistent value (no tailor snapshot to overwrite).
+      store.toggleSection('experience')
+      expect(exp.enabled).toBe(false)
+
       const payload = store.toPayload()
       const expPayload = payload.sections.find((s) => s.sectionId === 'experience')!
-      expect(expPayload.enabled).toBe(true)
+      expect(expPayload.enabled).toBe(false)
+
+      // Reset restores bullet visibility but never re-enables the section.
+      store.resetTailorFilter()
+      expect(store.isBulletRelevant('experience', 0, 1)).toBe(true)
+      expect(exp.enabled).toBe(false)
     })
   })
 })

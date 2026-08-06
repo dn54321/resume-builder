@@ -125,52 +125,20 @@ describe('useResumeStore', () => {
     })
   })
 
-  describe('toggleLock', () => {
-    it('toggles the locked flag on a section', () => {
+  describe('section-level locked flag is inert (RES-108)', () => {
+    it('has no store toggle — Tailor never consults section locks', () => {
       const store = useResumeStore()
       store.initializeDefaults()
 
+      // The section-level lock was removed from Tailor (RES-108): there is
+      // no store action to toggle it, and Tailor operates on sub-items only.
+      // The field stays on the wire/DB purely for backward compatibility
+      // with saved resumes.
       const section = store.sections.find((s) => s.sectionType === 'experience')!
-      expect(section.locked).toBe(false)
+      section.locked = true
 
-      store.toggleLock('experience')
-      expect(section.locked).toBe(true)
-      expect(store.lockedSections).toContain('experience' as SectionType)
-
-      store.toggleLock('experience')
-      expect(section.locked).toBe(false)
-      expect(store.lockedSections).not.toContain('experience' as SectionType)
-    })
-
-    it('keeps all 10 sections in the array while toggling lock', () => {
-      const store = useResumeStore()
-      store.initializeDefaults()
-
-      store.toggleLock('hobbies')
       expect(store.sections).toHaveLength(10)
-      expect(store.lockedSections).toEqual(['hobbies'])
-    })
-
-    it('is a no-op for unknown section types', () => {
-      const store = useResumeStore()
-      store.initializeDefaults()
-      store.toggleLock('unknown' as SectionType)
-      expect(store.sections).toHaveLength(10)
-      expect(store.lockedSections).toEqual([])
-    })
-
-    it('is independent of the enabled flag', () => {
-      const store = useResumeStore()
-      store.initializeDefaults()
-
-      // Lock a section, then disable it — lock must survive
-      store.toggleLock('summary')
-      store.toggleSection('summary')
-
-      const section = store.sections.find((s) => s.sectionType === 'summary')!
-      expect(section.enabled).toBe(false)
-      expect(section.locked).toBe(true)
-      expect(store.lockedSections).toContain('summary' as SectionType)
+      expect(section.enabled).toBe(true) // lock never affects the eye
     })
   })
 
@@ -417,19 +385,23 @@ describe('useResumeStore', () => {
       expect(store.isSectionEnabled('hobbies')).toBe(false)
     })
 
-    it('round-trips locked flag correctly', () => {
+    it('round-trips locked flag correctly (inert field, RES-108)', () => {
       const store = useResumeStore()
       store.initializeDefaults()
-      store.toggleLock('experience')
-      store.toggleLock('education')
+      // The section lock is obsolete for Tailor (RES-108) — set the field
+      // directly to verify it still round-trips for saved-resume compat.
+      const exp = store.sections.find((s) => s.sectionType === 'experience')!
+      exp.locked = true
+      const edu = store.sections.find((s) => s.sectionType === 'education')!
+      edu.locked = true
 
       const payload = store.toPayload()
-      const exp = payload.sections.find((s) => s.sectionId === 'experience')
-      expect(exp!.locked).toBe(true)
-      const edu = payload.sections.find((s) => s.sectionId === 'education')
-      expect(edu!.locked).toBe(true)
-      const contact = payload.sections.find((s) => s.sectionId === 'name_contact')
-      expect(contact!.locked).toBe(false)
+      const expP = payload.sections.find((s) => s.sectionId === 'experience')
+      expect(expP!.locked).toBe(true)
+      const eduP = payload.sections.find((s) => s.sectionId === 'education')
+      expect(eduP!.locked).toBe(true)
+      const contactP = payload.sections.find((s) => s.sectionId === 'name_contact')
+      expect(contactP!.locked).toBe(false)
 
       // Reload and verify locked survives
       store.loadFromPayload(payload)
@@ -437,7 +409,6 @@ describe('useResumeStore', () => {
       expect(store.sections.find((s) => s.sectionType === 'experience')!.locked).toBe(true)
       expect(store.sections.find((s) => s.sectionType === 'education')!.locked).toBe(true)
       expect(store.sections.find((s) => s.sectionType === 'name_contact')!.locked).toBe(false)
-      expect(store.lockedSections).toEqual(['experience', 'education'])
     })
 
     it('defaults to unlocked when payload omits locked', () => {
@@ -478,7 +449,6 @@ describe('useResumeStore', () => {
       store.loadFromPayload(oldPayload)
       const summary = store.sections.find((s) => s.sectionType === 'summary')!
       expect(summary.locked).toBe(false)
-      expect(store.lockedSections).toEqual([])
     })
 
     it('fills in missing sections as disabled and keeps saved ones', () => {
@@ -653,7 +623,6 @@ describe('useResumeStore', () => {
 
       store.toggleEntryLock('experience', entryId)
       expect(exp.locked).toBe(false)
-      expect(store.lockedSections).toEqual([])
     })
   })
 
@@ -741,16 +710,17 @@ describe('useResumeStore', () => {
       expect(exp!.enabled).toBe(true)
     })
 
-    it('includes locked flag for every section in payload', () => {
+    it('includes locked flag for every section in payload (inert, RES-108)', () => {
       const store = useResumeStore()
       store.initializeDefaults()
-      store.toggleLock('projects')
+      const projects = store.sections.find((s) => s.sectionType === 'projects')!
+      projects.locked = true
 
       const payload = store.toPayload()
       expect(payload.sections).toHaveLength(10)
 
-      const projects = payload.sections.find((s) => s.sectionId === 'projects')
-      expect(projects!.locked).toBe(true)
+      const projectsP = payload.sections.find((s) => s.sectionId === 'projects')
+      expect(projectsP!.locked).toBe(true)
 
       // All other sections serialize locked: false
       for (const s of payload.sections) {

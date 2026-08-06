@@ -144,19 +144,18 @@ describe('useTailor', () => {
       expect(store.filteredHardSkills).toEqual(['react'])
     })
 
-    it('keeps locked sections fully visible while filtering unlocked ones', async () => {
+    it('applies sub-item filtering to every section — section-level locks no longer shield content (RES-108)', async () => {
       const { tailorResume } = useTailor()
       const store = useResumeStore()
       store.initializeDefaults()
 
-      // Lock the experience section; leave projects unlocked.
+      // Flag the experience section locked at SECTION level — obsolete for
+      // Tailor (RES-108): only sub-item/bullet locks (RES-97/RES-106) count.
       const exp = store.sections.find((s) => s.sectionType === 'experience')!
       exp.locked = true
 
       const mockResponse: TailorResponse = {
         filteredBulletIndices: {
-          // Response says only bullet [0] of entry 0 survives — must be ignored
-          // for the locked experience section.
           experience: [{ entryOrder: 0, bulletIndices: [0] }],
           projects: [{ entryOrder: 0, bulletIndices: [0] }],
         },
@@ -168,20 +167,22 @@ describe('useTailor', () => {
 
       await tailorResume('React developer')
 
-      // Locked section: every bullet stays visible, regardless of matches.
-      expect(store.isBulletRelevant('experience', 0, 1)).toBe(true)
-      expect(store.isBulletRelevant('experience', 5, 2)).toBe(true)
-      expect(store.filteredBulletIndices['experience']).toBeUndefined()
+      // The response's indices are recorded for the section-level locked
+      // section too — its bullets are filtered normally.
+      expect(store.filteredBulletIndices['experience']).toEqual([
+        { entryOrder: 0, bulletIndices: [0] },
+      ])
+      expect(store.isBulletRelevant('experience', 0, 1)).toBe(false)
+      expect(store.isBulletRelevant('experience', 0, 0)).toBe(true)
 
-      // Unlocked section: filter still applies as before.
-      expect(store.isBulletRelevant('projects', 0, 0)).toBe(true)
+      // Other sections filter as before.
       expect(store.isBulletRelevant('projects', 0, 1)).toBe(false)
 
-      // Lock flag itself survives the tailor run.
+      // The inert section-level flag itself survives the tailor run.
       expect(exp.locked).toBe(true)
     })
 
-    // ── RES-98: eye-toggle feedback through the full tailor round-trip ──
+    // ── RES-108: Tailor only toggles sub-items, never whole sections ──
 
     /**
      * Add a top-level entry with N child bullets to a section.
@@ -203,7 +204,7 @@ describe('useTailor', () => {
       }
     }
 
-    it('flips the eye off for sections with no relevant content after tailoring', async () => {
+    it('never flips a section eye off when its content is non-relevant — bullets are hidden instead', async () => {
       const { tailorResume } = useTailor()
       const store = useResumeStore()
       store.initializeDefaults()
@@ -225,11 +226,15 @@ describe('useTailor', () => {
 
       await tailorResume('React developer')
 
-      expect(exp.enabled).toBe(true) // relevant → eye on
-      expect(projects.enabled).toBe(false) // irrelevant → eye off
+      // RES-108: the section eye is user-only — neither section flips.
+      expect(exp.enabled).toBe(true)
+      expect(projects.enabled).toBe(true)
+      // The irrelevant project bullet is hidden at sub-item level instead.
+      expect(store.isBulletRelevant('projects', 0, 0)).toBe(false)
+      expect(store.isBulletRelevant('experience', 0, 1)).toBe(false)
     })
 
-    it('flips the eye off for skill sections with no relevant skills', async () => {
+    it('never flips a skill section eye when no skills are relevant', async () => {
       const { tailorResume } = useTailor()
       const store = useResumeStore()
       store.initializeDefaults()
@@ -250,10 +255,12 @@ describe('useTailor', () => {
 
       await tailorResume('React developer')
 
-      expect(hard.enabled).toBe(false)
+      // The section stays visible; the non-matching skill is hidden.
+      expect(hard.enabled).toBe(true)
+      expect(store.isSkillRelevant('hard_skills', 'Python')).toBe(false)
     })
 
-    it('resetFilter restores the original eye states after tailoring', async () => {
+    it('resetFilter restores sub-item visibility and never touches section eyes', async () => {
       const { tailorResume, resetFilter } = useTailor()
       const store = useResumeStore()
       store.initializeDefaults()
@@ -276,17 +283,19 @@ describe('useTailor', () => {
       })
 
       await tailorResume('React developer')
-      // Both relevant → both visible after tailoring (projects re-enabled)
-      expect(exp.enabled).toBe(true)
-      expect(projects.enabled).toBe(true)
+      // Bullets are visible per the match; the user's eye choices survive.
+      expect(store.isBulletRelevant('experience', 0, 0)).toBe(true)
+      expect(store.isBulletRelevant('projects', 0, 0)).toBe(true)
+      expect(projects.enabled).toBe(false)
 
       resetFilter()
-      // Reset restores the pre-tailor state: projects hidden again
+      // Reset restores bullet visibility; the user's eye choice (projects
+      // hidden) is untouched.
       expect(projects.enabled).toBe(false)
       expect(exp.enabled).toBe(true)
     })
 
-    it('keeps locked skill sections fully visible after tailoring', async () => {
+    it('records filtered skills for a section flagged locked at section level (RES-108)', async () => {
       const { tailorResume } = useTailor()
       const store = useResumeStore()
       store.initializeDefaults()
@@ -304,12 +313,15 @@ describe('useTailor', () => {
 
       await tailorResume('React developer')
 
+      // Section-level locks are obsolete for Tailor (RES-108): the skill
+      // list is recorded as the match decided.
       expect(store.isFiltered).toBe(true)
-      expect(store.filteredHardSkills).toEqual([])
-      expect(store.isSkillRelevant('hard_skills', 'Python')).toBe(true)
+      expect(store.filteredHardSkills).toEqual(['react'])
+      expect(store.isSkillRelevant('hard_skills', 'react')).toBe(true)
+      expect(store.isSkillRelevant('hard_skills', 'Python')).toBe(false)
     })
 
-    it('keeps lock state after resetFilter', async () => {
+    it('keeps the inert section-level lock flag after resetFilter', async () => {
       const { tailorResume, resetFilter } = useTailor()
       const store = useResumeStore()
       store.initializeDefaults()
@@ -326,7 +338,7 @@ describe('useTailor', () => {
       await tailorResume('React developer')
       resetFilter()
 
-      // Reset clears the filter but does NOT unlock sections.
+      // Reset clears the filter but does not touch the inert section flag.
       expect(store.isFiltered).toBe(false)
       expect(exp.locked).toBe(true)
     })

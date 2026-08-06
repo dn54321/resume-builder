@@ -48,22 +48,9 @@ export const useResumeStore = defineStore('resume', () => {
   const filteredHardSkills = ref<string[]>([])
   const filteredSoftSkills = ref<string[]>([])
 
-  /**
-   * Eye (enabled) state of every section captured BEFORE the last tailor
-   * run. RES-98: tailoring flips the eye toggles to match the strategy
-   * result (relevant = visible); Reset Filter restores this snapshot so
-   * the user's original visibility choices come back.
-   */
-  const preTailorEnabled = ref<Record<string, boolean>>({})
-
   // Derived: enabled section types (visible in the resume)
   const enabledSections = computed(() =>
     sections.value.filter((s) => s.enabled).map((s) => s.sectionType),
-  )
-
-  // Derived: locked section types (protected from Tailor edits)
-  const lockedSections = computed(() =>
-    sections.value.filter((s) => s.locked).map((s) => s.sectionType),
   )
 
   // Derived: sections assigned to left column (only meaningful for 2:1 layout)
@@ -93,7 +80,6 @@ export const useResumeStore = defineStore('resume', () => {
     name.value = ''
     layout.value = 'standard'
     sections.value = SECTION_TYPES.map((type, i) => createDefaultSection(type, i))
-    preTailorEnabled.value = {}
   }
 
   /**
@@ -119,27 +105,9 @@ export const useResumeStore = defineStore('resume', () => {
     const existing = sections.value.find((s) => s.sectionType === sectionType)
     if (existing) {
       existing.enabled = !existing.enabled
-      // A MANUAL eye flip during an active filter session becomes the new
-      // persistent value (RES-98): tailoring-induced flips are ephemeral
-      // session state (never serialized), but a deliberate user toggle is
-      // the user's new intent and must survive save/reload.
-      if (Object.prototype.hasOwnProperty.call(preTailorEnabled.value, existing.sectionId)) {
-        preTailorEnabled.value[existing.sectionId] = existing.enabled
-      }
-    }
-  }
-
-  /**
-   * Toggle the `locked` flag — protects the section from Tailor edits.
-   * Kept for backward compatibility: the section-level lock remains a
-   * fast-path in the Tailor engine even though the UI lock now lives on
-   * individual entries.
-   * @param sectionType
-   */
-  function toggleLock(sectionType: SectionType) {
-    const existing = sections.value.find((s) => s.sectionType === sectionType)
-    if (existing) {
-      existing.locked = !existing.locked
+      // Tailor never touches section eyes (RES-108) — the eye toggle is
+      // exclusively the user's choice, so a manual flip is always the
+      // persistent value and serializes as-is.
     }
   }
 
@@ -225,7 +193,6 @@ export const useResumeStore = defineStore('resume', () => {
   function loadFromPayload(payload: ResumePayload) {
     name.value = payload.name ?? ''
     layout.value = payload.layout
-    preTailorEnabled.value = {}
 
     // Load saved sections, then fill in any new SECTION_TYPES that were
     // added after the resume was created (e.g. experience). Missing types
@@ -299,14 +266,10 @@ export const useResumeStore = defineStore('resume', () => {
         sectionId: s.sectionId,
         column: s.column,
         order: s.order,
-        // RES-98: while a filter session is active, tailor-flipped eye
-        // states are EPHEMERAL — serialize the user's pre-tailor choice so
-        // save/reload never persists hidden sections with no Reset path.
-        // Manual eye flips during the session update the snapshot (see
-        // toggleSection), so deliberate changes still persist.
-        enabled: isFiltered.value
-          ? (preTailorEnabled.value[s.sectionId] ?? s.enabled)
-          : s.enabled,
+        // RES-108: Tailor never flips section eyes — the eye toggle is
+        // exclusively the user's choice, so the live enabled flag is
+        // always the persistent value.
+        enabled: s.enabled,
         locked: s.locked,
         entries: s.entries.map((e) => ({
           id: e.id,
@@ -328,113 +291,32 @@ export const useResumeStore = defineStore('resume', () => {
   /**
    * Apply the tailor response filter to the resume store.
    *
-   * Locked sections are skipped entirely: their filter indices/skills are not
-   * recorded, so every item inside them keeps its current visibility
-   * regardless of keyword matches. Lock state itself is never changed by
-   * filtering — it only affects what the filter is allowed to touch.
+   * RES-108: Tailor operates at sub-item/bullet level ONLY. It never
+   * sets `section.enabled` — the section eye toggle is exclusively the
+   * user's choice. Section-level `locked` is likewise obsolete for Tailor:
+   * the locks that matter are sub-item/bullet locks (RES-97/RES-106).
    * @param response
    */
   function applyTailorFilter(response: TailorResponse): void {
-    // Snapshot the current eye state BEFORE flipping anything, so Reset
-    // Filter restores exactly what the user had before tailoring. Only the
-    // FIRST tailor run of a session captures the snapshot — re-running
-    // Tailor without Reset keeps the original, so Reset always returns to
-    // the true pre-tailor visibility.
-    if (!isFiltered.value) {
-      const before: Record<string, boolean> = {}
-      for (const s of sections.value) {
-        before[s.sectionId] = s.enabled
-      }
-      preTailorEnabled.value = before
-    }
-
     isFiltered.value = true
 
-    const isLocked = (sectionId: string): boolean =>
-      sections.value.find((s) => s.sectionId === sectionId)?.locked ?? false
-
-    // Skip locked sections — don't record indices that would hide their items.
-    const filteredIndices: Record<string, EntryBulletIndices[]> = {}
-    for (const [sectionId, indices] of Object.entries(
-      response.filteredBulletIndices ?? {},
-    )) {
-      if (!isLocked(sectionId)) {
-        filteredIndices[sectionId] = indices
-      }
-    }
-    filteredBulletIndices.value = filteredIndices
-
-    // Locked skill sections keep every skill visible. (The empty list is safe
-    // because isSkillRelevant short-circuits to true for locked sections.)
-    filteredHardSkills.value = isLocked('hard_skills')
-      ? []
-      : response.filteredHardSkills
-    filteredSoftSkills.value = isLocked('soft_skills')
-      ? []
-      : response.filteredSoftSkills
-
-    // RES-98 eye-toggle feedback: flip the eye toggles to mirror what the
-    // matching strategy decided — relevant sections/entries get shown
-    // (eye on), sections whose content is entirely non-relevant get hidden
-    // (eye off). Locked sections are never toggled (RES-92). Sections the
-    // filter carries no information about (empty sections, sections without
-    // bullet content) keep their current visibility.
-    for (const section of sections.value) {
-      if (section.locked) continue
-      const relevant = computeSectionRelevance(section)
-      if (relevant !== null) {
-        section.enabled = relevant
-      }
-    }
-  }
-
-  /**
-   * Decide whether a section is relevant to the JD based on the current
-   * filter state. Returns `null` when the filter carries no information for
-   * the section — the section keeps its current visibility in that case
-   * (matches isBulletRelevant/isSkillRelevant semantics).
-   * @param section
-   */
-  function computeSectionRelevance(section: ResumeSectionState): boolean | null {
-    // Skill sections: relevant when at least one skill survived. Empty
-    // skill sections have no filter info — leave them untouched.
-    if (
-      section.sectionType === 'hard_skills' ||
-      section.sectionType === 'soft_skills'
-    ) {
-      if (section.entries.length === 0) return null
-      const surviving =
-        section.sectionType === 'hard_skills'
-          ? filteredHardSkills.value
-          : filteredSoftSkills.value
-      return surviving.length > 0
-    }
-
-    // Sections without parented (bullet) content have no index info — the
-    // filter never touches them, so neither do we.
-    if (!section.entries.some((e) => e.parentId)) return null
-
-    const entryIndices = filteredBulletIndices.value[section.sectionId]
-    // Not in the map → nothing was filtered → keep visible (matches
-    // isBulletRelevant).
-    if (!entryIndices) return null
-    // Relevant when at least one bullet of any entry survived the match.
-    return entryIndices.some((e) => e.bulletIndices.length > 0)
+    // Record the sub-item/bullet visibility decided by the match. Sections
+    // the response carries no indices for keep every item visible
+    // (isBulletRelevant/isSkillRelevant treat a missing entry as relevant).
+    filteredBulletIndices.value = response.filteredBulletIndices ?? {}
+    filteredHardSkills.value = response.filteredHardSkills
+    filteredSoftSkills.value = response.filteredSoftSkills
   }
 
   /**
    * Clear all filter state and restore full visibility.
+   *
+   * RES-108: sub-item/bullet visibility is derived from the filter state
+   * (filteredBulletIndices/filteredHardSkills/filteredSoftSkills), so
+   * clearing it returns every entry/bullet to its pre-tailor visibility.
+   * Section eye states are never touched by Tailor and need no restoring.
    */
   function resetTailorFilter(): void {
-    // Restore the eye states captured before the last tailor run (RES-98).
-    for (const section of sections.value) {
-      const enabledBefore = preTailorEnabled.value[section.sectionId]
-      if (enabledBefore !== undefined) {
-        section.enabled = enabledBefore
-      }
-    }
-    preTailorEnabled.value = {}
-
     isFiltered.value = false
     filteredBulletIndices.value = {}
     filteredHardSkills.value = []
@@ -502,11 +384,9 @@ export const useResumeStore = defineStore('resume', () => {
   ): boolean {
     if (!isFiltered.value) return true
 
-    // Locked sections keep their current visibility regardless of matches.
-    if (sections.value.find((s) => s.sectionId === sectionId)?.locked) return true
-
     // Locked entries (or locked bullet sub-items) keep their current
-    // visibility regardless of keyword matches.
+    // visibility regardless of keyword matches. Section-level locks are
+    // obsolete for Tailor (RES-108) — only sub-item/bullet locks count.
     if (isEntryLockedAt(sectionId, entryIndex)) return true
     if (isBulletEntryLocked(sectionId, entryIndex, bulletIndex)) return true
 
@@ -527,9 +407,6 @@ export const useResumeStore = defineStore('resume', () => {
    */
   function isSkillRelevant(sectionId: string, skillName: string): boolean {
     if (!isFiltered.value) return true
-
-    // Locked sections keep their current visibility regardless of matches.
-    if (sections.value.find((s) => s.sectionId === sectionId)?.locked) return true
 
     const lowerName = skillName.toLowerCase().trim()
 
@@ -611,7 +488,6 @@ export const useResumeStore = defineStore('resume', () => {
     layout,
     sections,
     enabledSections,
-    lockedSections,
     orderedSectionTypes,
     leftColumnSections,
     rightColumnSections,
@@ -625,7 +501,6 @@ export const useResumeStore = defineStore('resume', () => {
     initializeDefaults,
     setLayout,
     toggleSection,
-    toggleLock,
     toggleEntryLock,
     setSectionColumn,
     reorderSections,
