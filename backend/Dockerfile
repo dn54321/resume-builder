@@ -25,6 +25,11 @@ WORKDIR /app
 # (Render: flaky registry fetches + OOM on large installs).
 RUN corepack enable
 
+# Cap the Node heap for the TypeScript compile below — `nest build` (tsc)
+# on Render's RAM-limited containers can exceed the default heap and get
+# SIGKILL'd (status 137 = OOM). 2048MB is enough for this app's size.
+ENV NODE_OPTIONS="--max-old-space-size=2048"
+
 # Reduce memory pressure during install: limited concurrency. Render build
 # containers are RAM-limited; `pnpm install --frozen-lockfile` of the full
 # dep tree regularly hits OOM (status 137 = SIGKILL by the OOM killer).
@@ -64,11 +69,13 @@ ENV NODE_ENV=production
 
 RUN corepack enable
 
-# Carry the FULL node_modules from build (Prisma CLI is needed for
-# `prisma migrate deploy` at boot; the compiled dist is independent of
-# source). Copy package files so the runtime image has valid metadata.
+# Install ONLY production deps fresh in the runtime image (no 571MB
+# devDeps copy — that bloats the image and the copy itself can OOM on
+# Render). prisma is a prod dep so `prisma migrate deploy` works at boot.
+# prisma:generate in the build stage already produced the client into
+# dist/src/generated, so the runtime never regenerates it.
 COPY backend/package.json backend/pnpm-lock.yaml backend/pnpm-workspace.yaml ./
-COPY --from=build /app/node_modules ./node_modules
+RUN pnpm install --frozen-lockfile --prod --child-concurrency=1 --network-concurrency=4
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/scripts ./scripts
