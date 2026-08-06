@@ -1718,6 +1718,83 @@ describe('ResumesService', () => {
       expect(result.name).toBe('New Name');
     });
 
+    it('rename-only update must NOT touch sections/entries — regression RES-112', async () => {
+      // The dashboard rename (DashboardView.commitRename) PUTs /resumes/:id
+      // with body { name } ONLY. RES-112: a replace-style update wiped every
+      // section entry (experience bullets are child SectionEntry rows via
+      // parentId). A name-only update must leave the whole tree untouched —
+      // no section/entry deleteMany, no recreate, no field writes.
+      const existingResume: ResumeRow = {
+        id: resumeId,
+        userId,
+        name: 'Old Name',
+        layout: 'standard',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      const updatedResume = makeResumeResponse({ name: 'Renamed' });
+
+      const resumeUpdate = jest.fn().mockResolvedValue({});
+      const sectionFindMany = jest.fn();
+      const sectionDeleteMany = jest.fn();
+      const sectionCreate = jest.fn();
+      const entryDeleteMany = jest.fn();
+      const entryCreate = jest.fn();
+      const fieldCreate = jest.fn();
+
+      mockPrisma.$transaction.mockImplementation(
+        async (cb: TransactionCallback<ResumeTreeRow>) => {
+          const tx = {
+            resume: {
+              findUnique: jest
+                .fn()
+                .mockResolvedValueOnce(existingResume)
+                .mockResolvedValueOnce(updatedResume),
+              update: resumeUpdate,
+            },
+            resumeSection: {
+              findMany: sectionFindMany,
+              deleteMany: sectionDeleteMany,
+              create: sectionCreate,
+            },
+            sectionEntry: {
+              deleteMany: entryDeleteMany,
+              create: entryCreate,
+            },
+            sectionField: {
+              create: fieldCreate,
+            },
+          };
+          const result = cb(tx);
+          return result instanceof Promise ? result : Promise.resolve(result);
+        },
+      );
+
+      mockCrypto.decryptField.mockImplementation(
+        (encrypted: string, _iv: string, _authTag: string) =>
+          encrypted.replace('enc_', ''),
+      );
+
+      // Exactly what commitRename sends: { name } and nothing else.
+      const dto: UpdateResumeDto = { name: 'Renamed' };
+
+      const result = await service.update(resumeId, userId, dto);
+
+      expect(result.name).toBe('Renamed');
+      // Only the resume row's name is updated — never a full-field replace.
+      expect(resumeUpdate).toHaveBeenCalledWith({
+        where: { id: resumeId },
+        data: { name: 'Renamed' },
+      });
+      // The section tree (sections/entries/fields) must not be touched at all.
+      expect(sectionFindMany).not.toHaveBeenCalled();
+      expect(sectionDeleteMany).not.toHaveBeenCalled();
+      expect(sectionCreate).not.toHaveBeenCalled();
+      expect(entryDeleteMany).not.toHaveBeenCalled();
+      expect(entryCreate).not.toHaveBeenCalled();
+      expect(fieldCreate).not.toHaveBeenCalled();
+    });
+
     it('clears name when updated with empty string', async () => {
       const existingResume: ResumeRow = {
         id: resumeId,
