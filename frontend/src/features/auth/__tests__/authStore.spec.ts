@@ -63,7 +63,10 @@ describe('useAuthStore', () => {
 
     it('posts resume data from localStorage and clears it on success', async () => {
       const resumeData = { layout: 'standard', name: 'My Resume' }
-      localStorage.setItem('resume_data', JSON.stringify(resumeData))
+      // RES-102: anonymous resumes live under resume_data_<id>, with a
+      // resume_data_last_id pointer to the most recent one.
+      localStorage.setItem('resume_data_last_id', 'anon-1')
+      localStorage.setItem('resume_data_anon-1', JSON.stringify(resumeData))
 
       const store = useAuthStore()
       mockFetch
@@ -82,13 +85,37 @@ describe('useAuthStore', () => {
       expect(resumeCall[1].method).toBe('POST')
       expect(JSON.parse(resumeCall[1].body as string)).toEqual(resumeData)
 
-      // Should clear resume_data only after successful POST
+      // Should clear the per-resume blob and the pointer after success
+      expect(localStorage.getItem('resume_data_anon-1')).toBeNull()
+      expect(localStorage.getItem('resume_data_last_id')).toBeNull()
+    })
+
+    it('imports the legacy shared resume_data blob when no pointer exists', async () => {
+      const resumeData = { layout: 'standard', name: 'Legacy Resume' }
+      // Pre-RES-102 anonymous data used a single shared key
+      localStorage.setItem('resume_data', JSON.stringify(resumeData))
+
+      const store = useAuthStore()
+      mockFetch
+        .mockResolvedValueOnce(
+          mockJsonResponse({
+            user: { id: '1', email: 'test@test.com' },
+          }),
+        )
+        .mockResolvedValueOnce(mockJsonResponse({ id: 'res-1' }, 201))
+
+      await store.signup('test@test.com', 'Password1')
+
+      const resumeCall = mockFetch.mock.calls[1] as [string, RequestInit]
+      expect(resumeCall[1].method).toBe('POST')
+      expect(JSON.parse(resumeCall[1].body as string)).toEqual(resumeData)
       expect(localStorage.getItem('resume_data')).toBeNull()
     })
 
     it('keeps resume data in localStorage when POST fails', async () => {
       const resumeData = { layout: 'standard', name: 'My Resume' }
-      localStorage.setItem('resume_data', JSON.stringify(resumeData))
+      localStorage.setItem('resume_data_last_id', 'anon-1')
+      localStorage.setItem('resume_data_anon-1', JSON.stringify(resumeData))
 
       const store = useAuthStore()
       mockFetch
@@ -102,8 +129,9 @@ describe('useAuthStore', () => {
       // signup should succeed even if resume import fails
       await store.signup('test@test.com', 'Password1')
 
-      // Should NOT have cleared resume_data on POST failure
-      expect(localStorage.getItem('resume_data')).toBe(JSON.stringify(resumeData))
+      // Should NOT have cleared the per-resume blob or pointer on POST failure
+      expect(localStorage.getItem('resume_data_anon-1')).toBe(JSON.stringify(resumeData))
+      expect(localStorage.getItem('resume_data_last_id')).toBe('anon-1')
       expect(store.isAuthenticated).toBe(true)
     })
   })
