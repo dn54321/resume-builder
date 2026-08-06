@@ -382,6 +382,41 @@ describe('useResumeData', () => {
       expect(dirty.value).toBe(false)
     })
 
+    it('fresh /builder (no id) IGNORES stale sessionStorage from an old resume', async () => {
+      // Regression (observed): a fresh /builder read the bare
+      // resume_pending_changes key, restoring a previous resume's fields into
+      // a brand-new resume. A fresh builder must ALWAYS start empty — the
+      // sessionStorage safety net only applies to an existing /builder/:id.
+      const auth = useAuthStore()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
+      )
+      await auth.login('test@test.com', 'password')
+
+      // Simulate stale pending data left by an old session (bare key, no id)
+      sessionStorage.setItem(
+        'resume_pending_changes',
+        JSON.stringify({
+          layout: 'column2-1',
+          sections: [{ sectionId: 'summary', column: 'right', order: 0, entries: [] }],
+        }),
+      )
+
+      const store = useResumeStore()
+      store.initializeDefaults()
+
+      const { loadResume, dirty } = useResumeData()
+      await loadResume()
+
+      // Fresh builder: defaults, NOT the stale pending payload
+      expect(store.layout).toBe('standard')
+      expect(store.sections).toHaveLength(11)
+      expect(store.id).toBeNull()
+      expect(dirty.value).toBe(false)
+      const summ = store.sections.find((s) => s.sectionType === 'summary')
+      expect(summ!.enabled).toBe(true)
+    })
+
     it('fresh /builder stays fresh across reloads (does not restore localStorage)', async () => {
       const auth = useAuthStore()
       mockFetch.mockResolvedValueOnce(
