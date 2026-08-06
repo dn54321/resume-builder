@@ -2,48 +2,50 @@
  * Tests for the dependency graph builder.
  */
 import { describe, it, expect } from 'vitest';
+import { isEpicComplete } from '../graph';
 import type { GraphNode, TicketInfo, TicketState } from '../types';
 
 // We test the graph logic directly using prepared nodes,
 // since the full buildGraph requires a live Linear API.
 
+function makeNode(
+  identifier: string,
+  status: TicketState['status'],
+  refs: string[] = [],
+  parentId: string | null = null,
+): GraphNode {
+  const ticket: TicketInfo = {
+    identifier,
+    id: `id-${identifier}`,
+    title: `Ticket ${identifier}`,
+    description: refs.length > 0 ? `ref: ${refs.join(' ')}` : '',
+    parentId,
+    refs,
+    url: `https://linear.app/issue/${identifier}`,
+  };
+
+  const state: TicketState = {
+    identifier,
+    status,
+    branch: `ticket/${identifier.toLowerCase()}`,
+    worktreePath: `/tmp/worktrees/${identifier}`,
+    logPath: `/tmp/logs/${identifier}.log`,
+    pid: null,
+    prUrl: null,
+    startedAt: null,
+    finishedAt: status === 'done' ? new Date().toISOString() : null,
+    error: null,
+    assignedPort: null,
+    retryCount: 0,
+    workerName: null,
+    agentId: null,
+    paneId: null,
+  };
+
+  return { ticket, state, dependencies: [], dependents: [] };
+}
+
 describe('Graph — readyTickets', () => {
-  function makeNode(
-    identifier: string,
-    status: TicketState['status'],
-    refs: string[] = [],
-    parentId: string | null = null,
-  ): GraphNode {
-    const ticket: TicketInfo = {
-      identifier,
-      id: `id-${identifier}`,
-      title: `Ticket ${identifier}`,
-      description: refs.length > 0 ? `ref: ${refs.join(' ')}` : '',
-      parentId,
-      refs,
-      url: `https://linear.app/issue/${identifier}`,
-    };
-
-    const state: TicketState = {
-      identifier,
-      status,
-      branch: `ticket/${identifier.toLowerCase()}`,
-      worktreePath: `/tmp/worktrees/${identifier}`,
-      logPath: `/tmp/logs/${identifier}.log`,
-      pid: null,
-      prUrl: null,
-      startedAt: null,
-      finishedAt: status === 'done' ? new Date().toISOString() : null,
-      error: null,
-      assignedPort: null,
-      retryCount: 0,
-      workerName: null,
-          agentId: null,
-          paneId: null,
-    };
-
-    return { ticket, state, dependencies: [], dependents: [] };
-  }
 
   function wireDependencies(nodes: Map<string, GraphNode>): void {
     for (const [, node] of nodes) {
@@ -188,5 +190,68 @@ describe('Graph — readyTickets', () => {
 
     const ready = readyTickets(nodes);
     expect(ready).toHaveLength(0);
+  });
+});
+
+describe('Graph — isEpicComplete (auto-complete epics when all children done)', () => {
+  /**
+   * An epic is a product-goal CONTAINER: readyTickets() never assigns it a
+   * worker (parents excluded). It should be auto-completed once every child
+   * it OWNS is done — referenced tickets (ref: deps owned by other epics)
+   * and the root itself must not count.
+   */
+  function buildEpic(children: Array<{ id: string; status: TicketState['status'] }>): {
+    nodes: Map<string, GraphNode>;
+    rootId: string;
+  } {
+    const nodes = new Map<string, GraphNode>();
+    const rootId = 'RES-EPIC';
+    nodes.set(rootId, makeNode(rootId, 'pending'));
+    for (const c of children) {
+      nodes.set(c.id, makeNode(c.id, c.status, [], rootId));
+    }
+    return { nodes, rootId };
+  }
+
+  it('epic with no children is NOT complete (nothing to auto-close)', () => {
+    const { nodes, rootId } = buildEpic([]);
+    expect(isEpicComplete(nodes, rootId)).toBe(false);
+  });
+
+  it('epic with all children done → complete', () => {
+    const { nodes, rootId } = buildEpic([
+      { id: 'RES-1', status: 'done' },
+      { id: 'RES-2', status: 'merged' },
+      { id: 'RES-3', status: 'done' },
+    ]);
+    expect(isEpicComplete(nodes, rootId)).toBe(true);
+  });
+
+  it('epic with any child in progress → NOT complete', () => {
+    const { nodes, rootId } = buildEpic([
+      { id: 'RES-1', status: 'done' },
+      { id: 'RES-2', status: 'in_progress' },
+      { id: 'RES-3', status: 'done' },
+    ]);
+    expect(isEpicComplete(nodes, rootId)).toBe(false);
+  });
+
+  it('a failed child still counts as finished (epic closes, ticket is failed)', () => {
+    const { nodes, rootId } = buildEpic([
+      { id: 'RES-1', status: 'done' },
+      { id: 'RES-2', status: 'failed' },
+    ]);
+    expect(isEpicComplete(nodes, rootId)).toBe(true);
+  });
+
+  it('referenced tickets (owned by another epic) do NOT block completion', () => {
+    const { nodes, rootId } = buildEpic([
+      { id: 'RES-1', status: 'done' },
+    ]);
+    // RES-2 is a ref: dependency owned by a DIFFERENT epic — its parentId
+    // is not the root, so it must not count as a child of this epic.
+    const ref = makeNode('RES-2', 'in_progress', [], 'RES-OTHER-EPIC');
+    nodes.set('RES-2', ref);
+    expect(isEpicComplete(nodes, rootId)).toBe(true);
   });
 });

@@ -13,7 +13,7 @@ import { RequeueTracker } from './requeue-tracker';
 import { Scheduler } from './scheduler';
 import { AgentPool, recordCompletedWork } from './pool';
 import { PaneManager } from '../tui/pane-manager';
-import { buildGraph, readyTickets } from './graph';
+import { buildGraph, readyTickets, isEpicComplete } from './graph';
 import { executeStrategy } from './strategist';
 import {
   loadState,
@@ -262,6 +262,43 @@ function areAllEpicsDone(): boolean {
   return true;
 }
 
+/**
+ * Auto-complete an epic once ALL its children are done/merged/failed.
+ * Epics are product-goal CONTAINERS — readyTickets() never assigns them a
+ * worker (parents are excluded), so nothing used to transition them: they
+ * sat 'pending' forever, the board understated progress, and
+ * areAllEpicsDone() never returned true even when every real ticket landed.
+ * Called after each child completion; marks the root node done + transitions
+ * Linear + notifies the boss. No-op for single-ticket epics (root == only
+ * node; the root itself is the real ticket and is completed by its worker).
+ */
+async function maybeCompleteEpic(rootId: string): Promise<void> {
+  const epic = epicGraphs.get(rootId);
+  if (!epic) return;
+  const rootNode = epic.nodes.get(rootId);
+  if (!rootNode || rootNode.state.status === 'done' || rootNode.state.status === 'merged') return;
+
+  // Real work items = all nodes except the epic root itself. A graph can
+  // also REFERENCE tickets owned by other epics (ref: deps) — only children
+  // actually parented under this epic count toward its completion.
+  if (!isEpicComplete(epic.nodes, rootId)) return; // children still in flight
+
+  const total = [...epic.nodes.values()].filter(
+    (n) => n.ticket.id !== rootId && n.ticket.parentId === rootId,
+  ).length;
+  log(`Epic ${rootId} complete — all ${total} children done. Auto-completing.`);
+  rootNode.state.status = 'done';
+  rootNode.state.finishedAt = new Date().toISOString();
+  try {
+    await transitionTicket(rootId, getConfig().linear.transitions.on_done);
+  } catch (err: any) {
+    log(`Epic ${rootId}: Linear transition failed (${err?.message}) — epic marked done locally anyway`);
+  }
+  await tellBoss(`🎉 Epic ${rootId}: all ${total} tickets complete — auto-closed.`);
+  saveAllState();
+  writeDashboard();
+}
+
 // ─── Worker Launch ──────────────────────────────────────────────────
 
 /**
@@ -384,6 +421,11 @@ async function onWorkerComplete(
 
         // Prune worktree if branch is merged
         pruneWorktree(node);
+
+        // An epic is complete once ALL its children are done — auto-close it.
+        for (const rootId of epicGraphs.keys()) {
+          await maybeCompleteEpic(rootId);
+        }
       } else {
         // Strategy failures (e.g. a transient merge race when another
         // worker/commit landed mid-merge) are RETRYABLE — re-queue the
@@ -437,6 +479,9 @@ async function onWorkerComplete(
         await transitionTicket(node.ticket.id, config.linear.transitions.on_done);
         await tellBoss(`✅ ${identifier}: already merged (no-op completion — worker had no changes because work is in master)`);
         pruneWorktree(node);
+        for (const rootId of epicGraphs.keys()) {
+          await maybeCompleteEpic(rootId);
+        }
       } else {
         node.state.status = 'failed';
         node.state.finishedAt = new Date().toISOString();
@@ -764,6 +809,9 @@ async function checkAgentHealth(): Promise<void> {
           recordCompletedWork('worker');
           await transitionTicket(node.ticket.id, config.linear.transitions.on_done);
           await tellBoss(`✅ ${node.ticket.identifier}: completed (work already merged to ${target})`);
+          for (const rootId of epicGraphs.keys()) {
+            await maybeCompleteEpic(rootId);
+          }
           continue;
         }
         log(`Re-queuing ${node.ticket.identifier} (worker ${node.state.workerName} gone)`);
