@@ -854,4 +854,187 @@ describe('useResumeData', () => {
       expect(isSaving.value).toBe(false)
     })
   })
+
+  describe('autosave coverage (RES-105)', () => {
+    // The "Unsaved Changes" modal is disabled (RES-105) — autosave is the
+    // ONLY persistence path, so it must fire on every store mutation:
+    // name edits, section content edits, visibility toggles, column
+    // assignments, and layout changes. These tests assert the debounced
+    // autosave persists each kind of edit for anonymous users, and that
+    // rapid edits collapse into a single backend save for authenticated
+    // users.
+
+    it('fires autosave on resume name edits', async () => {
+      vi.useFakeTimers()
+      const auth = useAuthStore()
+      auth.logout()
+
+      const store = useResumeStore()
+      store.initializeDefaults()
+      SECTION_TYPES.forEach((t) => store.toggleSection(t))
+
+      const { loadResume, setupAutoSave, teardownAutoSave } = useResumeData()
+      await loadResume()
+      setupAutoSave()
+
+      // Name edit → store mutation → autosave scheduled (1.5s debounce)
+      store.name = 'Autosaved Name'
+      await nextTick()
+      expect(localStorage.getItem('resume_data')).toBeNull() // not saved yet
+
+      await vi.advanceTimersByTimeAsync(2000)
+      const stored = JSON.parse(localStorage.getItem('resume_data')!)
+      expect(stored.name).toBe('Autosaved Name')
+
+      teardownAutoSave()
+      vi.useRealTimers()
+    })
+
+    it('fires autosave on section content edits (entry field value)', async () => {
+      vi.useFakeTimers()
+      const auth = useAuthStore()
+      auth.logout()
+
+      const store = useResumeStore()
+      store.initializeDefaults()
+      SECTION_TYPES.forEach((t) => store.toggleSection(t))
+
+      const { loadResume, setupAutoSave, teardownAutoSave } = useResumeData()
+      await loadResume()
+      setupAutoSave()
+
+      // Add an entry with a field value directly to the summary section
+      // (mirrors what useSectionEditor.addEntry + the field editors do).
+      const summary = store.sections.find((s) => s.sectionType === 'summary')!
+      summary.entries.push({
+        id: 'entry-1',
+        order: 0,
+        parentId: null,
+        locked: false,
+        fields: [{ key: 'text', value: 'Hello world', order: 0 }],
+      })
+      await nextTick()
+
+      await vi.advanceTimersByTimeAsync(2000)
+      const stored = JSON.parse(localStorage.getItem('resume_data')!)
+      const storedSummary = stored.sections.find(
+        (s: { sectionId: string }) => s.sectionId === 'summary',
+      )
+      expect(storedSummary.entries[0].fields[0].value).toBe('Hello world')
+
+      teardownAutoSave()
+      vi.useRealTimers()
+    })
+
+    it('fires autosave on visibility (eye) toggles', async () => {
+      vi.useFakeTimers()
+      const auth = useAuthStore()
+      auth.logout()
+
+      const store = useResumeStore()
+      store.initializeDefaults()
+      SECTION_TYPES.forEach((t) => store.toggleSection(t))
+
+      const { loadResume, setupAutoSave, teardownAutoSave } = useResumeData()
+      await loadResume()
+      setupAutoSave()
+
+      // Toggle a section off — the enabled flag must be persisted
+      store.toggleSection('hobbies')
+      await nextTick()
+
+      await vi.advanceTimersByTimeAsync(2000)
+      const stored = JSON.parse(localStorage.getItem('resume_data')!)
+      const hobbies = stored.sections.find(
+        (s: { sectionId: string }) => s.sectionId === 'hobbies',
+      )
+      expect(hobbies.enabled).toBe(false)
+
+      teardownAutoSave()
+      vi.useRealTimers()
+    })
+
+    it('fires autosave on column assignment changes', async () => {
+      vi.useFakeTimers()
+      const auth = useAuthStore()
+      auth.logout()
+
+      const store = useResumeStore()
+      store.initializeDefaults()
+      SECTION_TYPES.forEach((t) => store.toggleSection(t))
+
+      const { loadResume, setupAutoSave, teardownAutoSave } = useResumeData()
+      await loadResume()
+      setupAutoSave()
+
+      store.setSectionColumn('summary', 'left')
+      await nextTick()
+
+      await vi.advanceTimersByTimeAsync(2000)
+      const stored = JSON.parse(localStorage.getItem('resume_data')!)
+      const summary = stored.sections.find(
+        (s: { sectionId: string }) => s.sectionId === 'summary',
+      )
+      expect(summary.column).toBe('left')
+
+      teardownAutoSave()
+      vi.useRealTimers()
+    })
+
+    it('debounces rapid edits into a single autosave', async () => {
+      vi.useFakeTimers()
+      const auth = useAuthStore()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
+      )
+      await auth.login('test@test.com', 'password')
+
+      // loadResume: GET /resumes list → 404 → falls back to defaults
+      mockFetch.mockClear()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ message: 'Not Found' }, 404),
+      )
+      // The single debounced autosave PUT
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ id: 'resume-1', layout: 'standard', sections: [] }),
+      )
+
+      const store = useResumeStore()
+      store.initializeDefaults()
+      SECTION_TYPES.forEach((t) => store.toggleSection(t))
+
+      const { loadResume, setupAutoSave, teardownAutoSave, dirty } = useResumeData()
+      await loadResume()
+      setupAutoSave()
+
+      // Three rapid mutations inside the 1.5s debounce window
+      store.setLayout('column2-1')
+      await nextTick()
+      await vi.advanceTimersByTimeAsync(500)
+      store.name = 'Rapid edit'
+      await nextTick()
+      await vi.advanceTimersByTimeAsync(500)
+      store.toggleSection('hobbies')
+      await nextTick()
+      await vi.advanceTimersByTimeAsync(500)
+      expect(dirty.value).toBe(true)
+
+      // No PUT has fired yet — the debounce keeps resetting
+      const putCallsBefore = mockFetch.mock.calls.filter(
+        (c) => c[1]?.method === 'PUT',
+      ).length
+      expect(putCallsBefore).toBe(0)
+
+      // Once the window finally elapses, exactly ONE save fires
+      await vi.advanceTimersByTimeAsync(2000)
+      const putCallsAfter = mockFetch.mock.calls.filter(
+        (c) => c[1]?.method === 'PUT',
+      ).length
+      expect(putCallsAfter).toBe(1)
+      expect(dirty.value).toBe(false)
+
+      teardownAutoSave()
+      vi.useRealTimers()
+    })
+  })
 })

@@ -644,27 +644,48 @@ describe('ResumeBuilder', () => {
     vi.useRealTimers()
   })
 
-  // ─── Unsaved changes navigation guard tests ────────────────────
+  // ─── Disabled unsaved-changes guard tests (RES-105) ─────────────
+  //
+  // The "Unsaved Changes" ConfirmModal is intentionally disabled: every
+  // edit autosaves (useResumeData.setupAutoSave — 1.5s debounce), so
+  // navigation away must be immediate. The modal must NEVER open, even
+  // when dirty. The ConfirmModal itself is kept wired (v-model bound to a
+  // ref that stays false) so reintroducing the guard is a one-block change.
 
-  it('shows unsaved changes modal via v-model binding', async () => {
-    // The modal is driven by the showUnsavedModal ref in the component.
-    // We can test the ConfirmModal stub renders with correct props.
-    mockDirty.value = false
+  it('does not open the unsaved-changes modal when dirty (guard disabled, RES-105)', async () => {
+    mockDirty.value = true
     const wrapper = mountBuilder()
     await nextTick()
 
-    // When not dirty, modal should not be visible
+    // With the route-leave guard disabled, dirty state must never surface
+    // the ConfirmModal (the stub renders only when modelValue is true).
+    expect(wrapper.find('[data-testid="confirm-modal"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="unsaved-modal"]').exists()).toBe(false)
+  })
+
+  it('keeps the ConfirmModal wired in the tree but closed (reintroduction path, RES-105)', async () => {
+    const wrapper = mountBuilder()
+    await nextTick()
+
+    // The ConfirmModal component is still mounted with showUnsavedModal
+    // bound to a ref that stays false — reintroducing the guard is a
+    // one-block change. But while disabled it must render nothing.
+    const modal = wrapper.findComponent({ name: 'ConfirmModal' })
+    expect(modal.exists()).toBe(true)
     expect(wrapper.find('[data-testid="confirm-modal"]').exists()).toBe(false)
   })
 
-  it('ConfirmModal stub renders correct title and description', async () => {
+  it('does not show the unsaved-changes modal after an edit + immediate navigation (RES-105)', async () => {
+    mockDirty.value = true
+    const store = useResumeStore()
+    store.name = 'Mid-edit name'
     const wrapper = mountBuilder()
     await nextTick()
 
-    // Check the ConfirmModal is wired with correct props by finding it
-    // (it's rendered in the template even when modelValue is false, just hidden)
-    // Our stub only renders when modelValue is true, so check it's not visible
+    // Even mid-edit (dirty + unsaved name), no modal blocks the user —
+    // autosave is the sole persistence path.
     expect(wrapper.find('[data-testid="confirm-modal"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="unsaved-modal"]').exists()).toBe(false)
   })
 
   // ─── beforeunload handler tests ─────────────────────────────────

@@ -162,7 +162,20 @@
       </div>
     </div>
 
-    <!-- Unsaved Changes Modal -->
+    <!--
+      ⚠️ Unsaved Changes Modal — INTENTIONALLY DISABLED (RES-105).
+
+      Every field edit now autosaves (see useResumeData.setupAutoSave —
+      1.5s debounce, plus an immediate sessionStorage/localStorage safety
+      net), so blocking navigation with an "Unsaved Changes" confirm would
+      be both annoying and redundant. Navigation away is immediate;
+      autosave persists the edits.
+
+      The modal + handlers below are still WIRED (showUnsavedModal stays
+      `false` — nothing ever opens it). To REINTRODUCE the guard, restore
+      the onBeforeRouteLeave block in the script section below and this
+      modal will start appearing again whenever `dirty` is true.
+    -->
     <ConfirmModal
       v-model="showUnsavedModal"
       title="Unsaved Changes"
@@ -200,7 +213,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
-import { onBeforeRouteLeave, useRoute } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useResumeStore } from '@/features/builder/stores/resume'
 import { useResumeData } from '@/features/builder/composables/useResumeData'
 import { useAuth } from '@/features/auth/composables/useAuth'
@@ -509,29 +522,39 @@ onUnmounted(() => {
   }
 })
 
-// ─── Unsaved changes navigation guard ─────────────────────────────
+// ─── Unsaved changes navigation guard — INTENTIONALLY DISABLED (RES-105) ──
+//
+// Every edit autosaves (see useResumeData.setupAutoSave — 1.5s debounce +
+// immediate sessionStorage/localStorage safety net), so the "Unsaved
+// Changes" modal no longer gates navigation: leaving the builder mid-edit
+// must be immediate AND lossless. The ConfirmModal + showUnsavedModal ref
+// + onLeaveAnyway/onStay handlers below are still wired and functional —
+// only the route-leave TRIGGER was removed.
+//
+// To REINTRODUCE the modal, restore the guard below and re-add
+// `onBeforeRouteLeave` to the vue-router import at the top of the script:
+//
+//   onBeforeRouteLeave(() => {
+//     if (dirty.value) {
+//       showUnsavedModal.value = true
+//       return new Promise<boolean>((resolve) => {
+//         resolveNavigation = resolve
+//       })
+//     }
+//     return true
+//   })
 
 const showUnsavedModal = ref(false)
 let resolveNavigation: ((value: boolean) => void) | null = null
 
-onBeforeRouteLeave(() => {
-  if (dirty.value) {
-    showUnsavedModal.value = true
-    return new Promise<boolean>((resolve) => {
-      resolveNavigation = resolve
-    })
-  }
-  return true
-})
-
-/** User chose to leave anyway. */
+/** User chose to leave anyway. (Unused while the guard is disabled — RES-105.) */
 function onLeaveAnyway() {
   showUnsavedModal.value = false
   resolveNavigation?.(true)
   resolveNavigation = null
 }
 
-/** User chose to stay. */
+/** User chose to stay. (Unused while the guard is disabled — RES-105.) */
 function onStay() {
   showUnsavedModal.value = false
   resolveNavigation?.(false)
