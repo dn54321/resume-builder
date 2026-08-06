@@ -735,47 +735,49 @@ async function handleConfirmDelete(): Promise<void> {
             />
             </div>
 
-            <!-- Zoom controls: INSIDE the scaled wrapper so they anchor to
-                 the paper and scroll WITH it — not to the pane viewport
-                 (absolute-in-body kept them fixed while the paper scrolled
-                 underneath). right-6 clears the pane scrollbar. -->
-            <div
-              class="dashboard-preview__zoom-controls absolute bottom-3 right-6 z-10 inline-flex items-center gap-0.5 rounded-full border border-border bg-surface/95 p-1 shadow-md"
-              role="group"
-              aria-label="Preview zoom"
-              data-testid="dashboard-preview-zoom-controls"
-            >
-              <button
-                class="inline-flex items-center justify-center size-8 rounded-full text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                type="button"
-                :disabled="zoomFactor <= MIN_ZOOM"
-                aria-label="Zoom out"
-                title="Zoom out"
-                data-testid="dashboard-preview-zoom-out"
-                @click="zoomOut"
-              >
-                <ZoomOut class="size-4" />
-              </button>
-              <span
-                class="inline-block min-w-10 text-center text-xs font-semibold tabular-nums text-foreground select-none"
-                aria-live="polite"
-                data-testid="dashboard-preview-zoom-value"
-              >
-                {{ zoomPercent }}%
-              </span>
-              <button
-                class="inline-flex items-center justify-center size-8 rounded-full text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                type="button"
-                :disabled="zoomFactor >= MAX_ZOOM"
-                aria-label="Zoom in"
-                title="Zoom in"
-                data-testid="dashboard-preview-zoom-in"
-                @click="zoomIn"
-              >
-                <ZoomIn class="size-4" />
-              </button>
-            </div>
           </div>
+        </div>
+
+        <!-- Zoom controls: anchored to the dashboard-preview-pane container
+             (bottom-right), NOT the paper — the pane is position:relative
+             and overflow:hidden, so the pill stays pinned to the pane
+             corner while the paper scrolls. right-6 clears the scrollbar. -->
+        <div
+          v-if="previewResume"
+          class="dashboard-preview__zoom-controls absolute bottom-3 right-6 z-10 inline-flex items-center gap-0.5 rounded-full border border-border bg-surface/95 p-1 shadow-md"
+          role="group"
+          aria-label="Preview zoom"
+          data-testid="dashboard-preview-zoom-controls"
+        >
+          <button
+            class="inline-flex items-center justify-center size-8 rounded-full text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+            type="button"
+            :disabled="zoomFactor <= MIN_ZOOM"
+            aria-label="Zoom out"
+            title="Zoom out"
+            data-testid="dashboard-preview-zoom-out"
+            @click="zoomOut"
+          >
+            <ZoomOut class="size-4" />
+          </button>
+          <span
+            class="inline-block min-w-10 text-center text-xs font-semibold tabular-nums text-foreground select-none"
+            aria-live="polite"
+            data-testid="dashboard-preview-zoom-value"
+          >
+            {{ zoomPercent }}%
+          </span>
+          <button
+            class="inline-flex items-center justify-center size-8 rounded-full text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+            type="button"
+            :disabled="zoomFactor >= MAX_ZOOM"
+            aria-label="Zoom in"
+            title="Zoom in"
+            data-testid="dashboard-preview-zoom-in"
+            @click="zoomIn"
+          >
+            <ZoomIn class="size-4" />
+          </button>
         </div>
       </section>
     </div>
@@ -1081,6 +1083,7 @@ async function handleConfirmDelete(): Promise<void> {
 /* ── Right pane: live preview ───────────── */
 
 .dashboard-preview-pane {
+  position: relative; /* anchor for the floating zoom controls */
   flex: 1;
   min-width: 0;
   display: flex;
