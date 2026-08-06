@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Multi-engine database support** — the backend works with either
+  SQLite (`file:`/`libsql:` URLs, dev/tests) or PostgreSQL
+  (`postgresql://` URLs, production), selected automatically from
+  `DATABASE_URL`. The Prisma provider + driver adapter are chosen at
+  generate/runtime; a Postgres migration chain ships in
+  `prisma/migrations-postgresql`.
 - Production Dockerfiles for backend and frontend (`backend/Dockerfile`,
   `frontend/Dockerfile`) — inject `FRONTEND_URL`, `DATABASE_URL`, and the
   encryption keys via environment variables at runtime; CORS is derived
