@@ -135,6 +135,36 @@ describe('BossRelay — receipt window', () => {
     expect(relay.queuedCount).toBe(2);
   });
 
+  it('does NOT mark a busy-but-alive boss dead when the receipt window expires', async () => {
+    // Regression (observed at 01:49:19Z): the boss was mid-tool-call (a
+    // `sleep 20`), its intercom loop blocked, so it missed the 8s receipt
+    // window. tell() marked it dead and queued all notifications — even
+    // though the OS probe would have proven the process was alive. A busy
+    // boss is NOT a dead boss: the broker holds the message and injects it
+    // when the boss frees up.
+    const { send } = makeSend();
+    const relay = new BossRelay({
+      send,
+      receiptTimeoutMs: 100,
+      log: vi.fn(),
+      isProcessAlive: vi.fn(() => true), // process alive — just busy
+    });
+    await relay.registerBoss('boss-1', { pid: 4242, startedAt: 1000 });
+
+    const p = relay.tell('STATUS busy');
+    await vi.advanceTimersByTimeAsync(100 + 5);
+
+    expect(await p).toBe('delivered'); // broker holds it; late receipt confirms
+    expect(relay.isAlive).toBe(true);
+    expect(relay.queuedCount).toBe(0);
+
+    // The next send still goes out normally — the boss was never dead.
+    const p2 = relay.tell('STATUS again');
+    await vi.advanceTimersByTimeAsync(1);
+    relay.onReceipt('m1', 'receiver_received');
+    expect(await p2).toBe('delivered');
+  });
+
   it('queues when the receipt expires', async () => {
     const { send } = makeSend();
     const relay = new BossRelay({ send, receiptTimeoutMs: 5000, log: vi.fn() });
