@@ -953,9 +953,9 @@ describe('DashboardView', () => {
     wrapper.unmount()
   })
 
-  // ── Pencil Edit Button (RES-114) ──────────────────────────
+  // ── Pencil Rename Button ───────────────────────────────────
 
-  it('renders a visible pencil edit button on each resume card', async () => {
+  it('renders a visible pencil rename button on each resume card', async () => {
     createAuthenticatedStore()
     mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
 
@@ -969,21 +969,21 @@ describe('DashboardView', () => {
     expect(editBtns.length).toBe(2)
 
     // Each button is a real <button>, shows the Pencil icon, and carries an
-    // accessible label naming the resume it edits.
+    // accessible label naming the resume it renames.
     for (const btn of editBtns) {
       expect(btn.element.tagName).toBe('BUTTON')
       expect(btn.find('svg').exists()).toBe(true)
       expect(btn.attributes('aria-label')).toBeTruthy()
     }
     expect(editBtns[0]!.attributes('aria-label')).toBe(
-      'Edit Software Engineer Resume in builder',
+      'Rename Software Engineer Resume',
     )
-    expect(editBtns[1]!.attributes('aria-label')).toBe('Edit Untitled in builder')
+    expect(editBtns[1]!.attributes('aria-label')).toBe('Rename Untitled')
 
     wrapper.unmount()
   })
 
-  it('navigates to the builder when the pencil button is clicked', async () => {
+  it('starts inline rename when the pencil button is clicked', async () => {
     createAuthenticatedStore()
     mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
     const pushSpy = vi.spyOn(router, 'push')
@@ -998,21 +998,19 @@ describe('DashboardView', () => {
     await editBtns[0]!.trigger('click')
     await flushPromises()
 
-    // Same action as the dropdown "Edit in Builder" / double-click
-    expect(pushSpy).toHaveBeenCalledWith('/builder/resume-1')
-
-    // No preview fetch — the pencil navigates, it does not select.
-    const previewFetches = mockFetch.mock.calls.filter(
-      (call: unknown[]) =>
-        typeof call[0] === 'string' &&
-        call[0].includes('/api/v1/resumes/resume-1'),
+    // The pencil triggers the existing inline rename flow: the name becomes
+    // an input pre-filled with the current name. No builder navigation.
+    const input = wrapper.find('.resume-card__name-input')
+    expect(input.exists()).toBe(true)
+    expect((input.element as HTMLInputElement).value).toBe(
+      'Software Engineer Resume',
     )
-    expect(previewFetches.length).toBe(0)
+    expect(pushSpy).not.toHaveBeenCalled()
 
     wrapper.unmount()
   })
 
-  it('navigates to the builder for the correct resume from a non-first card', async () => {
+  it('starts inline rename for the correct resume from a non-first card', async () => {
     createAuthenticatedStore()
     mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
     const pushSpy = vi.spyOn(router, 'push')
@@ -1023,11 +1021,15 @@ describe('DashboardView', () => {
 
     await flushPromises()
 
+    // Second card has name: null → the input is pre-filled with "Untitled"
     const editBtns = wrapper.findAll('[data-testid="resume-edit-btn"]')
     await editBtns[1]!.trigger('click')
     await flushPromises()
 
-    expect(pushSpy).toHaveBeenCalledWith('/builder/resume-2')
+    const input = wrapper.find('.resume-card__name-input')
+    expect(input.exists()).toBe(true)
+    expect((input.element as HTMLInputElement).value).toBe('Untitled')
+    expect(pushSpy).not.toHaveBeenCalled()
 
     wrapper.unmount()
   })
@@ -1048,7 +1050,8 @@ describe('DashboardView', () => {
     await flushPromises()
 
     // The card's single-click preview must NOT fire — the click is stopped
-    // at the button. Placeholder stays; no preview body, no full-resume GET.
+    // at the button (the pencil only starts inline rename). Placeholder
+    // stays; no preview body, no full-resume GET.
     expect(wrapper.find('[data-testid="preview-body"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="preview-placeholder"]').exists()).toBe(true)
     const fullResumeFetches = mockFetch.mock.calls.filter(
@@ -1061,7 +1064,7 @@ describe('DashboardView', () => {
     wrapper.unmount()
   })
 
-  it('does not double-navigate when the pencil button is double-clicked', async () => {
+  it('does not open the builder when the pencil button is double-clicked', async () => {
     createAuthenticatedStore()
     mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
     const pushSpy = vi.spyOn(router, 'push')
@@ -1075,13 +1078,13 @@ describe('DashboardView', () => {
     const editBtn = wrapper.findAll('[data-testid="resume-edit-btn"]')[0]!
     // Browser fires click, then dblclick — the dblclick must be stopped at
     // the button so it does not bubble to the card's own dblclick handler
-    // (which would push a second time).
+    // (which would open the builder). The first click starts inline rename.
     await editBtn.trigger('click')
     await editBtn.trigger('dblclick')
     await flushPromises()
 
-    expect(pushSpy).toHaveBeenCalledTimes(1)
-    expect(pushSpy).toHaveBeenCalledWith('/builder/resume-1')
+    expect(pushSpy).not.toHaveBeenCalled()
+    expect(wrapper.find('.resume-card__name-input').exists()).toBe(true)
 
     wrapper.unmount()
   })
@@ -1108,6 +1111,49 @@ describe('DashboardView', () => {
     )
     expect(fullResumeFetches.length).toBe(0)
     expect(wrapper.find('[data-testid="preview-placeholder"]').exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('commits rename via the pencil on Enter and calls PUT', async () => {
+    createAuthenticatedStore()
+    // Deep-clone — commitRename mutates the local resume's name in place
+    const data = JSON.parse(JSON.stringify(mockResumes)) as typeof mockResumes
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(data))
+    // PUT response for rename
+    mockFetch.mockResolvedValueOnce(
+      mockJsonResponse({ id: 'resume-1', name: 'Pencil Renamed', layout: 'standard' }),
+    )
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    // Start inline rename from the pencil, type a new name, press Enter
+    const editBtns = wrapper.findAll('[data-testid="resume-edit-btn"]')
+    await editBtns[0]!.trigger('click')
+    await flushPromises()
+
+    const input = wrapper.find('.resume-card__name-input')
+    expect(input.exists()).toBe(true)
+    await input.setValue('Pencil Renamed')
+    await input.trigger('keydown.enter')
+    await flushPromises()
+
+    // Name-only PUT through the existing commitRename flow
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/v1/resumes/resume-1',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ name: 'Pencil Renamed' }),
+      }),
+    )
+
+    // Back to display mode with the updated name
+    expect(wrapper.find('.resume-card__name-input').exists()).toBe(false)
+    expect(wrapper.findAll('.resume-card__name')[0]!.text()).toBe('Pencil Renamed')
 
     wrapper.unmount()
   })

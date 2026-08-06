@@ -501,14 +501,14 @@ async function handleConfirmDelete(): Promise<void> {
                 <span v-if="renameLoading" class="rename-spinner" />
               </div>
 
-              <!-- Card actions: pencil edit shortcut (RES-114) + ⋮ menu -->
+              <!-- Card actions: pencil rename shortcut + ⋮ menu -->
               <div class="resume-card__actions">
                 <button
                   class="resume-card__edit-btn"
                   data-testid="resume-edit-btn"
-                  :aria-label="`Edit ${resume.name || 'Untitled'} in builder`"
-                  title="Edit in builder"
-                  @click.stop="handleEditResume(resume)"
+                  :aria-label="`Rename ${resume.name || 'Untitled'}`"
+                  title="Rename resume"
+                  @click.stop="startEditing(resume)"
                   @dblclick.stop
                   @keydown.stop
                 >
@@ -793,8 +793,8 @@ async function handleConfirmDelete(): Promise<void> {
   gap: 0.25rem;
 }
 
-/* Pencil edit shortcut (RES-114) — always-visible entry point into the
-   builder, mirroring the ⋮ menu button's styling and hover behavior. */
+/* Pencil rename shortcut — always-visible entry point into inline rename,
+   mirroring the ⋮ menu button's styling and hover behavior. */
 .resume-card__edit-btn {
   flex-shrink: 0;
   display: inline-flex;
