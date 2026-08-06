@@ -7,11 +7,12 @@ import ResumeBuilder from '@/features/builder/ResumeBuilder.vue'
 import { useResumeStore } from '@/features/builder/stores/resume'
 
 // ─── Mock vue-router useRoute ─────────────────────────────────────
-// ResumeBuilder reads route.query.layout (RES-86 feature flag) via useRoute.
+// ResumeBuilder reads route.query.layout (RES-86 feature flag) and
+// route.params.id (RES-102 per-resume load) via useRoute.
 // The mock route object is shared/hoisted so the vi.mock factory can access
-// it; tests mutate mockRoute.query before mounting.
+// it; tests mutate mockRoute.query / mockRoute.params before mounting.
 const { mockRoute } = vi.hoisted(() => ({
-  mockRoute: { query: {} as Record<string, unknown> },
+  mockRoute: { query: {} as Record<string, unknown>, params: {} as Record<string, unknown> },
 }))
 
 vi.mock('vue-router', async (importOriginal) => {
@@ -23,7 +24,7 @@ vi.mock('vue-router', async (importOriginal) => {
 })
 
 // ─── Mock useResumeData ────────────────────────────────────────────
-const mockLoadResume = vi.fn<() => Promise<void>>()
+const mockLoadResume = vi.fn<(id?: string) => Promise<void>>()
 const mockSaveResume = vi.fn<() => Promise<void>>()
 const mockSetupAutoSave = vi.fn<() => void>()
 const mockTeardownAutoSave = vi.fn<() => void>()
@@ -221,6 +222,7 @@ describe('ResumeBuilder', () => {
     setActivePinia(pinia)
     vi.clearAllMocks()
     mockRoute.query = {}
+    mockRoute.params = {}
     mockLoadResume.mockResolvedValue(undefined)
     mockIsTailoring.value = false
     mockTailorError.value = null
@@ -603,6 +605,20 @@ describe('ResumeBuilder', () => {
     await nextTick()
     expect(mockLoadResume).toHaveBeenCalled()
     expect(mockSetupAutoSave).toHaveBeenCalled()
+  })
+
+  it('passes route.params.id to loadResume for /builder/:id (RES-102)', async () => {
+    mockRoute.params = { id: 'resume-123' }
+    mountBuilder()
+    await nextTick()
+    expect(mockLoadResume).toHaveBeenCalledWith('resume-123')
+  })
+
+  it('calls loadResume with no id for /builder (new resume, RES-102)', async () => {
+    mockRoute.params = {}
+    mountBuilder()
+    await nextTick()
+    expect(mockLoadResume).toHaveBeenCalledWith(undefined)
   })
 
   it('tears down auto-save on unmount', () => {

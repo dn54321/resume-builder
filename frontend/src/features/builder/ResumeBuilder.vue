@@ -316,7 +316,10 @@ const columnAssignments = computed(() => {
 })
 
 onMounted(async () => {
-  await loadResume()
+  // RES-102: load the resume the route points at — /builder/:id loads THAT
+  // resume, /builder (no id) starts fresh from defaults.
+  const resumeId = typeof route.params.id === 'string' ? route.params.id : undefined
+  await loadResume(resumeId)
   setupAutoSave()
   // Select the first enabled section by default
   if (store.sections.length > 0 && !selectedSectionId.value) {

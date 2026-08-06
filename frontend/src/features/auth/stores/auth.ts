@@ -14,23 +14,35 @@ export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = computed(() => !!user.value)
 
   /**
+   * Import the user's anonymous resume into their authenticated account and
+   * clear it from localStorage.
    *
+   * RES-102: anonymous resumes are stored per-resume under `resume_data_<id>`
+   * with a `resume_data_last_id` pointer to the most recently saved one. We
+   * import the resume the pointer references (falling back to the legacy
+   * single `resume_data` blob for data saved before the per-resume change).
    * @param api
    */
   async function importAndClearLocalResume(api: ReturnType<typeof useApi>) {
-    const RESUME_KEY = 'resume_data'
-    const raw = localStorage.getItem(RESUME_KEY)
+    const LAST_ANON_RESUME_KEY = 'resume_data_last_id'
+    const lastId = localStorage.getItem(LAST_ANON_RESUME_KEY)
+    const key = lastId ? `resume_data_${lastId}` : 'resume_data'
+
+    const raw = localStorage.getItem(key)
     if (!raw) return
     let data: unknown
     try {
       data = JSON.parse(raw)
     } catch {
-      localStorage.removeItem(RESUME_KEY)
+      localStorage.removeItem(key)
       return
     }
     try {
       await api.post('/api/v1/resumes', data)
-      localStorage.removeItem(RESUME_KEY)
+      localStorage.removeItem(key)
+      if (lastId) {
+        localStorage.removeItem(LAST_ANON_RESUME_KEY)
+      }
     } catch {
       // Keep localStorage data on POST failure so user doesn't lose their resume
     }

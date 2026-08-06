@@ -34,7 +34,7 @@ describe('useResumeData', () => {
   })
 
   describe('loadResume (anonymous)', () => {
-    it('loads from localStorage when data exists', async () => {
+    it('loads its own resume from localStorage when data exists for the id', async () => {
       const auth = useAuthStore()
       // Ensure not authenticated
       auth.logout()
@@ -50,7 +50,8 @@ describe('useResumeData', () => {
           },
         ],
       }
-      localStorage.setItem('resume_data', JSON.stringify(localPayload))
+      // RES-102: anonymous resumes are keyed per-resume (resume_data_<id>)
+      localStorage.setItem('resume_data_resume-1', JSON.stringify(localPayload))
 
       const store = useResumeStore()
       // Ensure store has sections initialized (all disabled via toggle)
@@ -63,8 +64,9 @@ describe('useResumeData', () => {
       expect(store.sections.every((s) => !s.enabled)).toBe(true)
 
       const { loadResume } = useResumeData()
-      await loadResume()
+      await loadResume('resume-1')
 
+      expect(store.id).toBe('resume-1')
       expect(store.layout).toBe('column2-1')
       // loadFromPayload fills missing sections to 10 — saved one is enabled
       expect(store.sections).toHaveLength(10)
@@ -74,7 +76,7 @@ describe('useResumeData', () => {
       expect(nc!.column).toBe('left')
     })
 
-    it('loads defaults when localStorage is empty', async () => {
+    it('loads defaults when localStorage is empty (no id → new resume)', async () => {
       const auth = useAuthStore()
       auth.logout()
 
@@ -93,20 +95,37 @@ describe('useResumeData', () => {
       expect(store.sections).toHaveLength(10)
     })
 
-    it('handles corrupted localStorage gracefully', async () => {
+    it('loads defaults when the resume id has no saved data', async () => {
       const auth = useAuthStore()
       auth.logout()
-      localStorage.setItem('resume_data', 'not-valid-json{{')
 
       const store = useResumeStore()
       store.initializeDefaults()
       SECTION_TYPES.forEach((t) => store.toggleSection(t))
 
       const { loadResume, dirty } = useResumeData()
-      await loadResume()
+      await loadResume('ghost-resume')
+
+      // No blob for this id → defaults
+      expect(store.layout).toBe('standard')
+      expect(store.sections).toHaveLength(10)
+      expect(dirty.value).toBe(false)
+    })
+
+    it('handles corrupted localStorage gracefully', async () => {
+      const auth = useAuthStore()
+      auth.logout()
+      localStorage.setItem('resume_data_resume-1', 'not-valid-json{{')
+
+      const store = useResumeStore()
+      store.initializeDefaults()
+      SECTION_TYPES.forEach((t) => store.toggleSection(t))
+
+      const { loadResume, dirty } = useResumeData()
+      await loadResume('resume-1')
 
       // Corrupted data is cleared, defaults loaded
-      expect(localStorage.getItem('resume_data')).toBeNull()
+      expect(localStorage.getItem('resume_data_resume-1')).toBeNull()
       expect(store.sections).toHaveLength(10)
       // After load, dirty should be false
       expect(dirty.value).toBe(false)
@@ -194,7 +213,7 @@ describe('useResumeData', () => {
   })
 
   describe('saveResume (anonymous)', () => {
-    it('writes payload to localStorage', async () => {
+    it('writes payload to localStorage under the per-resume key', async () => {
       const auth = useAuthStore()
       auth.logout()
 
@@ -207,7 +226,9 @@ describe('useResumeData', () => {
       const { saveResume } = useResumeData()
       await saveResume()
 
-      const stored = JSON.parse(localStorage.getItem('resume_data')!)
+      // RES-102: stored under resume_data_<id>, not a shared blob
+      const key = `resume_data_${store.id}`
+      const stored = JSON.parse(localStorage.getItem(key)!)
       expect(stored.name).toBe('Local Resume')
       expect(stored.layout).toBe('column2-1')
       // All 10 sections serialized; hobbies is disabled
@@ -215,11 +236,13 @@ describe('useResumeData', () => {
       const hobbies = stored.sections.find((s: { sectionId: string }) => s.sectionId === 'hobbies')
       expect(hobbies).toBeDefined()
       expect(hobbies.enabled).toBe(false)
+      // The most recent anonymous resume pointer is updated
+      expect(localStorage.getItem('resume_data_last_id')).toBe(store.id)
     })
   })
 
   describe('loadResume (authenticated)', () => {
-    it('loads from API and calls loadFromPayload', async () => {
+    it('loads from API by id and calls loadFromPayload', async () => {
       const auth = useAuthStore()
       // Simulate authenticated user via login
       mockFetch.mockResolvedValueOnce(
@@ -227,11 +250,7 @@ describe('useResumeData', () => {
       )
       await auth.login('test@test.com', 'password')
 
-      // GET /api/v1/resumes → LIST of summaries (RES-93)
-      mockFetch.mockResolvedValueOnce(
-        createFetchResponse([{ id: 'resume-1', name: null, layout: 'column2-1' }]),
-      )
-      // Then GET /api/v1/resumes/resume-1 → full tree
+      // RES-102: GET /api/v1/resumes/:id directly — never the list
       mockFetch.mockResolvedValueOnce(
         createFetchResponse({
           id: 'resume-1',
@@ -252,18 +271,18 @@ describe('useResumeData', () => {
       SECTION_TYPES.forEach((t) => store.toggleSection(t))
 
       const { loadResume } = useResumeData()
-      await loadResume()
+      await loadResume('resume-1')
 
-      // RES-93 contract: GET /resumes returns a LIST; loadResume fetches the
-      // list, takes the first id, then GETs the full tree by id.
-      expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:3000/api/v1/resumes',
-        expect.anything(),
-      )
+      // The id-scoped endpoint is called — NOT the list endpoint
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3000/api/v1/resumes/resume-1',
         expect.anything(),
       )
+      expect(mockFetch).not.toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/resumes',
+        expect.anything(),
+      )
+      expect(store.id).toBe('resume-1')
       expect(store.layout).toBe('column2-1')
       // loadFromPayload fills missing sections — the saved one is enabled, rest are disabled
       expect(store.sections).toHaveLength(10)
@@ -281,9 +300,6 @@ describe('useResumeData', () => {
       )
       await auth.login('test@test.com', 'password')
 
-      mockFetch.mockResolvedValueOnce(
-        createFetchResponse([{ id: 'resume-1', name: 'Saved Name', layout: 'standard' }]),
-      )
       // Full tree INCLUDES the name — it must survive the reload
       mockFetch.mockResolvedValueOnce(
         createFetchResponse({
@@ -309,7 +325,7 @@ describe('useResumeData', () => {
 
       const store = useResumeStore()
       const { loadResume } = useResumeData()
-      await loadResume()
+      await loadResume('resume-1')
 
       // The saved name is restored instead of reset to ''
       expect(store.name).toBe('Saved Name')
@@ -331,7 +347,7 @@ describe('useResumeData', () => {
       SECTION_TYPES.forEach((t) => store.toggleSection(t))
 
       const { loadResume } = useResumeData()
-      await loadResume()
+      await loadResume('nonexistent')
 
       // Falls back to defaults
       expect(store.sections).toHaveLength(10)
@@ -339,8 +355,200 @@ describe('useResumeData', () => {
     })
   })
 
+  describe('loadResume (per-resume isolation, RES-102)', () => {
+    it('loads the resume matching the route id — never the first one', async () => {
+      const auth = useAuthStore()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({
+          user: { id: 'user-1', email: 'test@test.com' },
+          sessionToken: 'fake-token',
+        }),
+      )
+      await auth.login('test@test.com', 'password')
+
+      mockFetch.mockClear()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({
+          id: 'resume-2',
+          name: 'Second Resume',
+          layout: 'standard',
+          sections: [
+            {
+              sectionId: 'summary',
+              column: 'right',
+              order: 0,
+              entries: [
+                {
+                  order: 0,
+                  parentId: null,
+                  fields: [{ key: 'text', value: 'Second resume summary', order: 0 }],
+                },
+              ],
+            },
+          ],
+        }),
+      )
+
+      const store = useResumeStore()
+      const { loadResume } = useResumeData()
+      await loadResume('resume-2')
+
+      // Only the id-scoped GET is issued — the list endpoint is never hit
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/resumes/resume-2',
+        expect.anything(),
+      )
+      expect(mockFetch).not.toHaveBeenCalledWith(
+        'http://localhost:3000/api/v1/resumes',
+        expect.anything(),
+      )
+      expect(store.id).toBe('resume-2')
+      expect(store.name).toBe('Second Resume')
+      const summ = store.sections.find((s) => s.sectionType === 'summary')
+      expect(summ!.enabled).toBe(true)
+    })
+
+    it('two resumes never show each other\u2019s data', async () => {
+      const auth = useAuthStore()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({
+          user: { id: 'user-1', email: 'test@test.com' },
+          sessionToken: 'fake-token',
+        }),
+      )
+      await auth.login('test@test.com', 'password')
+
+      mockFetch.mockClear()
+      // Resume A
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({
+          id: 'resume-a',
+          name: 'Resume A',
+          layout: 'standard',
+          sections: [
+            {
+              sectionId: 'summary',
+              column: 'right',
+              order: 0,
+              entries: [
+                {
+                  order: 0,
+                  parentId: null,
+                  fields: [{ key: 'text', value: 'A data', order: 0 }],
+                },
+              ],
+            },
+          ],
+        }),
+      )
+      // Resume B
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({
+          id: 'resume-b',
+          name: 'Resume B',
+          layout: 'column2-1',
+          sections: [
+            {
+              sectionId: 'education',
+              column: 'left',
+              order: 0,
+              entries: [
+                {
+                  order: 0,
+                  parentId: null,
+                  fields: [{ key: 'school', value: 'B school', order: 0 }],
+                },
+              ],
+            },
+          ],
+        }),
+      )
+
+      const store = useResumeStore()
+      const { loadResume } = useResumeData()
+
+      await loadResume('resume-a')
+      expect(store.name).toBe('Resume A')
+      const summaryA = store.sections.find((s) => s.sectionType === 'summary')
+      expect(summaryA!.enabled).toBe(true)
+      expect(store.sections.find((s) => s.sectionType === 'education')!.enabled).toBe(false)
+
+      await loadResume('resume-b')
+      expect(store.name).toBe('Resume B')
+      expect(store.layout).toBe('column2-1')
+      const educationB = store.sections.find((s) => s.sectionType === 'education')
+      expect(educationB!.enabled).toBe(true)
+      expect(store.sections.find((s) => s.sectionType === 'summary')!.enabled).toBe(false)
+      expect(store.id).toBe('resume-b')
+    })
+
+    it('anonymous resumes are isolated per-resume in localStorage', async () => {
+      const auth = useAuthStore()
+      auth.logout()
+
+      const store = useResumeStore()
+      store.initializeDefaults()
+
+      const { saveResume, loadResume } = useResumeData()
+
+      // Save resume A (id anon-A)
+      store.id = 'anon-A'
+      store.name = 'Resume A'
+      await saveResume()
+
+      // Save resume B (id anon-B) — must NOT clobber A
+      store.id = 'anon-B'
+      store.name = 'Resume B'
+      await saveResume()
+
+      expect(localStorage.getItem('resume_data_anon-A')).not.toBeNull()
+      expect(localStorage.getItem('resume_data_anon-B')).not.toBeNull()
+      expect(localStorage.getItem('resume_data_last_id')).toBe('anon-B')
+
+      // Reopen A → A's data, reopen B → B's data
+      await loadResume('anon-A')
+      expect(store.id).toBe('anon-A')
+      expect(store.name).toBe('Resume A')
+
+      await loadResume('anon-B')
+      expect(store.id).toBe('anon-B')
+      expect(store.name).toBe('Resume B')
+    })
+
+    it('/builder (no id) starts fresh — never loads a saved resume', async () => {
+      const auth = useAuthStore()
+      auth.logout()
+
+      // Old shared key AND a per-resume key both exist — neither may be loaded
+      localStorage.setItem(
+        'resume_data',
+        JSON.stringify({
+          layout: 'column2-1',
+          sections: [{ sectionId: 'summary', column: 'right', order: 0, entries: [] }],
+        }),
+      )
+      localStorage.setItem(
+        'resume_data_some-old-id',
+        JSON.stringify({
+          layout: 'column2-1',
+          sections: [{ sectionId: 'summary', column: 'right', order: 0, entries: [] }],
+        }),
+      )
+
+      const store = useResumeStore()
+      const { loadResume } = useResumeData()
+      await loadResume()
+
+      // Fresh defaults — all 10 sections enabled, standard layout
+      expect(store.layout).toBe('standard')
+      expect(store.sections).toHaveLength(10)
+      expect(store.sections.every((s) => s.enabled)).toBe(true)
+      expect(store.name).toBe('')
+    })
+  })
+
   describe('saveResume (authenticated)', () => {
-    it('PUTs to API for authenticated user', async () => {
+    it('PUTs to /api/v1/resumes/:id for authenticated user', async () => {
       const auth = useAuthStore()
       mockFetch.mockResolvedValueOnce(
         createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
@@ -355,17 +563,19 @@ describe('useResumeData', () => {
 
       const store = useResumeStore()
       store.initializeDefaults()
+      store.id = 'resume-1'
 
       const { saveResume } = useResumeData()
       await saveResume()
 
       expect(mockFetch).toHaveBeenCalledTimes(1)
       const call = mockFetch.mock.calls[0]!
-      expect(call[0]).toContain('/api/v1/resumes')
+      // RES-102: the save targets THIS resume by id — never a bare upsert
+      expect(call[0]).toBe('http://localhost:3000/api/v1/resumes/resume-1')
       expect(call[1]!.method).toBe('PUT')
     })
 
-    it('POSTs on 404 (resume not yet created)', async () => {
+    it('POSTs to recreate when PUT 404s (resume deleted server-side)', async () => {
       const auth = useAuthStore()
       mockFetch.mockResolvedValueOnce(
         createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
@@ -374,25 +584,58 @@ describe('useResumeData', () => {
 
       // Reset mock to ignore login API calls
       mockFetch.mockClear()
-      // First call (PUT) fails with 404
+      // First call (PUT /resumes/:id) fails with 404
       mockFetch.mockResolvedValueOnce(
         createFetchResponse({ message: 'Not Found' }, 404),
       )
-      // Second call (POST) succeeds
+      // Second call (POST /resumes) succeeds and returns the new id
       mockFetch.mockResolvedValueOnce(
-        createFetchResponse({ id: 'resume-1', layout: 'standard', sections: [] }),
+        createFetchResponse({ id: 'resume-2', layout: 'standard', sections: [] }),
       )
 
       const store = useResumeStore()
       store.initializeDefaults()
+      store.id = 'resume-1'
 
       const { saveResume } = useResumeData()
       await saveResume()
 
       expect(mockFetch).toHaveBeenCalledTimes(2)
-      // Second call is a POST
+      const putCall = mockFetch.mock.calls[0]!
+      expect(putCall[0]).toBe('http://localhost:3000/api/v1/resumes/resume-1')
+      expect(putCall[1]!.method).toBe('PUT')
+      // Second call is a POST that recreates the resume
       const postCall = mockFetch.mock.calls[1]!
+      expect(postCall[0]).toBe('http://localhost:3000/api/v1/resumes')
       expect(postCall[1]!.method).toBe('POST')
+      // Store adopts the server-assigned id
+      expect(store.id).toBe('resume-2')
+    })
+
+    it('POSTs directly when the resume has no id yet (brand-new resume)', async () => {
+      const auth = useAuthStore()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
+      )
+      await auth.login('test@test.com', 'password')
+
+      mockFetch.mockClear()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ id: 'resume-new', layout: 'standard', sections: [] }),
+      )
+
+      // No initializeDefaults — a brand-new resume has no id yet
+      const store = useResumeStore()
+      expect(store.id).toBeNull()
+
+      const { saveResume } = useResumeData()
+      await saveResume()
+
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+      const call = mockFetch.mock.calls[0]!
+      expect(call[0]).toBe('http://localhost:3000/api/v1/resumes')
+      expect(call[1]!.method).toBe('POST')
+      expect(store.id).toBe('resume-new')
     })
 
     it('clears sessionStorage after successful API save', async () => {
@@ -407,17 +650,18 @@ describe('useResumeData', () => {
         createFetchResponse({ id: 'resume-1', layout: 'standard', sections: [] }),
       )
 
-      // Pre-populate sessionStorage with pending changes
-      sessionStorage.setItem('resume_pending_changes', JSON.stringify({ layout: 'column2-1', sections: [] }))
-
       const store = useResumeStore()
       store.initializeDefaults()
+      store.id = 'resume-1'
+
+      // Pre-populate sessionStorage with pending changes for THIS resume
+      sessionStorage.setItem('resume_pending_changes_resume-1', JSON.stringify({ layout: 'column2-1', sections: [] }))
 
       const { saveResume } = useResumeData()
       await saveResume()
 
-      // After successful save, sessionStorage should be cleared
-      expect(sessionStorage.getItem('resume_pending_changes')).toBeNull()
+      // After successful save, the per-resume sessionStorage key is cleared
+      expect(sessionStorage.getItem('resume_pending_changes_resume-1')).toBeNull()
     })
 
     it('clears dirty flag after successful authenticated save', async () => {
@@ -428,9 +672,20 @@ describe('useResumeData', () => {
       await auth.login('test@test.com', 'password')
 
       mockFetch.mockClear()
-      // Mock: loadResume GET returns empty sections (falls back to defaults)
+      // Mock: loadResume('resume-1') GET returns a resume (falls back cleanly)
       mockFetch.mockResolvedValueOnce(
-        createFetchResponse({ id: 'resume-1', layout: 'standard', sections: [] }),
+        createFetchResponse({
+          id: 'resume-1',
+          layout: 'standard',
+          sections: [
+            {
+              sectionId: 'summary',
+              column: 'right',
+              order: 0,
+              entries: [],
+            },
+          ],
+        }),
       )
 
       const store = useResumeStore()
@@ -438,14 +693,14 @@ describe('useResumeData', () => {
       SECTION_TYPES.forEach((t) => store.toggleSection(t))
 
       const { loadResume, saveResume, dirty } = useResumeData()
-      await loadResume()
+      await loadResume('resume-1')
 
       // Mutate to make dirty
       store.setLayout('column2-1')
       await nextTick()
       expect(dirty.value).toBe(true)
 
-      // Mock: saveResume PUT succeeds
+      // Mock: saveResume PUT /resumes/resume-1 succeeds
       mockFetch.mockClear()
       mockFetch.mockResolvedValueOnce(
         createFetchResponse({ id: 'resume-1', layout: 'standard', sections: [] }),
@@ -464,9 +719,20 @@ describe('useResumeData', () => {
       await auth.login('test@test.com', 'password')
 
       mockFetch.mockClear()
-      // Mock: loadResume GET returns empty sections (falls back to defaults)
+      // Mock: loadResume('resume-1') GET returns a resume
       mockFetch.mockResolvedValueOnce(
-        createFetchResponse({ id: 'resume-1', layout: 'standard', sections: [] }),
+        createFetchResponse({
+          id: 'resume-1',
+          layout: 'standard',
+          sections: [
+            {
+              sectionId: 'summary',
+              column: 'right',
+              order: 0,
+              entries: [],
+            },
+          ],
+        }),
       )
 
       const store = useResumeStore()
@@ -474,19 +740,19 @@ describe('useResumeData', () => {
       SECTION_TYPES.forEach((t) => store.toggleSection(t))
 
       const { loadResume, saveResume, dirty } = useResumeData()
-      await loadResume()
+      await loadResume('resume-1')
 
       store.setLayout('column2-1')
       await nextTick()
       expect(dirty.value).toBe(true)
 
-      // Mocks: PUT returns 404 — triggers POST fallback
+      // Mocks: PUT /resumes/resume-1 returns 404 — triggers POST fallback
       mockFetch.mockClear()
       mockFetch.mockResolvedValueOnce(
         createFetchResponse({ message: 'Not Found' }, 404),
       )
       mockFetch.mockResolvedValueOnce(
-        createFetchResponse({ id: 'resume-1', layout: 'standard', sections: [] }),
+        createFetchResponse({ id: 'resume-2', layout: 'standard', sections: [] }),
       )
 
       // Save (PUT 404 → POST succeeds) should clear dirty
@@ -502,9 +768,20 @@ describe('useResumeData', () => {
       await auth.login('test@test.com', 'password')
 
       mockFetch.mockClear()
-      // Mock: loadResume GET returns empty sections (falls back to defaults)
+      // Mock: loadResume('resume-1') GET returns a resume
       mockFetch.mockResolvedValueOnce(
-        createFetchResponse({ id: 'resume-1', layout: 'standard', sections: [] }),
+        createFetchResponse({
+          id: 'resume-1',
+          layout: 'standard',
+          sections: [
+            {
+              sectionId: 'summary',
+              column: 'right',
+              order: 0,
+              entries: [],
+            },
+          ],
+        }),
       )
 
       const store = useResumeStore()
@@ -512,7 +789,7 @@ describe('useResumeData', () => {
       SECTION_TYPES.forEach((t) => store.toggleSection(t))
 
       const { loadResume, saveResume, dirty } = useResumeData()
-      await loadResume()
+      await loadResume('resume-1')
 
       store.setLayout('column2-1')
       await nextTick()
@@ -537,9 +814,20 @@ describe('useResumeData', () => {
       await auth.login('test@test.com', 'password')
 
       mockFetch.mockClear()
-      // Mock: loadResume GET returns empty sections (falls back to defaults)
+      // Mock: loadResume('resume-1') GET returns a resume
       mockFetch.mockResolvedValueOnce(
-        createFetchResponse({ id: 'resume-1', layout: 'standard', sections: [] }),
+        createFetchResponse({
+          id: 'resume-1',
+          layout: 'standard',
+          sections: [
+            {
+              sectionId: 'summary',
+              column: 'right',
+              order: 0,
+              entries: [],
+            },
+          ],
+        }),
       )
 
       const store = useResumeStore()
@@ -547,7 +835,7 @@ describe('useResumeData', () => {
       SECTION_TYPES.forEach((t) => store.toggleSection(t))
 
       const { loadResume, saveResume, dirty } = useResumeData()
-      await loadResume()
+      await loadResume('resume-1')
       expect(dirty.value).toBe(false)
 
       // Make an edit
@@ -584,13 +872,8 @@ describe('useResumeData', () => {
       )
       await auth.login('test@test.com', 'password')
 
-      // Mock API response for auto-save
+      // Load resume-1 → GET /resumes/resume-1 → 404 → falls back to defaults
       mockFetch.mockClear()
-      mockFetch.mockResolvedValueOnce(
-        createFetchResponse({ id: 'resume-1', layout: 'standard', sections: [] }),
-      )
-
-      // Load resume first (should hit 404 and fall to defaults)
       mockFetch.mockResolvedValueOnce(
         createFetchResponse({ message: 'Not Found' }, 404),
       )
@@ -600,14 +883,16 @@ describe('useResumeData', () => {
       SECTION_TYPES.forEach((t) => store.toggleSection(t))
 
       const { loadResume, setupAutoSave, teardownAutoSave } = useResumeData()
-      await loadResume()
+      await loadResume('resume-1')
       setupAutoSave()
 
       // Mutate the store — sessionStorage should be written immediately
       store.setLayout('column2-1')
       await nextTick()
 
-      const stored = sessionStorage.getItem('resume_pending_changes')
+      // RES-102: the safety net is scoped to THIS resume
+      const key = `resume_pending_changes_${store.id}`
+      const stored = sessionStorage.getItem(key)
       expect(stored).not.toBeNull()
       const parsed = JSON.parse(stored!)
       expect(parsed.layout).toBe('column2-1')
@@ -634,7 +919,7 @@ describe('useResumeData', () => {
       await nextTick()
 
       // sessionStorage should NOT be written for anonymous users
-      expect(sessionStorage.getItem('resume_pending_changes')).toBeNull()
+      expect(sessionStorage.getItem(`resume_pending_changes_${store.id}`)).toBeNull()
 
       teardownAutoSave()
       vi.useRealTimers()
@@ -647,9 +932,10 @@ describe('useResumeData', () => {
       )
       await auth.login('test@test.com', 'password')
 
-      // Pre-populate sessionStorage with pending changes (simulating a refresh before auto-save)
+      // Pre-populate sessionStorage with pending changes for THIS resume
+      // (simulating a refresh before auto-save)
       sessionStorage.setItem(
-        'resume_pending_changes',
+        'resume_pending_changes_resume-1',
         JSON.stringify({
           layout: 'column2-1',
           sections: [
@@ -668,9 +954,10 @@ describe('useResumeData', () => {
       SECTION_TYPES.forEach((t) => store.toggleSection(t))
 
       const { loadResume, dirty } = useResumeData()
-      await loadResume()
+      await loadResume('resume-1')
 
       // Should load from sessionStorage, not from API defaults
+      expect(store.id).toBe('resume-1')
       expect(store.layout).toBe('column2-1')
       // loadFromPayload fills missing sections to 10 — saved one is enabled
       expect(store.sections).toHaveLength(10)
@@ -710,8 +997,9 @@ describe('useResumeData', () => {
       SECTION_TYPES.forEach((t) => store.toggleSection(t))
 
       const { loadResume, dirty } = useResumeData()
-      await loadResume()
+      await loadResume('resume-1')
 
+      expect(store.id).toBe('resume-1')
       expect(store.layout).toBe('standard')
       // loadFromPayload fills missing sections to 10 — saved one is enabled
       expect(store.sections).toHaveLength(10)
@@ -728,7 +1016,7 @@ describe('useResumeData', () => {
       await auth.login('test@test.com', 'password')
 
       // Corrupted sessionStorage — should fall back to API
-      sessionStorage.setItem('resume_pending_changes', 'not-valid-json{{')
+      sessionStorage.setItem('resume_pending_changes_resume-1', 'not-valid-json{{')
 
       mockFetch.mockResolvedValueOnce(
         createFetchResponse({
@@ -750,10 +1038,10 @@ describe('useResumeData', () => {
       SECTION_TYPES.forEach((t) => store.toggleSection(t))
 
       const { loadResume } = useResumeData()
-      await loadResume()
+      await loadResume('resume-1')
 
       // Corrupted data is cleared, falls back to API
-      expect(sessionStorage.getItem('resume_pending_changes')).toBeNull()
+      expect(sessionStorage.getItem('resume_pending_changes_resume-1')).toBeNull()
       // loadFromPayload fills missing sections to 10 — saved one is enabled
       expect(store.sections).toHaveLength(10)
       const nc = store.sections.find((s) => s.sectionType === 'name_contact')
