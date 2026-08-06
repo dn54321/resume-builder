@@ -79,7 +79,7 @@ The current strategy is **{{STRATEGY}}** targeting branch **{{PR_TARGET}}**.
 ## Database & Prisma (read this first)
 
 - **Engine is SQLite for EVERYONE.** The main app may use another engine in
-  production, but agents always get `file:./dev.db` (SQLite) — see
+  production, but agents always get `file:./prisma/db/dev.db` (SQLite) — see
   `backend/.env` in your worktree. Your worktree has its OWN `dev.db` and
   its own `test-e2e.db` — fully isolated, never shared with other workers.
   Any "database is locked" error means ANOTHER PROCESS is using YOUR
