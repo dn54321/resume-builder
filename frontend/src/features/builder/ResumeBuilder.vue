@@ -14,25 +14,6 @@
           Job Description
         </button>
 
-        <div class="relative inline-flex">
-          <button
-            class="px-3 py-1.5 rounded-md text-[0.8125rem] font-[inherit] font-medium cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-primary bg-primary text-primary-foreground hover:not-disabled:bg-primary/90 flex items-center gap-2"
-            :disabled="isTailoring || !store.jdText.trim()"
-            :title="!store.jdText.trim() ? 'Save a job description first' : ''"
-            @click="onTailor"
-            data-testid="toolbar-tailor-btn"
-          >
-            <template v-if="isTailoring">
-              <span
-                class="inline-block w-[14px] h-[14px] border-2 border-white/30 border-t-white rounded-full animate-spin"
-                aria-label="Loading"
-              ></span>
-              <span>Tailoring…</span>
-            </template>
-            <span v-else>Tailor Resume</span>
-          </button>
-        </div>
-
         <button
           v-if="store.isFiltered"
           class="px-3 py-1.5 rounded-md text-[0.8125rem] font-[inherit] font-medium cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-border bg-background text-foreground hover:not-disabled:bg-muted"
@@ -323,13 +304,6 @@ onMounted(async () => {
     selectedSectionId.value = store.sections[0]!.sectionType
   }
 })
-
-/**
- * Trigger tailoring with the current JD text from the store.
- */
-async function onTailor() {
-  await tailorResume(store.jdText)
-}
 
 /**
  * One-step flow from the JD modal (RES-98): the modal emits the trimmed JD,

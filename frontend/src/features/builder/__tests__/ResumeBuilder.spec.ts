@@ -285,37 +285,11 @@ describe('ResumeBuilder', () => {
     )
   })
 
-  it('renders the Tailor Resume button in toolbar', () => {
+  it('does not render a Tailor Resume button in the toolbar (JD modal only)', () => {
     const wrapper = mountBuilder()
-    const tailorBtn = wrapper.find('[data-testid="toolbar-tailor-btn"]')
-    expect(tailorBtn.exists()).toBe(true)
-  })
-
-  it('disables Tailor Resume button when no JD is saved', () => {
-    const store = useResumeStore()
-    store.jdText = ''
-
-    const wrapper = mountBuilder()
-    const tailorBtn = wrapper.find('[data-testid="toolbar-tailor-btn"]')
-    expect(tailorBtn.attributes('disabled')).toBeDefined()
-  })
-
-  it('shows hint title when Tailor button is disabled', () => {
-    const store = useResumeStore()
-    store.jdText = ''
-
-    const wrapper = mountBuilder()
-    const tailorBtn = wrapper.find('[data-testid="toolbar-tailor-btn"]')
-    expect(tailorBtn.attributes('title')).toBe('Save a job description first')
-  })
-
-  it('enables Tailor Resume button when JD is saved', () => {
-    const store = useResumeStore()
-    store.jdText = 'Some JD'
-
-    const wrapper = mountBuilder()
-    const tailorBtn = wrapper.find('[data-testid="toolbar-tailor-btn"]')
-    expect(tailorBtn.attributes('disabled')).toBeUndefined()
+    // The only Tailor Resume entry point is inside the Job Description modal.
+    expect(wrapper.find('[data-testid="toolbar-tailor-btn"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Tailor Resume')
   })
 
   it('opens JdModal when Job Description button is clicked', async () => {
@@ -447,42 +421,6 @@ describe('ResumeBuilder', () => {
     expect(error.exists()).toBe(false)
   })
 
-  it('disables Tailor button when isTailoring is true', async () => {
-    mockIsTailoring.value = true
-    const store = useResumeStore()
-    store.jdText = 'Some JD'
-
-    const wrapper = mountBuilder()
-    await nextTick()
-
-    const tailorBtn = wrapper.find('[data-testid="toolbar-tailor-btn"]')
-    expect(tailorBtn.attributes('disabled')).toBeDefined()
-  })
-
-  it('shows spinner in Tailor button when isTailoring is true', async () => {
-    mockIsTailoring.value = true
-    const store = useResumeStore()
-    store.jdText = 'Some JD'
-
-    const wrapper = mountBuilder()
-    await nextTick()
-
-    const spinner = wrapper.find('span[aria-label="Loading"]')
-    expect(spinner.exists()).toBe(true)
-  })
-
-  it('shows "Tailoring…" label in Tailor button while isTailoring', async () => {
-    mockIsTailoring.value = true
-    const store = useResumeStore()
-    store.jdText = 'Some JD'
-
-    const wrapper = mountBuilder()
-    await nextTick()
-
-    const tailorBtn = wrapper.find('[data-testid="toolbar-tailor-btn"]')
-    expect(tailorBtn.text()).toContain('Tailoring')
-  })
-
   // ─── Tailoring overlay animation (RES-98) ───────────────────────
 
   it('shows the tailoring overlay while isTailoring is true', async () => {
@@ -531,20 +469,6 @@ describe('ResumeBuilder', () => {
     mockIsTailoring.value = false
     await nextTick()
     expect(wrapper.find('[data-testid="tailoring-overlay"]').exists()).toBe(false)
-  })
-
-  it('calls tailorResume when Tailor button is clicked', async () => {
-    mockTailorResume.mockResolvedValue(undefined)
-    const store = useResumeStore()
-    store.jdText = 'React developer'
-
-    const wrapper = mountBuilder()
-    await nextTick()
-
-    const tailorBtn = wrapper.find('[data-testid="toolbar-tailor-btn"]')
-    await tailorBtn.trigger('click')
-
-    expect(mockTailorResume).toHaveBeenCalledWith('React developer')
   })
 
   it('calls resetFilter when Reset Filter button is clicked', async () => {

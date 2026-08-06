@@ -77,9 +77,14 @@ test.describe('Tailor Resume skips locked entries', () => {
     await expect(bullet2Row).not.toHaveClass(/opacity-45/)
 
     // ── 4. Unlock → re-run Tailor → non-matching bullet IS now dimmed ──
+    // The toolbar button is gone (RES-107): re-run tailoring via the JD modal.
     await lockBtn.click()
     await expect(entryPanel.locator('svg.lucide-lock-open')).toBeVisible()
-    await page.locator('[data-testid="toolbar-tailor-btn"]').click()
+    await page.locator('[data-testid="jd-toolbar-btn"]').click()
+    await page
+      .locator('[data-testid="jd-textarea"]')
+      .fill('React developer with TypeScript experience')
+    await page.locator('[data-testid="jd-modal-tailor"]').click()
 
     // Unlocked entry: keyword matching applies as before.
     await expect(bullet1Row).not.toHaveClass(/opacity-45/)

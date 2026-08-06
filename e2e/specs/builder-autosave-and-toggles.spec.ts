@@ -371,10 +371,15 @@ test.describe('Section eye/lock round-trips (RES-91 / RES-92)', () => {
     await expect(bullet1Row).not.toHaveClass(/opacity-45/)
     await expect(bullet2Row).not.toHaveClass(/opacity-45/)
 
-    // Unlock → re-run Tailor → the non-matching bullet IS now dimmed
+    // Unlock → re-run Tailor → the non-matching bullet IS now dimmed.
+    // The toolbar button is gone (RES-107): re-run via the JD modal.
     await lockBtn.click()
     await expect(entryPanel.locator('svg.lucide-lock-open')).toBeVisible()
-    await page.locator('[data-testid="toolbar-tailor-btn"]').click()
+    await page.locator('[data-testid="jd-toolbar-btn"]').click()
+    await page
+      .locator('[data-testid="jd-textarea"]')
+      .fill('React developer with TypeScript experience')
+    await page.locator('[data-testid="jd-modal-tailor"]').click()
     await expect(bullet1Row).not.toHaveClass(/opacity-45/)
     await expect(bullet2Row).toHaveClass(/opacity-45/)
 
