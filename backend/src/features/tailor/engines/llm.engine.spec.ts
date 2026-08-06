@@ -237,6 +237,93 @@ describe('LlmEngine', () => {
     expect(result.sections[1].sectionId).toBe('skills');
   });
 
+  // ── Locked entries (RES-97) ───────────────────────────────
+
+  it('keeps locked entries in an unlocked section even when the LLM would drop them', async () => {
+    // LLM selects only categorized index 0 (the unlocked React bullet).
+    // The locked coffee bullet must survive regardless.
+    mockFetch.mockResolvedValueOnce(
+      makeMockResponse('{"bulletIndices": [0], "skillIndices": []}'),
+    );
+
+    const jd = 'React developer';
+    const entries = [
+      bulletEntry(0, 'Built React apps'),
+      { ...bulletEntry(1, 'Managed coffee supply logistics'), locked: true },
+    ];
+
+    const result = await engine.match(makeRequest(jd, entries));
+
+    // Both entries survive: the selected one + the locked one.
+    expect(result.sections[0].entries).toHaveLength(2);
+    expect(result.sections[0].entries.map((e) => e.fields[0].value)).toEqual([
+      'Built React apps',
+      'Managed coffee supply logistics',
+    ]);
+  });
+
+  it('excludes locked entries from the LLM prompt and never ranks them', async () => {
+    mockFetch.mockResolvedValueOnce(
+      makeMockResponse('{"bulletIndices": [0], "skillIndices": []}'),
+    );
+
+    const jd = 'React developer';
+    const entries = [
+      { ...bulletEntry(0, 'Managed coffee supply logistics'), locked: true },
+      bulletEntry(1, 'Built React apps'),
+    ];
+
+    const result = await engine.match(makeRequest(jd, entries));
+
+    // Prompt numbers only the UNLOCKED bullet (index 0) — the locked entry
+    // is not listed, so the LLM cannot decide its fate.
+    const callArgs = mockFetch.mock.calls[0];
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const requestBody = JSON.parse(callArgs[1]!.body as string);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+    const userContent: string = requestBody.messages[1].content;
+    expect(userContent).not.toContain('Managed coffee supply logistics');
+    expect(userContent).toContain('Built React apps');
+
+    // Locked entry passes through unchanged; unlocked one selected.
+    expect(result.sections[0].entries).toHaveLength(2);
+  });
+
+  it('does not call the LLM when every entry in a section is locked', async () => {
+    const entries = [
+      { ...bulletEntry(0, 'Managed coffee supply'), locked: true },
+      { ...skillEntry(1, 'Coffee'), locked: true },
+    ];
+
+    const result = await engine.match(makeRequest('React developer', entries));
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(result.sections[0].entries).toHaveLength(2);
+  });
+
+  it('preserves original order when locked entries mix with selected ones', async () => {
+    mockFetch.mockResolvedValueOnce(
+      makeMockResponse('{"bulletIndices": [1], "skillIndices": []}'),
+    );
+
+    const jd = 'React developer';
+    const entries = [
+      { ...bulletEntry(0, 'Managed coffee supply'), locked: true },
+      bulletEntry(1, 'Unlocked first bullet'),
+      bulletEntry(2, 'Built React apps'),
+    ];
+
+    const result = await engine.match(makeRequest(jd, entries));
+
+    // categorized = [bullet(1) idx0, bullet(2) idx1]; LLM picks idx1 (React).
+    // Result: locked coffee + React bullet, ordered by `order`.
+    expect(result.sections[0].entries.map((e) => e.order)).toEqual([0, 2]);
+    expect(result.sections[0].entries.map((e) => e.fields[0].value)).toEqual([
+      'Managed coffee supply',
+      'Built React apps',
+    ]);
+  });
+
   // ── Locked sections ────────────────────────────────────────
 
   it('skips locked sections without calling the LLM API', async () => {
