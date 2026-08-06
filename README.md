@@ -211,7 +211,9 @@ needs this before the bootstrap runs.
 
 ```bash
 ssh root@<droplet-ip>
-git clone git@github.com:dn54321/resume-v3.git && cd resume-v3
+# Dir name stays "resume-v3" on purpose — deploy.sh and the deploy workflow
+# expect the checkout at ~/resume-v3.
+git clone git@github.com:dn54321/resume-builder.git resume-v3 && cd resume-v3
 sudo DOMAIN=resumes.example.com EMAIL=you@example.com ./deploy/setup-droplet.sh
 ```
 
