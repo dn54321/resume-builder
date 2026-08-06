@@ -11,7 +11,7 @@ import {
   fetchChildren,
   transitionTicket,
 } from '../integrations/linear/client';
-import { getDefaultBranch, branchName, isBranchMergedTo } from '../git/operations';
+import { getDefaultBranch, branchName, isBranchMergedTo, getRepoRoot } from '../git/operations';
 import { loadState, recoverFromWorktree, getStateDir } from './state';
 import { getConfig } from './config';
 
@@ -115,10 +115,29 @@ export async function buildGraph(
       }
     }
 
-    // Validate existing state: if marked done but worktree is gone, reset
+    // ⚠️ Validate existing 'done' state: a missing worktree does NOT mean
+    // the ticket is unfinished. pruneWorktree() (server.ts) removes the
+    // worktree AFTER a successful merge — done tickets routinely have NO
+    // worktree on disk. Resetting here sent completed tickets back to
+    // 'pending' on every restart, spawning a worker that re-verified the
+    // already-merged branch and no-op completed (observed: RES-87/97/98
+    // re-assigned after every orchestrator restart).
+    // Only reset when the branch is genuinely NOT merged to the target.
     if (ticketState?.status === 'done') {
-      if (!ticketState.worktreePath || !fs.existsSync(ticketState.worktreePath)) {
-        ticketState = undefined;
+      const wt = ticketState.worktreePath;
+      if (!wt || !fs.existsSync(wt)) {
+        const target = config.strategy.branches.direct_push;
+        let merged = false;
+        try {
+          merged = ticketState.branch
+            ? isBranchMergedTo(getRepoRoot(), ticketState.branch, target)
+            : false;
+        } catch { /* best effort — keep 'done' if merge status is unverifiable */ }
+        if (!merged) {
+          ticketState = undefined;
+        }
+        // else: merged work exists on target — keep 'done', worktree
+        // absence is expected post-merge.
       }
     }
 
