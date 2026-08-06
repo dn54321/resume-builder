@@ -380,7 +380,7 @@ describe('DashboardView', () => {
     expect(wrapper.find('[data-testid="dashboard-dblclick-hint"]').exists()).toBe(false)
   })
 
-  it('adds a "Double-click to edit in builder" title tooltip to each card', async () => {
+  it('adds a "Double-tap / double-click to edit in builder" title tooltip to each card', async () => {
     createAuthenticatedStore()
     mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
 
@@ -393,7 +393,7 @@ describe('DashboardView', () => {
     const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
     expect(cards.length).toBeGreaterThan(0)
     for (const card of cards) {
-      expect(card.attributes('title')).toBe('Double-click to edit in builder')
+      expect(card.attributes('title')).toBe('Double-tap / double-click to edit in builder')
     }
   })
 
@@ -901,7 +901,7 @@ describe('DashboardView', () => {
     wrapper.unmount()
   })
 
-  it('opens the builder when a resume card is double-clicked', async () => {
+  it('opens the builder when a resume card is double-tapped/double-clicked', async () => {
     createAuthenticatedStore()
     mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
     const pushSpy = vi.spyOn(router, 'push')
@@ -913,10 +913,36 @@ describe('DashboardView', () => {
     await flushPromises()
 
     const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
-    await cards[0]!.trigger('dblclick')
+    // Two clicks within the 300ms double-tap window → edit in builder.
+    // (Mobile browsers don't fire dblclick on touch; the card detects two
+    // taps manually, so the test simulates the tap sequence.)
+    await cards[0]!.trigger('click')
+    await cards[0]!.trigger('click')
     await flushPromises()
 
     expect(pushSpy).toHaveBeenCalledWith('/builder/resume-1')
+
+    wrapper.unmount()
+  })
+
+  it('selects the preview on a single tap and does NOT open the builder', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockFullResumeStandard))
+    const pushSpy = vi.spyOn(router, 'push')
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    const cards = wrapper.findAll('.resume-card:not(.resume-card--skeleton)')
+    await cards[0]!.trigger('click')
+    await flushPromises()
+
+    expect(pushSpy).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-testid="preview-body"]').exists()).toBe(true)
 
     wrapper.unmount()
   })
