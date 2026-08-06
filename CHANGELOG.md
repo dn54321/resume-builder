@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **Render deployment** — pnpm installed via npm (no corepack runtime
+  download that OOM'd builds), backend binds `0.0.0.0` (Render port
+  detection), frontend nginx listens on `$PORT`, Node heap capped.
+
 ### Added
 - **Multi-engine database support** — the backend works with either
   SQLite (`file:`/`libsql:` URLs, dev/tests) or PostgreSQL
