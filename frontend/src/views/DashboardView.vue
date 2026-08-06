@@ -296,6 +296,26 @@ function handleEditResume(resume: ResumeSummary): void {
   router.push(`/builder/${resume.id}`)
 }
 
+// ── Double-tap / double-click detector ────────────────────────────
+// Mobile browsers do NOT reliably fire `dblclick` on touch (they treat
+// double-tap as zoom/scroll gestures). Detect two taps within 300ms
+// manually: the first tap selects the preview, a second tap inside the
+// window opens the builder. Same behaviour on desktop (two clicks).
+const DOUBLE_TAP_MS = 300
+let lastCardTap: { resumeId: string; at: number } | null = null
+
+function onCardTap(resume: ResumeSummary): void {
+  const now = Date.now()
+  if (lastCardTap && lastCardTap.resumeId === resume.id && now - lastCardTap.at <= DOUBLE_TAP_MS) {
+    // Second tap on the same card within the window → edit in builder
+    lastCardTap = null
+    handleEditResume(resume)
+    return
+  }
+  lastCardTap = { resumeId: resume.id, at: now }
+  selectResume(resume)
+}
+
 /**
  * Select a resume card: fetch the full resume and render its preview in
  * the right pane. Replaces the old navigate-to-builder card click.
@@ -545,9 +565,8 @@ async function handleConfirmDelete(): Promise<void> {
             role="button"
             tabindex="0"
             :aria-pressed="selectedResumeId === resume.id"
-            title="Double-click to edit in builder"
-            @click="selectResume(resume)"
-            @dblclick="handleEditResume(resume)"
+            title="Double-tap / double-click to edit in builder"
+            @click="onCardTap(resume)"
             @keydown.enter="selectResume(resume)"
             @keydown.space.prevent="selectResume(resume)"
           >
@@ -1176,17 +1195,21 @@ html.dark .dashboard-preview-error {
     gap: 0.75rem;
   }
 
-  /* List on top, preview below */
-  .dashboard-list-pane {
-    flex: none;
-    width: 100%;
-    max-height: 45vh;
-  }
-
+  /* Mobile ergonomics: preview on TOP (order-1), resume list on BOTTOM
+     (order-2) — the visualiser is the primary surface; the list is a
+     picker below it. */
   .dashboard-preview-pane {
+    order: 1;
     flex: 1;
     width: 100%;
     min-height: 55vh;
+  }
+
+  .dashboard-list-pane {
+    order: 2;
+    flex: none;
+    width: 100%;
+    max-height: 45vh;
   }
 }
 </style>

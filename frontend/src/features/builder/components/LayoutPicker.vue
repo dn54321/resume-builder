@@ -3,7 +3,7 @@
     <h3 class="text-sm font-semibold uppercase tracking-wider text-muted-foreground m-0 mb-3">Layout</h3>
     <div class="flex gap-3">
       <button
-        class="flex-1 flex flex-col items-center gap-1.5 px-3 py-4 border-2 border-border rounded-lg bg-surface cursor-pointer transition-colors hover:border-primary font-[inherit]"
+        class="flex-1 flex flex-col items-center gap-1.5 px-3 py-4 border-2 border-border rounded-lg bg-surface cursor-pointer transition-colors hover:border-primary font-[inherit] layout-picker__option"
         :class="{ 'border-primary! ring-2 ring-primary/30': modelValue === 'standard' }"
         @click="$emit('update:modelValue', 'standard')"
         aria-label="Standard layout"
@@ -22,7 +22,7 @@
       -->
       <button
         v-if="showTwoColumn"
-        class="flex-1 flex flex-col items-center gap-1.5 px-3 py-4 border-2 border-border rounded-lg bg-surface cursor-pointer transition-colors hover:border-primary font-[inherit]"
+        class="flex-1 flex flex-col items-center gap-1.5 px-3 py-4 border-2 border-border rounded-lg bg-surface cursor-pointer transition-colors hover:border-primary font-[inherit] layout-picker__option"
         :class="{ 'border-primary! ring-2 ring-primary/30': modelValue === 'column2-1' }"
         @click="$emit('update:modelValue', 'column2-1')"
         aria-label="2:1 Column layout"
@@ -55,3 +55,16 @@ defineEmits<{
 </script>
 
 
+
+<style scoped>
+/* Mobile ergonomics: the layout options are barely tappable at their
+   default compact height. Give them a comfortable hit area on small
+   screens so the user can actually select a layout. */
+@media (max-width: 767px) {
+  .layout-picker__option {
+    min-height: 96px;
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+}
+</style>
