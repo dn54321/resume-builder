@@ -16,17 +16,19 @@
 
         <div class="relative inline-flex">
           <button
-            class="px-3 py-1.5 rounded-md text-[0.8125rem] font-[inherit] font-medium cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-primary bg-primary text-primary-foreground hover:not-disabled:bg-primary/90"
+            class="px-3 py-1.5 rounded-md text-[0.8125rem] font-[inherit] font-medium cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-primary bg-primary text-primary-foreground hover:not-disabled:bg-primary/90 flex items-center gap-2"
             :disabled="isTailoring || !store.jdText.trim()"
             :title="!store.jdText.trim() ? 'Save a job description first' : ''"
             @click="onTailor"
             data-testid="toolbar-tailor-btn"
           >
-            <span
-              v-if="isTailoring"
-              class="inline-block w-[14px] h-[14px] border-2 border-white/30 border-t-white rounded-full animate-spin"
-              aria-label="Loading"
-            ></span>
+            <template v-if="isTailoring">
+              <span
+                class="inline-block w-[14px] h-[14px] border-2 border-white/30 border-t-white rounded-full animate-spin"
+                aria-label="Loading"
+              ></span>
+              <span>Tailoring…</span>
+            </template>
             <span v-else>Tailor Resume</span>
           </button>
         </div>
@@ -97,13 +99,11 @@
         <SectionToggles
           :layout="store.layout"
           :enabled-sections="store.enabledSections"
-          :locked-sections="store.lockedSections"
           :ordered-section-types="store.orderedSectionTypes"
           :column-assignments="columnAssignments"
           :selected-section-id="selectedSectionId"
           :show-two-column="showTwoColumn"
           @toggle="store.toggleSection"
-          @toggle-lock="store.toggleLock"
           @set-column="store.setSectionColumn"
           @reorder="store.reorderSections"
           @select="selectedSectionId = $event"
@@ -145,7 +145,41 @@
     </div>
 
     <!-- JD Modal -->
-    <JdModal v-model="jdModalOpen" />
+    <JdModal v-model="jdModalOpen" :tailoring="isTailoring" @tailor="onModalTailor" />
+
+    <!-- Tailoring overlay animation (RES-98) -->
+    <!--
+      While the keyword matching runs, a themed full-screen overlay shows a
+      pulsing ring + shimmer progress bar + “Tailoring your resume…” copy.
+      position:fixed keeps it viewport-anchored regardless of scroll; z-50
+      sits above page content. The JD modal closes before tailoring starts,
+      so the two never stack.
+    -->
+    <div
+      v-if="isTailoring"
+      class="tailoring-overlay fixed inset-0 z-50 flex items-center justify-center bg-background/70 backdrop-blur-sm"
+      role="status"
+      aria-live="polite"
+      data-testid="tailoring-overlay"
+    >
+      <div class="flex flex-col items-center gap-4 rounded-lg border border-border bg-surface px-10 py-8 shadow-xl">
+        <div class="relative flex items-center justify-center size-16">
+          <span class="tailoring-pulse-ring absolute inset-0 rounded-full bg-primary/25"></span>
+          <div class="relative flex items-center justify-center size-12 rounded-full bg-primary text-primary-foreground shadow-md">
+            <Wand2 class="size-6 animate-pulse" />
+          </div>
+        </div>
+        <span class="text-sm font-semibold text-foreground" data-testid="tailoring-label">
+          Tailoring your resume…
+        </span>
+        <div class="tailoring-shimmer relative h-1.5 w-56 overflow-hidden rounded-full bg-muted">
+          <div class="tailoring-shimmer-bar"></div>
+        </div>
+        <span class="text-xs text-muted-foreground text-center">
+          Matching your experience to the job description
+        </span>
+      </div>
+    </div>
 
     <!-- Unsaved Changes Modal -->
     <ConfirmModal
@@ -198,7 +232,7 @@ import LivePreview from '@/features/builder/components/LivePreview.vue'
 import PdfExportButton from '@/features/builder/components/PdfExportButton.vue'
 import ConfirmModal from '@/features/builder/components/ConfirmModal.vue'
 import FullscreenPreview from '@/features/builder/components/FullscreenPreview.vue'
-import { Eye } from '@lucide/vue'
+import { Eye, Wand2 } from '@lucide/vue'
 import { useTailor } from '@/features/builder/composables/useTailor'
 import type { SectionType } from '@/features/builder/types/resume'
 
@@ -295,6 +329,17 @@ onMounted(async () => {
  */
 async function onTailor() {
   await tailorResume(store.jdText)
+}
+
+/**
+ * One-step flow from the JD modal (RES-98): the modal emits the trimmed JD,
+ * we close it and run tailoring here — the single owner of isTailoring so
+ * the overlay animation and eye flips stay in sync.
+ * @param jobDescription
+ */
+async function onModalTailor(jobDescription: string) {
+  jdModalOpen.value = false
+  await tailorResume(jobDescription)
 }
 
 // ─── Autosave indicator state ────────────────────────────────────
@@ -543,6 +588,53 @@ main::-webkit-scrollbar-thumb {
 
 main::-webkit-scrollbar-thumb:hover {
   background: var(--foreground);
+}
+
+/* ── Tailoring overlay animation (RES-98) ─────────────── */
+
+/*
+ * Pulsing ring behind the wand icon — scales out and fades, like an
+ * active radar ping. (Tailwind's built-in animate-ping has the same
+ * effect; the custom class keeps the duration/opacity tuned for the
+ * overlay card.)
+ */
+@keyframes tailoring-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  80%,
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+.tailoring-pulse-ring {
+  animation: tailoring-ping 1.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/*
+ * Shimmer sweep across the progress bar — a skewed gradient highlight
+ * travelling left-to-right on an infinite loop. Gives the “matching is
+ * happening” progress feel without a fake percentage.
+ */
+@keyframes tailoring-shimmer {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(280%);
+  }
+}
+
+.tailoring-shimmer-bar {
+  position: absolute;
+  inset-block: 0;
+  width: 45%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, transparent, var(--color-primary), transparent);
+  animation: tailoring-shimmer 1.1s ease-in-out infinite;
 }
 
 /* ── Responsive breakpoint: stacked layout at ≤1024px ── */

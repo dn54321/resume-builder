@@ -19,7 +19,10 @@ test.describe('Authenticated resume builder', () => {
 
   /**
    * Helper: sign up a fresh user (unique email so runs never collide),
-   * then log in via the UI.
+   * then log in via the UI. Auth is cookie-based (HttpOnly
+   * `session_token`) — there is no localStorage auth token anymore,
+   * so the session cookie set by the login response is all that's
+   * needed for subsequent requests.
    */
   async function signupAndLogin(page: any): Promise<string> {
     const email = `auth-builder-${Date.now()}-${Math.floor(Math.random() * 1e6)}@test.com`

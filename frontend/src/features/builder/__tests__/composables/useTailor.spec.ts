@@ -181,6 +181,111 @@ describe('useTailor', () => {
       expect(exp.locked).toBe(true)
     })
 
+    // ── RES-98: eye-toggle feedback through the full tailor round-trip ──
+
+    /**
+     * Add a top-level entry with N child bullets to a section.
+     * @param store
+     * @param sectionType
+     * @param bulletCount
+     */
+    function addBullets(store: ReturnType<typeof useResumeStore>, sectionType: string, bulletCount: number) {
+      const section = store.sections.find((s) => s.sectionType === sectionType)!
+      const entryId = crypto.randomUUID()
+      section.entries.push({ id: entryId, order: 0, parentId: null, fields: [] })
+      for (let i = 0; i < bulletCount; i++) {
+        section.entries.push({
+          id: crypto.randomUUID(),
+          order: i,
+          parentId: entryId,
+          fields: [{ key: 'text', value: `Bullet ${i}`, order: 0 }],
+        })
+      }
+    }
+
+    it('flips the eye off for sections with no relevant content after tailoring', async () => {
+      const { tailorResume } = useTailor()
+      const store = useResumeStore()
+      store.initializeDefaults()
+      addBullets(store, 'experience', 2)
+      addBullets(store, 'projects', 1)
+
+      const exp = store.sections.find((s) => s.sectionType === 'experience')!
+      const projects = store.sections.find((s) => s.sectionType === 'projects')!
+
+      // JD only matches one experience bullet — projects has no matches.
+      mockApiPost.mockResolvedValue({
+        filteredBulletIndices: {
+          experience: [{ entryOrder: 0, bulletIndices: [0] }],
+          projects: [{ entryOrder: 0, bulletIndices: [] }],
+        },
+        filteredHardSkills: [],
+        filteredSoftSkills: [],
+      })
+
+      await tailorResume('React developer')
+
+      expect(exp.enabled).toBe(true) // relevant → eye on
+      expect(projects.enabled).toBe(false) // irrelevant → eye off
+    })
+
+    it('flips the eye off for skill sections with no relevant skills', async () => {
+      const { tailorResume } = useTailor()
+      const store = useResumeStore()
+      store.initializeDefaults()
+
+      const hard = store.sections.find((s) => s.sectionType === 'hard_skills')!
+      hard.entries.push({
+        id: crypto.randomUUID(),
+        order: 0,
+        parentId: null,
+        fields: [{ key: 'name', value: 'Python', order: 0 }],
+      })
+
+      mockApiPost.mockResolvedValue({
+        filteredBulletIndices: {},
+        filteredHardSkills: [],
+        filteredSoftSkills: [],
+      })
+
+      await tailorResume('React developer')
+
+      expect(hard.enabled).toBe(false)
+    })
+
+    it('resetFilter restores the original eye states after tailoring', async () => {
+      const { tailorResume, resetFilter } = useTailor()
+      const store = useResumeStore()
+      store.initializeDefaults()
+      addBullets(store, 'experience', 1)
+      addBullets(store, 'projects', 1)
+
+      const exp = store.sections.find((s) => s.sectionType === 'experience')!
+      const projects = store.sections.find((s) => s.sectionType === 'projects')!
+
+      // User hid projects before tailoring
+      projects.enabled = false
+
+      mockApiPost.mockResolvedValue({
+        filteredBulletIndices: {
+          experience: [{ entryOrder: 0, bulletIndices: [0] }],
+          projects: [{ entryOrder: 0, bulletIndices: [0] }],
+        },
+        filteredHardSkills: [],
+        filteredSoftSkills: [],
+      })
+
+      await tailorResume('React developer')
+      // Both relevant → both visible after tailoring (projects re-enabled)
+      expect(exp.enabled).toBe(true)
+      expect(projects.enabled).toBe(true)
+
+      resetFilter()
+      // Reset restores the pre-tailor state: projects hidden again
+      expect(projects.enabled).toBe(false)
+      expect(exp.enabled).toBe(true)
+    })
+
     it('keeps locked skill sections fully visible after tailoring', async () => {
       const { tailorResume } = useTailor()
       const store = useResumeStore()

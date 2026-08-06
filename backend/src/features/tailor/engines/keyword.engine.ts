@@ -180,6 +180,13 @@ export class KeywordEngine implements MatchingEngine {
    * ("Showing relevant bullets (max N per entry)"): a bullet with no JD
    * token overlap is hidden when the section is unlocked, and a locked
    * section is skipped entirely — every entry passes through unchanged.
+   *
+   * Locking is honoured at TWO levels (RES-97):
+   *  - Section locked (RES-92): every entry in the section passes through
+   *    unchanged — a fast-path that skips the whole section.
+   *  - Entry locked (RES-97): the individual sub-item passes through
+   *    unchanged even inside an otherwise unlocked section — it is never
+   *    removed or re-ranked, regardless of JD keyword overlap.
    * @param section
    * @param jdTokens
    */
@@ -207,9 +214,14 @@ export class KeywordEngine implements MatchingEngine {
     const scoredBullets: ScoredEntry[] = [];
     const scoredSkills: ScoredEntry[] = [];
     const passThrough: SectionEntryDto[] = [];
+    // Locked sub-items always pass through unfiltered — they are
+    // never removed or re-ranked, even when they score zero against the JD.
+    const lockedPassThrough: SectionEntryDto[] = [];
 
     for (const entry of section.entries) {
-      if (this.isBulletEntry(entry)) {
+      if (entry.locked === true) {
+        lockedPassThrough.push(entry);
+      } else if (this.isBulletEntry(entry)) {
         const text = this.getBulletText(entry) ?? '';
         scoredBullets.push({ entry, score: this.scoreText(text, jdTokens) });
       } else if (this.isSkillEntry(entry)) {
@@ -249,8 +261,16 @@ export class KeywordEngine implements MatchingEngine {
       topBullets.push(...kept);
     }
 
-    // Combine: pass-through + kept bullets + kept skills, sorted by original order
-    const allEntries = [...passThrough, ...topBullets, ...topSkills];
+    // Combine: locked pass-through + pass-through + kept bullets +
+    // kept skills, sorted by original order. Locked sub-items are included
+    // unconditionally — never dropped for zero JD overlap, never counted
+    // against the per-entry/section caps.
+    const allEntries = [
+      ...lockedPassThrough,
+      ...passThrough,
+      ...topBullets,
+      ...topSkills,
+    ];
     allEntries.sort((a, b) => a.order - b.order);
 
     return {

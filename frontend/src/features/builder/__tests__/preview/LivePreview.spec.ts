@@ -134,6 +134,7 @@ describe('LivePreview', () => {
             {
               order: 0,
               parentId: null,
+              locked: false,
               fields: [{ key: 'text', value: 'Test summary', order: 0 }],
             },
           ],

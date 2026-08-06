@@ -99,7 +99,7 @@ describe('SectionToggles', () => {
     expect(items).toHaveLength(10)
   })
 
-  it('shows an eye icon and a lock icon for every section row', () => {
+  it('shows an eye icon for every section row (lock moved to entries in RES-97)', () => {
     const wrapper = mount(SectionToggles, {
       props: {
         layout: 'standard',
@@ -112,7 +112,8 @@ describe('SectionToggles', () => {
     expect(items).toHaveLength(10)
     for (const item of items) {
       expect(item.find('[data-testid="section-eye-toggle"]').exists()).toBe(true)
-      expect(item.find('[data-testid="section-lock-toggle"]').exists()).toBe(true)
+      // Section rows must NOT carry a lock toggle anymore (RES-97).
+      expect(item.find('[data-testid="section-lock-toggle"]').exists()).toBe(false)
     }
   })
 
@@ -191,62 +192,23 @@ describe('SectionToggles', () => {
     expect(wrapper.emitted('toggle')![0]).toEqual(['name_contact' as SectionType])
   })
 
-  // ── Lock toggle (RES-91) ────────────────────────────────────────
+  // ── Lock removed from section rows (RES-97) ────────────────────────
 
-  it('shows LockOpen icon for unlocked sections and Lock icon for locked ones', () => {
-    const locked: SectionType[] = ['summary']
+  it('does not render any lock icons in section rows (lock moved to sub-items)', () => {
     const wrapper = mount(SectionToggles, {
       props: {
         layout: 'standard',
         enabledSections: allEnabled,
-        lockedSections: locked,
         columnAssignments: noAssignments,
       },
     })
 
-    // 1 locked → 1 Lock (closed); 9 unlocked → 9 LockOpen
-    expect(wrapper.findAll('svg.lucide-lock')).toHaveLength(1)
-    expect(wrapper.findAll('svg.lucide-lock-open')).toHaveLength(9)
-
-    const items = wrapper.findAll('li')
-    const summaryItem = items.find((item) =>
-      item.text().includes('Summary'),
-    )!
-    expect(summaryItem.find('svg.lucide-lock').exists()).toBe(true)
-
-    const contactItem = items.find((item) =>
-      item.text().includes('Contact'),
-    )!
-    expect(contactItem.find('svg.lucide-lock-open').exists()).toBe(true)
+    expect(wrapper.findAll('svg.lucide-lock')).toHaveLength(0)
+    expect(wrapper.findAll('svg.lucide-lock-open')).toHaveLength(0)
+    expect(wrapper.findAll('[data-testid="section-lock-toggle"]')).toHaveLength(0)
   })
 
-  it('renders the lock button semi-transparent when the section is locked', () => {
-    const locked: SectionType[] = ['summary']
-    const wrapper = mount(SectionToggles, {
-      props: {
-        layout: 'standard',
-        enabledSections: allEnabled,
-        lockedSections: locked,
-        columnAssignments: noAssignments,
-      },
-    })
-
-    const items = wrapper.findAll('li')
-    const summaryItem = items.find((item) =>
-      item.text().includes('Summary'),
-    )!
-    const lockButton = summaryItem.find('[data-testid="section-lock-toggle"]')
-    expect(lockButton.classes()).toContain('text-muted-foreground/50')
-
-    // Unlocked sections keep the full-opacity lock button
-    const contactItem = items.find((item) =>
-      item.text().includes('Contact'),
-    )!
-    const contactLock = contactItem.find('[data-testid="section-lock-toggle"]')
-    expect(contactLock.classes()).not.toContain('text-muted-foreground/50')
-  })
-
-  it('emits toggleLock when the lock icon is clicked', async () => {
+  it('does not emit toggleLock (no lock button to click)', async () => {
     const wrapper = mount(SectionToggles, {
       props: {
         layout: 'standard',
@@ -255,15 +217,7 @@ describe('SectionToggles', () => {
       },
     })
 
-    const items = wrapper.findAll('li')
-    const contactItem = items.find((item) =>
-      item.text().includes('Contact'),
-    )!
-    const lockButton = contactItem.find('[data-testid="section-lock-toggle"]')
-    await lockButton.trigger('click')
-
-    expect(wrapper.emitted('toggleLock')).toBeTruthy()
-    expect(wrapper.emitted('toggleLock')![0]).toEqual(['name_contact' as SectionType])
+    expect(wrapper.emitted('toggleLock')).toBeUndefined()
   })
 
   it('shows column select only for 2:1 layout with enabled sections (showTwoColumn=true)', () => {

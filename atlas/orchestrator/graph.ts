@@ -270,6 +270,34 @@ export function readyTickets(nodes: Map<string, GraphNode>): GraphNode[] {
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
+/**
+ * True when every CHILD owned by an epic root is done/merged/failed — i.e.
+ * the epic (a product-goal container, never assigned a worker) should be
+ * auto-completed. Only nodes actually parented under the root count:
+ * graphs can also REFERENCE tickets owned by other epics (ref: deps), and
+ * the root node itself is the container, not a work item.
+ */
+export function isEpicComplete(
+  nodes: Map<string, GraphNode>,
+  rootId: string,
+): boolean {
+  let total = 0;
+  let finished = 0;
+  for (const [, node] of nodes) {
+    if (node.ticket.id === rootId) continue;
+    if (node.ticket.parentId !== rootId) continue; // referenced, not owned
+    total++;
+    if (
+      node.state.status === 'done' ||
+      node.state.status === 'merged' ||
+      node.state.status === 'failed'
+    ) {
+      finished++;
+    }
+  }
+  return total > 0 && finished === total;
+}
+
 function hasMeaningfulWorkCheck(worktreePath: string, baseBranch: string): boolean {
   try {
     const cp = require('node:child_process');
