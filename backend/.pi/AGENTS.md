@@ -214,7 +214,7 @@ canonical reference.
 
 Current: **SQLite** via `@prisma/adapter-libsql`. Planned migration to PostgreSQL.
 
-- SQLite file lives at `prisma/dev.db` (git-ignored).
+- SQLite file lives at `prisma/db/dev.db` (git-ignored).
 - Schema: `prisma/schema.prisma`.
 - Client is generated to `src/generated/prisma/` (git-ignored).
 - The `PrismaService` (singleton, extends `PrismaClient`) is provided by `DatabaseModule`.

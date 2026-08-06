@@ -10,7 +10,7 @@ Use this to verify database state in PR "Setup & Verification" and "Proof of Cha
 
 ## Prerequisites
 
-The project uses SQLite via Prisma. The database is at `backend/prisma/dev.db`.
+The project uses SQLite via Prisma. The database is at `backend/prisma/db/dev.db`.
 
 ## How to Query
 
@@ -19,13 +19,13 @@ The project uses SQLite via Prisma. The database is at `backend/prisma/dev.db`.
 ### Option A: sqlite3 CLI with timer (preferred)
 
 ```bash
-sqlite3 backend/prisma/dev.db -column -header ".timer on" "SELECT * FROM <table> LIMIT 20;"
+sqlite3 backend/prisma/db/dev.db -column -header ".timer on" "SELECT * FROM <table> LIMIT 20;"
 ```
 
 Or interactively:
 
 ```bash
-sqlite3 backend/prisma/dev.db
+sqlite3 backend/prisma/db/dev.db
 .timer on
 .mode column
 .headers on
@@ -75,7 +75,7 @@ When including database state in a PR:
 
 **Test:**
 \`\`\`bash
-$ sqlite3 backend/prisma/dev.db -column -header ".timer on" "SELECT id, email, createdAt FROM User;"
+$ sqlite3 backend/prisma/db/dev.db -column -header ".timer on" "SELECT id, email, createdAt FROM User;"
 \`\`\`
 
 **Result:** Verifies that a User row exists with UUID primary key, correct email, and timestamp.

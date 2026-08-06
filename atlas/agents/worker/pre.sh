@@ -81,20 +81,20 @@ else
 fi
 
 # ─── Apply migrations to the worktree DB (SAFE — no snapshot copy) ───
-# ⚠️ DO NOT copy the main repo's backend/dev.db into worktrees. That file is
-# a live runtime DB (a dev snapshot that drifts from migrations and can
-# contain user data); copying it clobbered real data twice (2026-08-06 — the
-# docker volume's dev.db was overwritten by `docker cp`, wiping the user's
-# resumes). The safe path is `prisma migrate deploy`: it applies only the
-# additive migrations in prisma/migrations/, never wiping existing rows.
+# ⚠️ DO NOT copy the main repo's dev.db into worktrees. The only real dev DB
+# is the Docker volume at backend/prisma/db/dev.db (docker-compose maps
+# backend-db:/app/prisma/db). Copying any host .db file over it clobbered
+# real data twice (2026-08-06). The safe path is `prisma migrate deploy`:
+# it applies only the additive migrations in prisma/migrations/, never
+# wiping existing rows.
 #
 # Worktrees need a DB for prisma-schema.spec.ts + backend tests. Create a
-# FRESH one via migrations (idempotent, additive) rather than seeding from
-# the main repo's drifted snapshot.
-BACKEND_DB_DST="${ATLAS_WORKTREE}/backend/prisma/dev.db"
+# FRESH one via migrations (idempotent, additive) at the canonical
+# prisma/db/dev.db path rather than seeding from a drifted snapshot.
+BACKEND_DB_DST="${ATLAS_WORKTREE}/backend/prisma/db/dev.db"
 if [ ! -f "$BACKEND_DB_DST" ] || [ ! -s "$BACKEND_DB_DST" ]; then
   echo "[pre.sh] Applying migrations to fresh worktree DB (no snapshot copy)..."
-  ( cd "${ATLAS_WORKTREE}/backend" && DATABASE_URL="file:./prisma/dev.db" timeout 120 pnpm prisma:migrate ) \
+  ( cd "${ATLAS_WORKTREE}/backend" && DATABASE_URL="file:./prisma/db/dev.db" timeout 120 pnpm prisma:migrate ) \
     && echo "[pre.sh] ✓ worktree DB migrated (prisma migrate deploy)" \
     || echo "[pre.sh] WARNING: prisma migrate deploy failed — DB-backed tests may fail"
 else
@@ -108,7 +108,7 @@ fi
 # dev.db happened to carry them from manual seeding; a fresh migrated DB
 # does not. INSERT OR IGNORE is idempotent and additive — never wipes.
 if [ -f "$BACKEND_DB_DST" ]; then
-  ( cd "${ATLAS_WORKTREE}/backend" && DATABASE_URL="file:./prisma/dev.db" node -e '
+  ( cd "${ATLAS_WORKTREE}/backend" && DATABASE_URL="file:./prisma/db/dev.db" node -e '
     const { DatabaseSync } = require("node:sqlite");
     const db = new DatabaseSync(process.env.DATABASE_URL.replace(/^file:/, ""));
     const cats = [["name_contact","Name & Contact"],["summary","Summary"],["experience","Experience"],["education","Education"],["hard_skills","Hard Skills"],["soft_skills","Soft Skills"],["certifications","Certifications"],["projects","Projects"],["languages","Languages"],["hobbies","Hobbies"],["volunteer","Volunteer"]];

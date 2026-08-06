@@ -41,8 +41,12 @@ services:
       - ./backend/prisma.config.ts:/app/prisma.config.ts:ro
       # Anonymous volume to prevent host node_modules from overwriting container's
       - /app/node_modules
-      # Database persistence (only persist the DB file, not the entire prisma dir)
-      - backend-db:/app/prisma/db
+      # Database: the bind mount of ./backend/prisma above exposes
+      # prisma/db/dev.db DIRECTLY on the host (backend/prisma/db/dev.db) so
+      # the DB file is viewable/editable outside Docker — no named volume
+      # shadowing prisma/db (that hid the file and caused data-loss
+      # confusion: host prisma/db stayed empty while the volume held the
+      # real rows).
     networks:
       - resume-net
     restart: unless-stopped
@@ -87,10 +91,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
-volumes:
-  backend-db:
-    driver: local
 
 networks:
   resume-net:
