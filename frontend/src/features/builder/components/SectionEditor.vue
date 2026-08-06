@@ -114,11 +114,17 @@ function setSectionRef(sectionType: SectionType, el: HTMLElement | null): void {
   sectionRefs[sectionType] = el
 }
 
-// Watch selectedSectionId → smooth-scroll to the corresponding section
+// Watch selectedSectionId → smooth-scroll to the corresponding section.
+// ⚠️ Skip the initial auto-select: on mount the parent auto-selects a
+// section (ResumeBuilder onMounted, selectedSectionId goes null → X).
+// Scrolling then yanks the page down — the builder should open scrolled
+// to the TOP. Only user-driven changes (oldId already set → a click)
+// should scroll into view.
 watch(
   () => props.selectedSectionId,
-  async (newId) => {
+  async (newId, oldId) => {
     if (!newId) return
+    if (oldId == null) return // initial auto-select on mount — no scroll
     await nextTick()
     const el = sectionRefs[newId as SectionType]
     if (el) {

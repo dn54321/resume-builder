@@ -200,14 +200,31 @@ describe('SectionEditor', () => {
   })
 
   describe('scroll-to behavior', () => {
-    it('calls scrollIntoView when selectedSectionId changes to a valid section', async () => {
+    it('does NOT scroll on the initial auto-select (null → section, mount)', async () => {
       const scrollMock = vi.fn<() => void>()
       Element.prototype.scrollIntoView = scrollMock
 
       const wrapper = mountEditor({ selectedSectionId: null })
       await flushPromises()
 
-      // Change selectedSectionId
+      // Initial auto-select on mount (null → experience) must NOT scroll —
+      // the builder should open scrolled to the TOP (regression: the page
+      // yanked down on load).
+      await wrapper.setProps({ selectedSectionId: 'experience' })
+      await flushPromises()
+
+      expect(scrollMock).not.toHaveBeenCalled()
+    })
+
+    it('calls scrollIntoView when a USER changes the section (old → new)', async () => {
+      const scrollMock = vi.fn<() => void>()
+      Element.prototype.scrollIntoView = scrollMock
+
+      const wrapper = mountEditor({ selectedSectionId: 'name_contact' })
+      await flushPromises()
+      scrollMock.mockClear()
+
+      // User click: a defined section → another defined section
       await wrapper.setProps({ selectedSectionId: 'experience' })
       await flushPromises()
 
@@ -233,7 +250,7 @@ describe('SectionEditor', () => {
       expect(scrollMock).not.toHaveBeenCalled()
     })
 
-    it('scrolls to the correct section element', async () => {
+    it('scrolls to the correct section element on a user selection change', async () => {
       const scrollIntoViewCalls: Element[] = []
       const originalScrollIntoView = Element.prototype.scrollIntoView
       Element.prototype.scrollIntoView = function (
@@ -244,10 +261,10 @@ describe('SectionEditor', () => {
         return originalScrollIntoView.call(this, arg)
       }
 
-      const wrapper = mountEditor({ selectedSectionId: null })
+      const wrapper = mountEditor({ selectedSectionId: 'name_contact' })
       await flushPromises()
 
-      // Set to 'certifications' (a section near the end)
+      // User click: name_contact → certifications (a section near the end)
       await wrapper.setProps({ selectedSectionId: 'certifications' })
       await flushPromises()
 
