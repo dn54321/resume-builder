@@ -5,8 +5,9 @@
  *   4. Autosave: edit the resume, watch the Saving…/✓ Saved indicator,
  *      reload, verify the name AND content persisted via the API (RES-90).
  *   5. Section eye/lock: toggling the eye updates the live preview and the
- *      state survives a reload; locking a section persists the flag and
- *      protects it from Tailor keyword matching (RES-91 / RES-92).
+ *      state survives a reload; locking an entry persists the flag and
+ *      protects it from Tailor keyword matching (RES-91 / RES-92; locks
+ *      live on sub-item entries since RES-97).
  *
  * Full stack: browser → frontend → backend → database. Every mutation is
  * verified through the API afterwards and each test uses a unique user.
@@ -19,11 +20,11 @@ const API_BASE = `http://localhost:${BACKEND_PORT}/api/v1`
 
 const PASSWORD = 'TestPass123!'
 
-/** Builder-side row scoping: matches only SectionToggles rows (has the lock button). */
+/** Builder-side row scoping: matches only SectionToggles rows (has the eye button). */
 function sectionRow(page: import('@playwright/test').Page, label: string) {
   return page
     .locator('li')
-    .filter({ has: page.locator('[data-testid="section-lock-toggle"]') })
+    .filter({ has: page.locator('[data-testid="section-eye-toggle"]') })
     .filter({ hasText: label })
 }
 
@@ -327,9 +328,14 @@ test.describe('Section eye/lock round-trips (RES-91 / RES-92)', () => {
     const bullet1Row = bullet1.locator('xpath=..')
     const bullet2Row = bullet2.locator('xpath=..')
 
-    // Lock the Experience section
-    await expRow.locator('[data-testid="section-lock-toggle"]').click()
-    await expect(expRow.locator('svg.lucide-lock')).toBeVisible()
+    // Lock the JOB ENTRY (RES-97: Tailor-protect locks live on sub-items,
+    // not section rows) — the Experience editor's first entry panel holds
+    // the lock toggle.
+    const entryPanel = page.locator('[data-entry-panel]').first()
+    const lockBtn = entryPanel.locator('[data-testid="entry-lock-toggle"]')
+    await expect(lockBtn).toBeVisible()
+    await lockBtn.click()
+    await expect(entryPanel.locator('svg.lucide-lock')).toBeVisible()
 
     // Wait for the autosave, then verify the lock persisted via the API
     await expect(
@@ -343,29 +349,31 @@ test.describe('Section eye/lock round-trips (RES-91 / RES-92)', () => {
     const expSection = fullBody.sections.find(
       (s: { sectionId: string }) => s.sectionId === 'experience',
     )
-    expect(expSection.locked).toBe(true)
+    const jobEntry = expSection.entries.find(
+      (e: { parentId: string | null }) => e.parentId === null,
+    )
+    expect(jobEntry.locked).toBe(true)
 
-    // Save a JD and run Tailor Resume
+    // Save a JD and run Tailor Resume — one step from the modal (RES-98)
     await page.locator('[data-testid="jd-toolbar-btn"]').click()
     await page
       .locator('[data-testid="jd-textarea"]')
       .fill('React developer with TypeScript experience')
-    await page.locator('[data-testid="jd-modal-save"]').click()
-    await page.locator('[data-testid="toolbar-tailor-btn"]').click()
+    await page.locator('[data-testid="jd-modal-tailor"]').click()
 
     // Filtering became active…
     await expect(
       page.locator('[data-testid="filtered-badge"]'),
     ).toBeVisible({ timeout: 15_000 })
 
-    // …but the LOCKED section is untouched: even the non-matching bullet
+    // …but the LOCKED entry is untouched: even the non-matching bullet
     // stays fully visible (no dimming).
     await expect(bullet1Row).not.toHaveClass(/opacity-45/)
     await expect(bullet2Row).not.toHaveClass(/opacity-45/)
 
     // Unlock → re-run Tailor → the non-matching bullet IS now dimmed
-    await expRow.locator('[data-testid="section-lock-toggle"]').click()
-    await expect(expRow.locator('svg.lucide-lock-open')).toBeVisible()
+    await lockBtn.click()
+    await expect(entryPanel.locator('svg.lucide-lock-open')).toBeVisible()
     await page.locator('[data-testid="toolbar-tailor-btn"]').click()
     await expect(bullet1Row).not.toHaveClass(/opacity-45/)
     await expect(bullet2Row).toHaveClass(/opacity-45/)
@@ -381,7 +389,10 @@ test.describe('Section eye/lock round-trips (RES-91 / RES-92)', () => {
       const expAfter = fullAfterBody.sections.find(
         (s: { sectionId: string }) => s.sectionId === 'experience',
       )
-      expect(expAfter.locked).toBe(false)
+      const jobAfter = expAfter.entries.find(
+        (e: { parentId: string | null }) => e.parentId === null,
+      )
+      expect(jobAfter.locked).toBe(false)
     }).toPass({ timeout: 15_000 })
   })
 })
