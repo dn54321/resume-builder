@@ -33,7 +33,8 @@ const router = createRouter({
   routes: [
     { path: '/login', name: 'login', component: { template: '<div>Login</div>' } },
     { path: '/dashboard', name: 'dashboard', component: DashboardView },
-    { path: '/builder/:id', name: 'builder', component: { template: '<div>Builder</div>' } },
+    { path: '/builder', name: 'builder', component: { template: '<div>Builder</div>' } },
+    { path: '/builder/:id', name: 'builder-edit', component: { template: '<div>Builder</div>' } },
   ],
 })
 
@@ -1276,14 +1277,10 @@ describe('DashboardView', () => {
 
   // ── Create Resume Flow ─────────────────────────────────────
 
-  it('creates resume and navigates to builder on success', async () => {
+  it('navigates to /builder without creating a DB record (RES-103)', async () => {
     createAuthenticatedStore()
-    // First call: fetch resumes (empty list)
+    // Only the resumes fetch fires — NO create POST.
     mockFetch.mockResolvedValueOnce(mockJsonResponse([]))
-    // Second call: create resume
-    mockFetch.mockResolvedValueOnce(
-      mockJsonResponse({ id: 'new-resume-id' }, 201),
-    )
 
     const pushSpy = vi.spyOn(router, 'push')
 
@@ -1300,66 +1297,19 @@ describe('DashboardView', () => {
     await emptyStateBtn.trigger('click')
     await flushPromises()
 
-    // Verify POST was called with sections: []
-    expect(mockFetch).toHaveBeenCalledWith(
-      'http://localhost:3000/api/v1/resumes',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ sections: [] }),
-      }),
+    // Navigates to the fresh builder — no uuid, no backend POST
+    expect(pushSpy).toHaveBeenCalledWith('/builder')
+    const postCalls = mockFetch.mock.calls.filter(
+      ([url, init]) =>
+        String(url).includes('/api/v1/resumes') &&
+        (init as RequestInit | undefined)?.method === 'POST',
     )
-
-    expect(pushSpy).toHaveBeenCalledWith('/builder/new-resume-id')
+    expect(postCalls).toHaveLength(0)
   })
 
-  it('shows error when create resume fails', async () => {
-    createAuthenticatedStore()
-    // First call: fetch resumes (empty list)
-    mockFetch.mockResolvedValueOnce(mockJsonResponse([]))
-    // Second call: create fails
-    mockFetch.mockResolvedValueOnce(
-      mockJsonResponse({ message: 'Failed to create resume' }, 500),
-    )
-
-    const wrapper = mount(DashboardView, {
-      global: { plugins: [router] },
-    })
-
-    await flushPromises()
-
-    const emptyStateBtn = wrapper.find('.empty-state-card .btn-primary')
-    await emptyStateBtn.trigger('click')
-    await flushPromises()
-
-    expect(wrapper.find('[role="alert"]').exists()).toBe(true)
-    expect(wrapper.find('[role="alert"]').text()).toBe('Failed to create resume')
-  })
-
-  it('shows generic error when create throws non-API error', async () => {
-    createAuthenticatedStore()
-    mockFetch.mockResolvedValueOnce(mockJsonResponse([]))
-    mockFetch.mockRejectedValueOnce(new Error('Network error'))
-
-    const wrapper = mount(DashboardView, {
-      global: { plugins: [router] },
-    })
-
-    await flushPromises()
-
-    const emptyStateBtn = wrapper.find('.empty-state-card .btn-primary')
-    await emptyStateBtn.trigger('click')
-    await flushPromises()
-
-    expect(wrapper.find('[role="alert"]').exists()).toBe(true)
-    expect(wrapper.find('[role="alert"]').text()).toBe('Something went wrong')
-  })
-
-  it('creates resume from header button and navigates to builder', async () => {
+  it('navigates to /builder from the header button without creating a row (RES-103)', async () => {
     createAuthenticatedStore()
     mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
-    mockFetch.mockResolvedValueOnce(
-      mockJsonResponse({ id: 'new-resume-id-2' }, 201),
-    )
 
     const pushSpy = vi.spyOn(router, 'push')
 
@@ -1376,7 +1326,13 @@ describe('DashboardView', () => {
     await headerBtn.trigger('click')
     await flushPromises()
 
-    expect(pushSpy).toHaveBeenCalledWith('/builder/new-resume-id-2')
+    expect(pushSpy).toHaveBeenCalledWith('/builder')
+    const postCalls = mockFetch.mock.calls.filter(
+      ([url, init]) =>
+        String(url).includes('/api/v1/resumes') &&
+        (init as RequestInit | undefined)?.method === 'POST',
+    )
+    expect(postCalls).toHaveLength(0)
   })
 
   // ── Dark Mode / Theme ─────────────────────────────────────

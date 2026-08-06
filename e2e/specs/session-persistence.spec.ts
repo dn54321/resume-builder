@@ -76,7 +76,7 @@ test.describe('Session persistence', () => {
       .getByRole('button', { name: 'Create New Resume' })
       .first()
       .click()
-    await page.waitForURL('**/builder/**', { timeout: 15_000 })
+    await page.waitForURL('**/builder', { timeout: 15_000 })
 
     // 4. Verify still authenticated on builder
     await expect(page.locator('header button svg.lucide-user')).toBeVisible()

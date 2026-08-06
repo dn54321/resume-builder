@@ -2,7 +2,7 @@
  * Dashboard + resume-management core flows — RES-83.
  *
  * Covers the milestone's dashboard-critical paths end to end:
- *   1. Homepage "Create New Resume" → /builder/:id (RES-80)
+ *   1. Homepage "Create New Resume" → /builder (RES-103 deferred-create)
  *   2. Two-pane dashboard with live preview (RES-87)
  *   3. Resume card actions — rename / duplicate / delete via the ⋮
  *      dropdown (RES-89 / RES-84), including error states
@@ -128,7 +128,7 @@ test.describe('Homepage → Create Resume (RES-80)', () => {
     expect(res.status()).toBe(201)
   })
 
-  test('authenticated homepage "Create New Resume" navigates to /builder/:id and persists the resume', async ({
+  test('authenticated homepage "Create New Resume" opens a fresh /builder and only persists after the first edit', async ({
     page,
   }) => {
     // Login via the UI (sets the session cookie in the browser context)
@@ -144,21 +144,35 @@ test.describe('Homepage → Create Resume (RES-80)', () => {
       page.locator('[data-testid="create-resume-button"]'),
     ).toBeVisible({ timeout: 10_000 })
 
-    // Click "Create New Resume" → must navigate straight into the builder
+    // Click "Create New Resume" → navigates to the fresh builder at /builder
+    // (RES-103 deferred-create: no uuid, NO backend POST yet)
     await page.locator('[data-testid="create-resume-button"]').click()
-    await page.waitForURL('**/builder/**', { timeout: 15_000 })
+    await page.waitForURL('**/builder', { timeout: 15_000 })
 
     // Builder actually loaded (resume name input present)
     await expect(
       page.locator('input[aria-label="Resume name"]'),
     ).toBeVisible({ timeout: 10_000 })
 
-    // Database state: exactly one resume was created for this user
+    // Database state: NO resume was created on navigation (deferred create)
     const list = await page.request.get(`${API_BASE}/resumes`)
     expect(list.status()).toBe(200)
     const resumes = await list.json()
-    expect(resumes).toHaveLength(1)
-    expect(resumes[0]!.name).toBeNull() // fresh resume has no name yet
+    expect(resumes).toHaveLength(0)
+
+    // First edit (name blur commits + autosaves) → POST creates the row and
+    // the URL gains the uuid
+    const nameInput = page.locator('input[aria-label="Resume name"]')
+    await nameInput.fill('Deferred Create Resume')
+    await nameInput.blur()
+    await page.waitForURL('**/builder/**', { timeout: 15_000 })
+
+    // Database state: exactly one resume was created, carrying the name
+    const listAfter = await page.request.get(`${API_BASE}/resumes`)
+    expect(listAfter.status()).toBe(200)
+    const resumesAfter = await listAfter.json()
+    expect(resumesAfter).toHaveLength(1)
+    expect(resumesAfter[0]!.name).toBe('Deferred Create Resume')
   })
 })
 

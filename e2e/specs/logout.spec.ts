@@ -75,7 +75,7 @@ test.describe('Logout', () => {
       .getByRole('button', { name: 'Create New Resume' })
       .first()
       .click()
-    await page.waitForURL('**/builder/**', { timeout: 15_000 })
+    await page.waitForURL('**/builder', { timeout: 15_000 })
     await expect(page.locator('input[aria-label="Resume name"]')).toBeVisible()
 
     // 3. Logout from builder — scope to the App navbar (role=banner): the

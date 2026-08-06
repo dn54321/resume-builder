@@ -129,27 +129,30 @@ test.describe('Builder autosave (RES-90)', () => {
     await page.click('button[type="submit"]')
     await page.waitForURL('**/dashboard', { timeout: 15_000 })
     await page.getByRole('button', { name: 'Create New Resume' }).first().click()
-    await page.waitForURL('**/builder/**', { timeout: 15_000 })
+    await page.waitForURL('**/builder', { timeout: 15_000 })
 
     const nameInput = page.locator('input[aria-label="Resume name"]')
     await expect(nameInput).toBeVisible({ timeout: 10_000 })
 
-    // Slow the autosave PUT so the "Saving…" indicator is deterministically
-    // visible while the request is in flight (locally the PUT finishes in
-    // <100ms — too fast for the indicator to be reliably caught).
-    await page.route('**/api/v1/resumes', async (route) => {
+    // Slow the autosave PUT (RES-103: updates go to /resumes/:id, creations
+    // to /resumes) so the "Saving…" indicator is deterministically visible
+    // while the request is in flight (locally the PUT finishes in <100ms —
+    // too fast for the indicator to be reliably caught).
+    await page.route('**/api/v1/resumes**', async (route) => {
       if (route.request().method() === 'PUT') {
         await new Promise((resolve) => setTimeout(resolve, 1200))
       }
       await route.continue()
     })
 
-    // 1. Set the resume name — blur commits it and saves immediately
+    // 1. Set the resume name — blur commits it and saves immediately.
+    //    First edit POSTs → URL gains the uuid.
     await nameInput.fill('Autosave Resume')
     await nameInput.blur()
     await expect(
       page.locator('[data-testid="toolbar-saved-msg"]'),
     ).toBeVisible({ timeout: 10_000 })
+    await page.waitForURL('**/builder/**', { timeout: 15_000 })
 
     // 2. Edit the Summary section — this goes through the debounced autosave
     const summaryRow = sectionRow(page, 'Summary')
@@ -230,7 +233,7 @@ test.describe('Section eye/lock round-trips (RES-91 / RES-92)', () => {
     await page.click('button[type="submit"]')
     await page.waitForURL('**/dashboard', { timeout: 15_000 })
     await page.getByRole('button', { name: 'Create New Resume' }).first().click()
-    await page.waitForURL('**/builder/**', { timeout: 15_000 })
+    await page.waitForURL('**/builder', { timeout: 15_000 })
 
     // Add content to the Summary section so it renders in the preview
     const summaryRow = sectionRow(page, 'Summary')
@@ -301,9 +304,12 @@ test.describe('Section eye/lock round-trips (RES-91 / RES-92)', () => {
       data: makeTailorResumePayload(),
     })
     expect(seedRes.status()).toBe(201)
+    const seededBody = await seedRes.json()
+    const seededId = seededBody.id
 
-    // Open the builder — it loads the seeded resume
-    await page.goto('/builder')
+    // Open the builder for THAT resume — RES-103: /builder (no id) starts
+    // fresh, so editing an existing resume must go to /builder/:id.
+    await page.goto(`/builder/${seededId}`)
     await page.waitForSelector('text=Name & Contact', { timeout: 10_000 })
 
     // Select Experience and confirm both bullets are loaded. Entry panels
@@ -429,9 +435,9 @@ test.describe('Mobile fullscreen FAB (RES-81)', () => {
       .getByRole('button', { name: 'Create New Resume' })
       .first()
       .click()
-    await page.waitForURL(/\/builder\/[0-9a-f-]{36}/, { timeout: 15_000 })
+    await page.waitForURL('**/builder', { timeout: 15_000 })
 
-    // FAB is visible once the resume has loaded (sections populated).
+    // FAB is visible on mobile once the fresh builder has populated sections.
     const fab = page.getByTestId('fullscreen-fab')
     await expect(fab).toBeVisible({ timeout: 10_000 })
 

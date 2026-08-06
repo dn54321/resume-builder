@@ -10,19 +10,6 @@ const mockFetch = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promis
 globalThis.fetch = mockFetch
 
 /**
- * @param data
- * @param status
- */
-function mockJsonResponse(data: unknown, status = 200): Response {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: () => Promise.resolve(data),
-    text: () => Promise.resolve(JSON.stringify(data)),
-  } as Response
-}
-
-/**
  * Create a router with all routes referenced by HomeView.
  */
 function createTestRouter(): Router {
@@ -33,6 +20,7 @@ function createTestRouter(): Router {
       { path: '/signup', name: 'signup', component: { template: '<div>Signup</div>' } },
       { path: '/login', name: 'login', component: { template: '<div>Login</div>' } },
       { path: '/dashboard', name: 'dashboard', component: { template: '<div>Dashboard</div>' } },
+      { path: '/builder', name: 'builder', component: { template: '<div>Builder</div>' } },
       { path: '/builder/:id', name: 'builder-edit', component: { template: '<div>Builder</div>' } },
     ],
   })
@@ -161,127 +149,26 @@ describe('HomeView', () => {
     expect(loginButton).toBeUndefined()
   })
 
-  // ── Create New Resume flow ────────────────────────────────
+  // ── Create New Resume flow (RES-103 deferred-create) ───────
 
-  it('POSTs { sections: [] } to /api/v1/resumes when clicking "Create New Resume"', async () => {
+  it('navigates to /builder without creating a DB record when clicking "Create New Resume"', async () => {
     const { wrapper } = mountHome({ authenticated: true })
-    mockFetch.mockResolvedValueOnce(mockJsonResponse({ id: 'resume-42' }))
 
     await findCreateButton(wrapper).trigger('click')
     await flushPromises()
 
-    expect(mockFetch).toHaveBeenCalledTimes(1)
-    expect(mockFetch).toHaveBeenCalledWith(
-      'http://localhost:3000/api/v1/resumes',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ sections: [] }),
-        credentials: 'include',
-      }),
-    )
+    // No backend POST — the resume row is created on the FIRST edit inside
+    // the builder (the builder's autosave POSTs and replaces the URL).
+    expect(mockFetch).not.toHaveBeenCalled()
   })
 
-  it('navigates to /builder/:id on success', async () => {
+  it('navigates to /builder (no uuid) on click', async () => {
     const { wrapper, router } = mountHome({ authenticated: true })
-    mockFetch.mockResolvedValueOnce(mockJsonResponse({ id: 'resume-42' }))
 
     await findCreateButton(wrapper).trigger('click')
     await flushPromises()
 
-    expect(router.currentRoute.value.path).toBe('/builder/resume-42')
-  })
-
-  it('shows loading state on the button while the request is in flight', async () => {
-    const { wrapper } = mountHome({ authenticated: true })
-
-    let resolveFetch!: (value: Response) => void
-    mockFetch.mockImplementationOnce(
-      () =>
-        new Promise<Response>((resolve) => {
-          resolveFetch = resolve
-        }),
-    )
-
-    const createBtn = findCreateButton(wrapper)
-    await createBtn.trigger('click')
-
-    // While pending: button is disabled and shows "Creating…"
-    expect(createBtn.text()).toContain('Creating…')
-    expect(createBtn.attributes('disabled')).toBeDefined()
-
-    resolveFetch(mockJsonResponse({ id: 'resume-43' }))
-    await flushPromises()
-
-    // After completion the button returns to normal (navigation replaces view)
-    expect(mockFetch).toHaveBeenCalledTimes(1)
-  })
-
-  it('shows API error inline and stays on the page on failure', async () => {
-    const { wrapper, router } = mountHome({ authenticated: true })
-    mockFetch.mockResolvedValueOnce(
-      mockJsonResponse({ message: 'Failed to create resume' }, 500),
-    )
-
-    await findCreateButton(wrapper).trigger('click')
-    await flushPromises()
-
-    const alert = wrapper.find('[role="alert"]')
-    expect(alert.exists()).toBe(true)
-    expect(alert.text()).toContain('Failed to create resume')
-    // Stays on the homepage
-    expect(router.currentRoute.value.path).toBe('/')
-  })
-
-  it('clears a previous error before retrying', async () => {
-    const { wrapper } = mountHome({ authenticated: true })
-    // First attempt fails
-    mockFetch.mockResolvedValueOnce(mockJsonResponse({ message: 'boom' }, 500))
-    // Second attempt succeeds
-    mockFetch.mockResolvedValueOnce(mockJsonResponse({ id: 'resume-44' }))
-
-    const createBtn = findCreateButton(wrapper)
-    await createBtn.trigger('click')
-    await flushPromises()
-    expect(wrapper.find('[role="alert"]').text()).toContain('boom')
-
-    await createBtn.trigger('click')
-    await flushPromises()
-    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
-    expect(mockFetch).toHaveBeenCalledTimes(2)
-  })
-
-  it('ignores clicks while a create request is already in flight', async () => {
-    const { wrapper } = mountHome({ authenticated: true })
-
-    let resolveFetch!: (value: Response) => void
-    mockFetch.mockImplementationOnce(
-      () =>
-        new Promise<Response>((resolve) => {
-          resolveFetch = resolve
-        }),
-    )
-
-    const createBtn = findCreateButton(wrapper)
-    await createBtn.trigger('click')
-    // Click again while pending — must be a no-op
-    await createBtn.trigger('click')
-
-    expect(mockFetch).toHaveBeenCalledTimes(1)
-
-    resolveFetch(mockJsonResponse({ id: 'resume-45' }))
-    await flushPromises()
-  })
-
-  it('shows a generic message when the request fails with a non-API error', async () => {
-    const { wrapper } = mountHome({ authenticated: true })
-    mockFetch.mockRejectedValueOnce(new Error('network down'))
-
-    await findCreateButton(wrapper).trigger('click')
-    await flushPromises()
-
-    const alert = wrapper.find('[role="alert"]')
-    expect(alert.exists()).toBe(true)
-    expect(alert.text()).toContain('Something went wrong')
+    expect(router.currentRoute.value.path).toBe('/builder')
   })
 
   // ── Feature Grid ──────────────────────────────────────────

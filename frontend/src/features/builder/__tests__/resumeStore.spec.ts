@@ -9,12 +9,13 @@ describe('useResumeStore', () => {
   })
 
   describe('initializeDefaults', () => {
-    it('sets id, layout, name to empty, and all 10 sections with defaults', () => {
+    it('sets id to null (deferred create), empty name, and all 10 sections with defaults', () => {
       const store = useResumeStore()
       store.initializeDefaults()
 
-      expect(store.id).toBeTruthy()
-      expect(typeof store.id).toBe('string')
+      // RES-103: a fresh builder has NO server id — the resume row is only
+      // created on the first edit's autosave (POST assigns the real id).
+      expect(store.id).toBeNull()
       expect(store.name).toBe('')
       expect(store.layout).toBe('standard')
       expect(store.sections).toHaveLength(10)
@@ -34,14 +35,16 @@ describe('useResumeStore', () => {
       }
     })
 
-    it('generates unique IDs across calls', () => {
+    it('always starts fresh with no server id across calls', () => {
       const store1 = useResumeStore()
       store1.initializeDefaults()
       setActivePinia(createPinia())
       const store2 = useResumeStore()
       store2.initializeDefaults()
 
-      expect(store1.id).not.toBe(store2.id)
+      // Deferred create: no server id is claimed until the first save POSTs.
+      expect(store1.id).toBeNull()
+      expect(store2.id).toBeNull()
     })
   })
 

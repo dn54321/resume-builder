@@ -48,29 +48,33 @@ test.describe('Authenticated resume builder', () => {
 
     // 2. Create a new resume — the dashboard renders TWO 'Create New Resume'
     //    buttons (header + empty state), so use .first() to avoid a strict-
-    //    mode violation.
+    //    mode violation. RES-103 deferred-create: this navigates to /builder
+    //    (no uuid) and creates NO row until the first edit.
     await page
       .getByRole('button', { name: 'Create New Resume' })
       .first()
       .click()
 
-    // 3. Verify redirected to builder with an ID
-    await page.waitForURL('**/builder/**', { timeout: 15_000 })
+    // 3. Fresh builder at /builder (no id yet)
+    await page.waitForURL('**/builder', { timeout: 15_000 })
 
     // 4. Set resume name
     const nameInput = page.locator('input[aria-label="Resume name"]')
     await nameInput.fill('My Test Resume')
 
     // 5. Blur the input — the name commits to the store on blur and the
-    //    autosave (the sole save mechanism now) persists it immediately
+    //    autosave (the sole save mechanism now) persists it immediately.
+    //    The FIRST edit POSTs, claims the uuid, and replaces the URL with
+    //    /builder/:id.
     await nameInput.blur()
 
-    // 6. Wait for "Saved" confirmation
+    // 6. Wait for "Saved" confirmation AND the uuid to appear in the URL
     await expect(page.locator('[data-testid="toolbar-saved-msg"]')).toBeVisible({
       timeout: 10_000,
     })
+    await page.waitForURL('**/builder/**', { timeout: 15_000 })
 
-    // 7. Reload page
+    // 7. Reload page — refresh on /builder/:id must load that resume
     await page.reload()
     await page.waitForURL('**/builder/**')
 
@@ -101,11 +105,12 @@ test.describe('Authenticated resume builder', () => {
 
     // Create a resume first — dashboard renders two 'Create New Resume'
     // buttons (header + empty state); .first() avoids strict-mode violation.
+    // RES-103: click → /builder (no row yet), first edit POSTs + gains uuid.
     await page
       .getByRole('button', { name: 'Create New Resume' })
       .first()
       .click()
-    await page.waitForURL('**/builder/**', { timeout: 15_000 })
+    await page.waitForURL('**/builder', { timeout: 15_000 })
 
     const nameInput = page.locator('input[aria-label="Resume name"]')
     await nameInput.fill('Dashboard Test Resume')
@@ -114,6 +119,7 @@ test.describe('Authenticated resume builder', () => {
     await expect(
       page.locator('[data-testid="toolbar-saved-msg"]'),
     ).toBeVisible({ timeout: 10_000 })
+    await page.waitForURL('**/builder/**', { timeout: 15_000 })
 
     // Go back to dashboard
     await page.goto('/dashboard')

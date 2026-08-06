@@ -1,35 +1,29 @@
 /*
- * ⚠️ RES-102 — per-resume data isolation (previously RES-90/RES-93 warning).
+ * RES-103 deferred-create — this composable now owns the "don't save until
+ * first edit" contract:
  *
- * The old contract loaded the FIRST resume for every /builder/:id (GET
- * /api/v1/resumes → list[0]) and anonymous users shared ONE localStorage
- * blob — so every resume showed the same data. RES-102 fixed it:
+ *   - `/builder` (no uuid) starts FRESH: `store.id` is null, no GET, no DB
+ *     row. The first edit's autosave POSTs /resumes, claims the returned id,
+ *     and replaces the URL with /builder/:id.
+ *   - `/builder/:id` loads THAT resume via GET /resumes/:id (the old code
+ *     loaded the FIRST resume from the list, ignoring the route id — that
+ *     made "Create New Resume" pointless and was fixed here).
+ *   - Saves go to PUT /resumes/:id now that the id is known (RES-93 added
+ *     the endpoint). A PUT 404 (row deleted elsewhere) recreates via POST.
  *
- *   1. loadResume(id) GETs /api/v1/resumes/:id (the route param), never the
- *      list, and sets store.id from the route.
- *   2. saveResume() is id-scoped: PUT /api/v1/resumes/:id (404 → POST to
- *      recreate), or POST when the resume is brand new. The old PUT
- *      /api/v1/resumes (no id) upsert route silently updated the user's
- *      FIRST resume — that is exactly the cross-resume clobbering this
- *      ticket kills.
- *   3. Anonymous storage is keyed per resume: resume_data_<id>, plus a
- *      resume_data_last_id pointer so the auth store can import the most
- *      recent anonymous resume on login/signup.
- *   4. sessionStorage safety net is scoped per resume: resume_pending_changes_<id>.
- *
- * /builder (no :id) always starts from defaults (initializeDefaults) and
- * never loads a saved resume.
+ * The old ⚠️ WARNING above this comment (RES-90: PUT /resumes without an id
+ * 404'd, `enabled` rejected, GET /resumes returns a LIST) is RESOLVED —
+ * RES-93 added PUT /resumes/:id, enabled in ResumeSectionDto, and the
+ * GET /resumes/:id loader. Do not reintroduce PUT /resumes (no id) or
+ * list-first loading.
  */
 import { ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useResumeStore } from '@/features/builder/stores/resume'
 import { useAuth } from '@/features/auth/composables/useAuth'
 import { useApi, ApiRequestError } from '@/shared/composables/useApi'
+import type { ResumePayload } from '@/features/builder/types/resume'
 
-/**
- * localStorage key prefix for anonymous resume blobs. Each anonymous resume
- * is stored under `resume_data_<id>` so two anonymous resumes never clobber
- * each other (RES-102).
- */
 const LOCAL_STORAGE_PREFIX = 'resume_data'
 
 /**
@@ -149,12 +143,42 @@ function clearSessionStorage(id: string | null | undefined) {
 let autoSaveWatch: (() => void) | null = null
 
 /**
+ * True when the payload carries real user content: a non-empty name or at
+ * least one non-empty field value anywhere. RES-103: the editors auto-add
+ * EMPTY template entries on mount (name_contact fullName row, summary text
+ * row, …). Those are scaffolding, not edits — a fresh builder with only
+ * empty template entries must never create a DB row.
+ * @param payload
+ */
+function hasResumeContent(payload: ResumePayload): boolean {
+  if (payload.name && payload.name.trim() !== '') return true
+  return payload.sections.some((section) =>
+    section.entries.some((entry) =>
+      entry.fields.some((field) => field.value && field.value.trim() !== ''),
+    ),
+  )
+}
+
+/**
  *
  */
 export function useResumeData() {
   const store = useResumeStore()
   const { isAuthenticated } = useAuth()
   const api = useApi()
+
+  // Router access is optional: useResumeData is also invoked directly in
+  // unit tests without a router instance. Inside the builder it resolves to
+  // the real router; the deferred-create navigation is a no-op when absent.
+  let route: ReturnType<typeof useRoute> | null = null
+  let router: ReturnType<typeof useRouter> | null = null
+  try {
+    route = useRoute()
+    router = useRouter()
+  } catch {
+    // No router injected (bare composable call in tests) — loadResume must
+    // then receive the resume id explicitly.
+  }
 
   /**
    * Dirty flag: true when there are unsaved changes in the store,
@@ -177,10 +201,20 @@ export function useResumeData() {
   // initialLoadComplete is still false during loadResume(). Without it,
   // the callback fires asynchronously after initialLoadComplete is set to
   // true, causing a false dirty flag right after load.
+  //
+  // RES-103: on a fresh builder (no server id) the editors auto-add EMPTY
+  // template entries on mount — those are scaffolding, not edits, and must
+  // not mark the builder dirty (otherwise the autosave POSTs and creates a
+  // DB row before the user types anything). Once a server id exists, every
+  // change is dirty (clearing content on an existing resume is a real edit).
   watch(
     () => store.toPayload(),
     () => {
-      if (initialLoadComplete && !isSaving.value) {
+      if (
+        initialLoadComplete &&
+        !isSaving.value &&
+        (store.id !== null || hasResumeContent(store.toPayload()))
+      ) {
         dirty.value = true
       }
     },
@@ -188,27 +222,27 @@ export function useResumeData() {
   )
 
   /**
-   * Load a resume into the store.
+   * Load resume state into the store.
    *
-   * RES-102: the resume is identified by `id` — the /builder/:id route
-   * param. Each resume loads ONLY its own data:
-   *
-   *   - authenticated + id: sessionStorage safety net first, then GET
-   *     /api/v1/resumes/:id (never the list).
-   *   - anonymous + id: localStorage `resume_data_<id>`.
-   *   - no id (new resume, /builder): start from defaults, never load a
-   *     saved resume.
-   *
-   * A 404 (resume deleted server-side) falls through to defaults.
-   * @param {string} [id] - the resume id from the route, or undefined for a new resume
+   * RES-103 deferred-create contract:
+   * - `resumeId` provided (editing `/builder/:id`) → GET that resume from
+   *   the server and load it; `store.id` is set to the server id so later
+   *   saves PUT /resumes/:id.
+   * - no id (fresh `/builder`) → start from defaults with `store.id = null`;
+   *   nothing is fetched and NO DB row exists until the first edit saves.
+   *   Anonymous users still restore their previous localStorage draft (the
+   *   anonymous persistence mechanism — never a server row).
+   * @param resumeId - The route resume id; defaults to the current route
+   *   param when called from inside the builder.
    */
-  async function loadResume(id?: string) {
-    const resumeId = id ?? null
+  async function loadResume(resumeId?: string | null) {
+    const id = resumeId ?? (route?.params.id as string | undefined) ?? null
 
-    // Authenticated + existing resume: restore pending sessionStorage edits
-    // first (safety net for edits made before the debounced API save fired).
-    if (isAuthenticated.value && resumeId) {
-      const pending = readFromSessionStorage(resumeId)
+    if (isAuthenticated.value) {
+      // Check sessionStorage first for pending changes that survived a refresh.
+      // This is the safety net: if the user edited and refreshed before the
+      // debounced auto-save fired, sessionStorage still has the pending state.
+      const pending = readFromSessionStorage(id)
       if (
         pending &&
         typeof pending === 'object' &&
@@ -218,7 +252,9 @@ export function useResumeData() {
         ((pending as Record<string, unknown>).sections as unknown[]).length > 0
       ) {
         const payload = pending as { layout?: string; sections: unknown[] }
-        store.id = resumeId
+        // The resume id (null for a fresh builder) must survive the restore
+        // so the next autosave PUTs /resumes/:id instead of re-creating.
+        store.id = id
         store.loadFromPayload({
           layout: (payload.layout as 'standard' | 'column2-1') ?? 'standard',
           sections: payload.sections as ResumePayload['sections'],
@@ -231,19 +267,35 @@ export function useResumeData() {
       }
     }
 
-    if (resumeId) {
+    if (id) {
+      // Editing an existing resume — load THAT resume by id (RES-103: the
+      // old code loaded the first resume from the list, which made
+      // "Create New Resume" reload an unrelated resume).
       if (isAuthenticated.value) {
+        // If the store already holds THIS resume (same id, populated — e.g.
+        // the just-created resume right after the deferred-create navigation
+        // to /builder/:id), the local state is authoritative. Skipping the
+        // redundant GET prevents it from racing and wiping edits the user
+        // types while the request is in flight (caught by the
+        // builder-autosave e2e: summary text vanished + no ✓ Saved).
+        if (store.id === id && store.sections.length > 0) {
+          initialLoadComplete = true
+          dirty.value = false
+          return
+        }
         try {
-          // GET the exact resume the route asked for. The wire shape carries
-          // `name` — it MUST be forwarded to loadFromPayload, otherwise the
-          // resume name silently resets to empty on every reload (RES-83).
+          // The wire shape carries `name` — it MUST be forwarded to
+          // loadFromPayload, otherwise the resume name silently resets to
+          // empty on every authenticated reload (found via RES-83 e2e:
+          // "autosave → reload → name persisted" failed while the DB still
+          // had the name).
           const data = await api.get<{
             id: string
             name: string | null
             layout: string
             sections: unknown[]
-          }>(`/api/v1/resumes/${resumeId}`)
-          store.id = resumeId
+          }>(`/api/v1/resumes/${id}`)
+          store.id = data.id ?? id
           if (data.sections?.length > 0 || data.layout) {
             store.loadFromPayload({
               name: data.name ?? '',
@@ -256,14 +308,16 @@ export function useResumeData() {
           }
         } catch (err) {
           if (err instanceof ApiRequestError && err.status === 404) {
-            // Resume doesn't exist (deleted?) — fall through to defaults
+            // Resume was deleted — fall through to defaults
           } else {
             throw err
           }
         }
       } else {
-        // Anonymous resume: load the per-resume localStorage blob.
-        const local = readFromLocalStorage(resumeId)
+        // Anonymous + id: restore the per-resume localStorage blob
+        // (resume_data_<id>). If nothing is saved for this id, fall through
+        // to defaults below.
+        const local = readFromLocalStorage(id)
         if (
           local &&
           typeof local === 'object' &&
@@ -273,7 +327,7 @@ export function useResumeData() {
           ((local as Record<string, unknown>).sections as unknown[]).length > 0
         ) {
           const payload = local as { name?: string | null; layout?: string; sections?: unknown[] }
-          store.id = resumeId
+          store.id = id
           store.loadFromPayload({
             // The anonymous payload carries `name` too — forward it so the
             // resume name survives reloads (same contract as the API path).
@@ -285,16 +339,66 @@ export function useResumeData() {
           dirty.value = false
           return
         }
-        // No saved anonymous resume for this id — fall through to defaults
+      }
+    } else {
+      // Fresh builder (no uuid): anonymous-style local state.
+      if (!isAuthenticated.value) {
+        // Restore the LAST anonymous resume (RES-102 per-resume isolation):
+        // the bare resume_data key is never read (it would clobber across
+        // resumes); instead follow the resume_data_last_id pointer to the
+        // most recently saved per-resume blob. Fresh /builder therefore
+        // continues the user's last anonymous draft without sharing data
+        // across resumes (RES-103 deferred-create: still no server row).
+        const lastId = localStorage.getItem(LAST_ANON_RESUME_KEY)
+        const local = lastId ? readFromLocalStorage(lastId) : null
+        if (local && typeof local === 'object' && local !== null) {
+          const payload = local as { layout?: string; sections?: unknown[] }
+          if (
+            payload.sections &&
+            Array.isArray(payload.sections) &&
+            payload.sections.length > 0
+          ) {
+            store.loadFromPayload({
+              layout: (payload.layout as 'standard' | 'column2-1') ?? 'standard',
+              sections: payload.sections as ResumePayload['sections'],
+            })
+            store.id = lastId
+            initialLoadComplete = true
+            dirty.value = false
+            return
+          }
+        }
       }
     }
 
-    // New resume (no id in route) or the id had nothing saved: start from
-    // defaults. Never load a saved resume for /builder without an id.
+    // Nothing found: initialize a fresh builder (no server id yet).
     store.initializeDefaults()
-
+    store.id = null
     initialLoadComplete = true
     dirty.value = false
+  }
+
+  /**
+   * Create the resume on the server (first edit of a fresh /builder, or a
+   * PUT-404 recovery), claim the returned id in the store, and replace the
+   * URL with /builder/:id so a refresh keeps the uuid (RES-103).
+   * @param payload
+   */
+  async function createResumeAndNavigate(payload: ResumePayload) {
+    const created = await api.post<{ id: string }>('/api/v1/resumes', payload)
+    store.id = created.id
+    // Clear dirty BEFORE navigating so the route-leave guard doesn't treat
+    // the deferred-create navigation as unsaved changes.
+    dirty.value = false
+    // Clear the sessionStorage safety net BEFORE navigation: the replace
+    // remounts the builder at /builder/:id, whose loadResume reads
+    // sessionStorage first. A stale pending payload would restore as dirty
+    // and block subsequent navigation with the unsaved-changes modal
+    // (caught by the unsaved-changes e2e 'no warning after save').
+    clearSessionStorage(store.id)
+    if (router) {
+      await router.replace(`/builder/${created.id}`)
+    }
   }
 
   /**
@@ -302,40 +406,54 @@ export function useResumeData() {
    * localStorage (anonymous). Sets isSaving guard during the operation
    * to prevent the dirty watcher from re-asserting dirty=true after
    * the save completes and clears the dirty flag.
-   *
-   * RES-102: the save is scoped to THIS resume (store.id), never to a
-   * generic upsert of the user's first resume — otherwise editing resume B
-   * would silently overwrite resume A's data.
    */
   async function saveResume() {
     isSaving.value = true
     try {
       const payload = store.toPayload()
 
+      // RES-103 deferred-create: a fresh /builder (no server id yet) must
+      // NOT create a DB row until the user types something. The editors'
+      // auto-added empty template entries are not edits — skip the save
+      // (defense in depth alongside the content-aware dirty watcher).
+      // This gate applies to AUTHENTICATED creation only — anonymous local
+      // persistence is harmless and must still capture toggle-only edits.
+      if (isAuthenticated.value && !store.id && !hasResumeContent(payload)) {
+        dirty.value = false
+        return
+      }
+
       if (isAuthenticated.value) {
         if (store.id) {
           try {
+            // Resume already exists — update it by id (RES-93 added
+            // PUT /resumes/:id; the old PUT /resumes-without-id always 404'd).
             await api.put(`/api/v1/resumes/${store.id}`, payload)
           } catch (err) {
             if (err instanceof ApiRequestError && err.status === 404) {
-              // Resume was deleted server-side — recreate it and adopt the
-              // server-assigned id.
-              const created = await api.post<{ id: string }>('/api/v1/resumes', payload)
-              store.id = created.id
-            } else {
-              throw err
+              // The row was deleted server-side (e.g. another tab) —
+              // recreate it via POST and claim the new id.
+              await createResumeAndNavigate(payload)
+              return
             }
+            throw err
           }
         } else {
-          // Brand-new resume (no id yet) — create it and remember the id so
-          // subsequent saves PUT to it.
-          const created = await api.post<{ id: string }>('/api/v1/resumes', payload)
-          store.id = created.id
+          // First edit on a fresh /builder: create the resume row now.
+          await createResumeAndNavigate(payload)
+          return
         }
-        // Successful backend save — clear the sessionStorage safety net for
-        // this resume.
+        // Successful backend save — clear the sessionStorage safety net
         clearSessionStorage(store.id)
       } else {
+        // Anonymous save. RES-102: anonymous resumes are stored PER-RESUME
+        // under resume_data_<id>. RES-103: a fresh /builder has no SERVER id
+        // yet (deferred-create), so assign a local id on first save — the
+        // same uuid() the store used pre-RES-103 — so the anonymous blob is
+        // isolated per resume instead of clobbering resume_data (no suffix).
+        if (!store.id) {
+          store.id = store.generateAnonymousId()
+        }
         writeToLocalStorage(payload, store.id)
       }
 
@@ -368,10 +486,16 @@ export function useResumeData() {
     autoSaveWatch = watch(
       () => store.toPayload(),
       () => {
+        const payload = store.toPayload()
+        // RES-103: skip the empty template the editors auto-add on mount —
+        // nothing to persist until the user actually edits. Applies to
+        // authenticated creation only (anonymous local saves are harmless).
+        if (isAuthenticated.value && !store.id && !hasResumeContent(payload)) return
+
         // Immediate safety net: write to sessionStorage on every change
         // so edits survive page refreshes before the debounced API save fires.
         if (isAuthenticated.value) {
-          writeToSessionStorage(store.toPayload(), store.id)
+          writeToSessionStorage(payload, store.id)
         }
 
         if (timer) clearTimeout(timer)
@@ -405,6 +529,3 @@ export function useResumeData() {
     isSaving,
   }
 }
-
-// Import type for use in loadResume
-import type { ResumePayload } from '@/features/builder/types/resume'

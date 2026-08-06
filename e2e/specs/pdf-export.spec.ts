@@ -34,7 +34,7 @@ test.describe('PDF Export', () => {
       .getByRole('button', { name: 'Create New Resume' })
       .first()
       .click()
-    await page.waitForURL('**/builder/**', { timeout: 15_000 })
+    await page.waitForURL('**/builder', { timeout: 15_000 })
   }
 
   test('PDF export button is visible and clickable', async ({ page }) => {

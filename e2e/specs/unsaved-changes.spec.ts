@@ -55,11 +55,13 @@ test.describe('Autosave + immediate navigation (RES-105)', () => {
 
     // Create a resume — dashboard renders two 'Create New Resume' buttons
     // (header + empty state); .first() avoids a strict-mode violation.
+    // RES-103 deferred-create: click → /builder (no row yet); the uuid
+    // appears only after the first edit saves.
     await page
       .getByRole('button', { name: 'Create New Resume' })
       .first()
       .click()
-    await page.waitForURL('**/builder/**', { timeout: 15_000 })
+    await page.waitForURL('**/builder', { timeout: 15_000 })
 
     const nameInput = page.locator('input[aria-label="Resume name"]')
     await expect(nameInput).toBeVisible({ timeout: 10_000 })
@@ -129,6 +131,9 @@ test.describe('Autosave + immediate navigation (RES-105)', () => {
     await expect(page.locator('[data-testid="toolbar-saved-msg"]')).toBeVisible(
       { timeout: 10_000 },
     )
+    // First edit POSTed → URL now carries the uuid (refresh-safe)
+    await page.waitForURL('**/builder/**', { timeout: 15_000 })
+  }
 
     // Navigate away — should just work, no modal
     await page.getByRole('link', { name: 'My Resumes' }).click()

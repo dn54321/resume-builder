@@ -74,10 +74,15 @@ export const useResumeStore = defineStore('resume', () => {
   )
 
   /**
+   * Initialize a FRESH builder with default sections.
    *
+   * RES-103 deferred-create: `id` is the SERVER resume id and starts as
+   * `null` — no DB row exists until the first edit autosaves (the composable
+   * POSTs, receives the real id, and assigns it here). A truthy id means the
+   * resume already exists server-side and saves must PUT /resumes/:id.
    */
   function initializeDefaults() {
-    id.value = generateId()
+    id.value = null
     name.value = ''
     layout.value = 'standard'
     sections.value = SECTION_TYPES.map((type, i) => createDefaultSection(type, i))
@@ -543,5 +548,9 @@ export const useResumeStore = defineStore('resume', () => {
     isBulletRelevant,
     isSkillRelevant,
     getFilteredBulletCount,
+    // RES-103/RES-102: assign a local id for an anonymous first save so the
+    // blob lands under resume_data_<id> (per-resume isolation) instead of
+    // the bare resume_data key.
+    generateAnonymousId: (): string => generateId(),
   }
 })

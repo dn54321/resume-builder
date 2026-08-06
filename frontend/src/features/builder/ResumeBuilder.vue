@@ -310,16 +310,28 @@ const columnAssignments = computed(() => {
 })
 
 onMounted(async () => {
-  // RES-102: load the resume the route points at — /builder/:id loads THAT
-  // resume, /builder (no id) starts fresh from defaults.
-  const resumeId = typeof route.params.id === 'string' ? route.params.id : undefined
-  await loadResume(resumeId)
+  await loadResume(route.params?.id as string | undefined)
   setupAutoSave()
   // Select the first enabled section by default
   if (store.sections.length > 0 && !selectedSectionId.value) {
     selectedSectionId.value = store.sections[0]!.sectionType
   }
 })
+
+// RES-103: a /builder/:id → /builder/:id navigation (different resume id)
+// reuses the component instance, so onMounted does not re-run. Watch the
+// route id and reload the newly-targeted resume. The deferred-create
+// navigation /builder → /builder/:id either remounts this component (fresh
+// onMounted → loadResume with the id) or is covered here — both paths load
+// the same freshly-created resume, so no data is lost.
+watch(
+  () => route.params?.id as string | undefined,
+  (newId, oldId) => {
+    if (newId !== oldId) {
+      loadResume(newId)
+    }
+  },
+)
 
 /**
  * One-step flow from the JD modal (RES-98): the modal emits the trimmed JD,

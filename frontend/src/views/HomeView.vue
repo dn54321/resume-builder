@@ -9,46 +9,24 @@
 import { RouterLink, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/features/auth/stores/auth'
-import { useApi, ApiRequestError } from '@/shared/composables/useApi'
 import SvgIllustration from '@/components/SvgIllustration.vue'
 
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import blob3Raw from '@/assets/illustrations/decorative/blob-3.svg?raw'
 import waveDividerRaw from '@/assets/illustrations/decorative/wave-divider.svg?raw'
 import dotPatternRaw from '@/assets/illustrations/decorative/dot-pattern.svg?raw'
 
 const auth = useAuthStore()
 const router = useRouter()
-const api = useApi()
-
-/** True while the "Create New Resume" POST is in flight */
-const isCreating = ref(false)
-/** Inline error shown when the create request fails */
-const createError = ref('')
 
 /**
- * Create a fresh resume via the API and navigate straight into the builder.
- * Errors are shown inline and the user stays on the page.
+ * Start a new resume: navigate to the fresh builder at /builder (no uuid
+ * suffix). RES-103 deferred-create — nothing is persisted here; the resume
+ * row is created by the builder's autosave on the FIRST edit, which POSTs
+ * and then replaces the URL with /builder/:id.
  */
-async function handleCreateResume(): Promise<void> {
-  if (isCreating.value) return
-  isCreating.value = true
-  createError.value = ''
-
-  try {
-    const created = await api.post<{ id: string }>('/api/v1/resumes', {
-      sections: [],
-    })
-    await router.push(`/builder/${created.id}`)
-  } catch (err) {
-    if (err instanceof ApiRequestError) {
-      createError.value = err.message
-    } else {
-      createError.value = 'Something went wrong'
-    }
-  } finally {
-    isCreating.value = false
-  }
+function handleCreateResume(): void {
+  router.push('/builder')
 }
 
 /** URL-encoded dot-pattern for use as a repeating background image */
@@ -115,10 +93,9 @@ const features = [
               variant="outline"
               size="lg"
               data-testid="create-resume-button"
-              :disabled="isCreating"
               @click="handleCreateResume"
             >
-              {{ isCreating ? 'Creating…' : 'Create New Resume' }}
+              Create New Resume
             </Button>
           </template>
           <template v-else>
@@ -130,15 +107,6 @@ const features = [
             </RouterLink>
           </template>
         </div>
-
-        <!-- Inline error for the authenticated create-resume flow -->
-        <p
-          v-if="createError"
-          role="alert"
-          class="mt-4 text-sm text-destructive"
-        >
-          {{ createError }}
-        </p>
       </div>
     </section>
 

@@ -207,24 +207,13 @@ async function fetchResumes(): Promise<void> {
 }
 
 /**
- * Create a new resume and navigate to its builder.
- * @returns {Promise<void>} Resolves once navigation is triggered
+ * Create a new resume: navigate to the fresh builder at /builder (no uuid
+ * suffix). RES-103 deferred-create — nothing is persisted here; the resume
+ * row is created by the builder's autosave on the FIRST edit, which POSTs
+ * and then replaces the URL with /builder/:id.
  */
-async function handleCreateResume(): Promise<void> {
-  error.value = ''
-
-  try {
-    const created = await api.post<{ id: string }>('/api/v1/resumes', {
-      sections: [],
-    })
-    router.push(`/builder/${created.id}`)
-  } catch (err) {
-    if (err instanceof ApiRequestError) {
-      error.value = err.message
-    } else {
-      error.value = 'Something went wrong'
-    }
-  }
+function handleCreateResume(): void {
+  router.push('/builder')
 }
 
 /**
