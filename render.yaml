@@ -1,0 +1,65 @@
+# ─── Render Blueprint (render.yaml) ──────────────────────────────────────
+# Declares both services as DOCKER type so Render uses our production
+# Dockerfiles + their CMDs — it will NOT run its own buildpack install
+# (which tried to install the full 329-package devDep tree from the root
+# package.json and OOM'd with status 137).
+#
+# Deploy: create a Blueprint from this file, or copy these settings into
+# the two existing services. For docker services Render builds the image
+# from dockerfilePath/dockerContext and runs the image's CMD — no
+# buildCommand, no buildpack install.
+#
+# Build args are passed via the dockerBuildArgs section.
+
+services:
+  # ─── Backend API (NestJS + Prisma) ──────────────────────────────────
+  - type: docker
+    name: resume-backend
+    runtime: docker
+    repo: https://github.com/dn54321/resume-v3
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    # Pass DATABASE_URL as a build arg so the Prisma provider (sqlite vs
+    # postgresql) is generated correctly. Value comes from the envVar below.
+    dockerBuildArgs:
+      DATABASE_URL: ${DATABASE_URL}
+    # Render injects PORT; the app binds 0.0.0.0. 401 is the auth-gated
+    # health response (a 200 on an unauthenticated GET isn't expected).
+    healthCheckPath: /api/v1/resumes
+    autoDeploy: true
+    plan: starter
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        sync: false # Render sets this
+      - key: DATABASE_URL
+        sync: false # set in dashboard (e.g. Neon Postgres)
+      - key: FRONTEND_URL
+        sync: false # your frontend URL, e.g. https://resumes.onrender.com
+      - key: RESUME_FIELD_ENCRYPTION_KEY
+        sync: false # 64-hex AES-256-GCM (./gen-key.sh)
+      - key: SESSION_ENCRYPTION_KEY
+        sync: false # 64-hex AES-256-GCM
+      - key: MATCHING_ENGINE
+        value: keyword
+      - key: BULLET_CAP
+        value: "5"
+
+  # ─── Frontend (Vite build → nginx) ──────────────────────────────────
+  - type: docker
+    name: resume-frontend
+    runtime: docker
+    repo: https://github.com/dn54321/resume-v3
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: .
+    # VITE_API_BASE_URL must be the backend's public URL (baked at build).
+    dockerBuildArgs:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+    # nginx listens on $PORT (envsubst at boot) — Render routes here.
+    healthCheckPath: /
+    autoDeploy: true
+    plan: starter
+    envVars:
+      - key: VITE_API_BASE_URL
+        sync: false # your API URL, e.g. https://resume-backend.onrender.com
