@@ -18,6 +18,8 @@ export interface SectionEntry {
   parentId?: string | null;
   /** Whether the entry is locked (Tailor must not modify/remove it). */
   locked: boolean;
+  /** Whether the entry is visible in the rendered resume (eye toggle, RES-106). */
+  visible: boolean;
   fields: SectionField[];
   children?: SectionEntry[];
 }

@@ -38,6 +38,20 @@
           <option value="Native">Native</option>
           <option value="Bilingual">Bilingual</option>
         </select>
+        <!-- Entry visibility toggle: eye shows the language, eye crossed out hides it (RES-106) -->
+        <button
+          type="button"
+          class="w-6 h-6 flex items-center justify-center border-none bg-transparent rounded-sm text-xs shrink-0 transition-colors hover:bg-muted/50 hover:text-foreground"
+          :class="entry.visible === false ? 'text-muted-foreground/50' : 'text-foreground'"
+          :title="entry.visible === false ? 'Show language in resume' : 'Hide language from resume'"
+          :aria-label="`${entry.visible === false ? 'Show' : 'Hide'} language`"
+          :aria-pressed="entry.visible !== false"
+          data-testid="entry-eye-toggle"
+          @click="onToggleVisibility(entry.id)"
+        >
+          <Eye v-if="entry.visible !== false" class="w-3.5 h-3.5" />
+          <EyeOff v-else class="w-3.5 h-3.5" />
+        </button>
         <!-- Entry lock toggle: protect this language from Tailor edits -->
         <button
           type="button"
@@ -68,7 +82,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Lock, LockOpen } from '@lucide/vue'
+import { Eye, EyeOff, Lock, LockOpen } from '@lucide/vue'
 import { useSectionEditor } from '@/features/builder/composables/useSectionEditor'
 
 const editor = useSectionEditor('languages')
@@ -79,6 +93,7 @@ interface LanguageRow {
   name: string
   proficiency: string
   locked: boolean
+  visible: boolean
 }
 
 const languageEntries = computed<LanguageRow[]>(() =>
@@ -90,6 +105,7 @@ const languageEntries = computed<LanguageRow[]>(() =>
       name: editor.getFieldValue(e.id, 'name'),
       proficiency: editor.getFieldValue(e.id, 'proficiency'),
       locked: e.locked,
+      visible: e.visible,
     })),
 )
 
@@ -127,6 +143,14 @@ function onProficiencyUpdate(id: string, value: string) {
  */
 function onToggleLock(id: string) {
   editor.toggleEntryLock(id)
+}
+
+/**
+ * Toggle the entry-level visibility (eye) flag.
+ * @param id
+ */
+function onToggleVisibility(id: string) {
+  editor.toggleEntryVisibility(id)
 }
 
 /**

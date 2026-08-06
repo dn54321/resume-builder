@@ -63,11 +63,14 @@ const rightSections = computed(() =>
 
 /**
  * Check whether a section has any non-empty data that should be rendered.
+ * Hidden entries (`visible === false`, RES-106) count as absent.
  * @param section - The section to check.
  * @returns `true` if the section has any visible content.
  */
 function isSectionNonEmpty(section: ResumeSectionState): boolean {
-  const entries = section.entries.filter((e) => !e.parentId)
+  const entries = section.entries.filter(
+    (e) => !e.parentId && e.visible !== false,
+  )
   if (entries.length === 0) return false
 
   if (section.sectionType === 'name_contact') {
@@ -92,12 +95,13 @@ function isSectionNonEmpty(section: ResumeSectionState): boolean {
 
 /**
  * Get top-level entries (no parent) from a section, sorted by order.
+ * Hidden entries (`visible === false`, RES-106) are excluded.
  * @param section - The section to extract entries from.
- * @returns Sorted array of top-level entries.
+ * @returns Sorted array of visible top-level entries.
  */
 function topLevelEntries(section: ResumeSectionState): SectionEntryState[] {
   return section.entries
-    .filter((e) => !e.parentId)
+    .filter((e) => !e.parentId && e.visible !== false)
     .sort((a, b) => a.order - b.order)
 }
 
@@ -168,13 +172,14 @@ function commaList(section: ResumeSectionState): string {
 
 /**
  * Extract bullet point entries for a parent entry (e.g., experience or project).
+ * Hidden bullet entries (`visible === false`, RES-106) are excluded.
  * @param section - The section containing the entries.
  * @param parentId - ID of the parent entry.
  * @returns Array of non-empty bullet objects with id and value.
  */
 function entryBullets(section: ResumeSectionState, parentId: string) {
   return section.entries
-    .filter((e) => e.parentId === parentId)
+    .filter((e) => e.parentId === parentId && e.visible !== false)
     .sort((a, b) => a.order - b.order)
     .map((e) => ({
       id: e.id,
@@ -208,7 +213,9 @@ const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
     props: { section: Object as () => ResumeSectionState },
     setup(p) {
       const section: ResumeSectionState = p.section!
-      const entry = computed(() => section.entries[0])
+      const entry = computed(() =>
+        section.entries.find((e) => !e.parentId && e.visible !== false),
+      )
 
       const contactKeys = ['email', 'phone', 'location', 'linkedin', 'website'] as const
 
@@ -254,7 +261,9 @@ const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
     setup(p) {
       const section: ResumeSectionState = p.section!
       const text = computed(() => {
-        const e = section.entries[0]
+        const e = section.entries.find(
+          (entry) => !entry.parentId && entry.visible !== false,
+        )
         if (!e) return ''
         return e.fields.find((f) => f.key === 'text')?.value ?? ''
       })
@@ -271,7 +280,7 @@ const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
       const section: ResumeSectionState = p.section!
       const entries = computed(() =>
         section.entries
-          .filter((e) => !e.parentId)
+          .filter((e) => !e.parentId && e.visible !== false)
           .sort((a, b) => a.order - b.order),
       )
       return () =>
@@ -302,7 +311,7 @@ const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
       const section: ResumeSectionState = p.section!
       const entries = computed(() =>
         section.entries
-          .filter((e) => !e.parentId)
+          .filter((e) => !e.parentId && e.visible !== false)
           .sort((a, b) => a.order - b.order),
       )
       return () =>
@@ -355,7 +364,7 @@ const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
       const section: ResumeSectionState = p.section!
       const entries = computed(() =>
         section.entries
-          .filter((e) => !e.parentId)
+          .filter((e) => !e.parentId && e.visible !== false)
           .sort((a, b) => a.order - b.order),
       )
       return () =>
@@ -388,7 +397,7 @@ const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
       const section: ResumeSectionState = p.section!
       const entries = computed(() =>
         section.entries
-          .filter((e) => !e.parentId)
+          .filter((e) => !e.parentId && e.visible !== false)
           .sort((a, b) => a.order - b.order),
       )
       return () =>

@@ -30,6 +30,35 @@
         :placeholder="placeholder"
         :aria-label="`Bullet point ${index + 1}`"
       />
+      <!-- Bullet visibility toggle (RES-106): eye shows the bullet in the resume,
+           eye crossed out hides it. Lives on the bullet row for Experience/Projects. -->
+      <button
+        type="button"
+        class="w-6 h-6 flex items-center justify-center border-none bg-transparent rounded-sm text-xs shrink-0 transition-colors hover:bg-muted/50 hover:text-foreground"
+        :class="bullet.visible === false ? 'text-muted-foreground/50' : 'text-foreground'"
+        :title="bullet.visible === false ? 'Show bullet in resume' : 'Hide bullet from resume'"
+        :aria-label="`${bullet.visible === false ? 'Show' : 'Hide'} bullet point`"
+        :aria-pressed="bullet.visible !== false"
+        data-testid="bullet-eye-toggle"
+        @click="emit('toggleVisibility', bullet.id)"
+      >
+        <Eye v-if="bullet.visible !== false" class="w-3.5 h-3.5" />
+        <EyeOff v-else class="w-3.5 h-3.5" />
+      </button>
+      <!-- Bullet lock toggle (RES-106): protect this bullet from Tailor edits. -->
+      <button
+        type="button"
+        class="w-6 h-6 flex items-center justify-center border-none bg-transparent rounded-sm text-xs shrink-0 transition-colors hover:bg-muted/50 hover:text-foreground"
+        :class="bullet.locked ? 'text-muted-foreground/50' : 'text-foreground'"
+        :title="bullet.locked ? 'Unlock bullet (Tailor may edit it)' : 'Lock bullet (protect from Tailor)'"
+        :aria-label="`${bullet.locked ? 'Unlock' : 'Lock'} bullet point`"
+        :aria-pressed="bullet.locked"
+        data-testid="bullet-lock-toggle"
+        @click="emit('toggleLock', bullet.id)"
+      >
+        <Lock v-if="bullet.locked" class="w-3.5 h-3.5" />
+        <LockOpen v-else class="w-3.5 h-3.5" />
+      </button>
       <button
         class="w-6 h-6 flex items-center justify-center border-none bg-transparent text-muted-foreground/70 cursor-pointer rounded-sm text-lg leading-none shrink-0 hover:bg-destructive/10 hover:text-destructive"
         @click="onRemove(bullet.id)"
@@ -45,12 +74,17 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { Eye, EyeOff, Lock, LockOpen } from '@lucide/vue'
 
 export interface BulletState {
   id: string
   value: string
   /** When true, the bullet row is dimmed (filtered out) */
   dimmed?: boolean
+  /** Whether the bullet is Tailor-protected (eye/lock on bullet rows, RES-106) */
+  locked?: boolean
+  /** Whether the bullet is visible in the rendered resume (eye toggle, RES-106) */
+  visible?: boolean
 }
 
 withDefaults(defineProps<{
@@ -65,6 +99,8 @@ const emit = defineEmits<{
   remove: [id: string]
   update: [index: number, value: string]
   reorder: [fromIndex: number, toIndex: number]
+  toggleLock: [id: string]
+  toggleVisibility: [id: string]
 }>()
 
 const dragIndex = ref<number | null>(null)

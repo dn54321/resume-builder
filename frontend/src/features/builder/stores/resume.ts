@@ -129,6 +129,23 @@ export const useResumeStore = defineStore('resume', () => {
   }
 
   /**
+   * Toggle the `visible` flag on an individual sub-item (entry) within a
+   * section. Hidden entries (eye crossed out) are excluded from every
+   * resume preview. Independent of `locked` — a locked entry keeps its
+   * visibility through Tailor runs, but the user can still hide/show it.
+   * @param sectionType
+   * @param entryId
+   */
+  function toggleEntryVisibility(sectionType: SectionType, entryId: string) {
+    const section = sections.value.find((s) => s.sectionType === sectionType)
+    if (!section) return
+    const entry = section.entries.find((e) => e.id === entryId)
+    if (entry) {
+      entry.visible = !entry.visible
+    }
+  }
+
+  /**
    *
    * @param sectionType
    * @param column
@@ -229,6 +246,7 @@ export const useResumeStore = defineStore('resume', () => {
             order: e.order,
             parentId: e.parentId,
             locked: (e as { locked?: boolean }).locked ?? false,
+            visible: (e as { visible?: boolean }).visible ?? true,
             fields: e.fields.map((f) => ({
               key: f.key,
               value: f.value,
@@ -286,6 +304,7 @@ export const useResumeStore = defineStore('resume', () => {
           order: e.order,
           parentId: e.parentId,
           locked: e.locked,
+          visible: e.visible,
           fields: e.fields.map((f) => ({
             key: f.key,
             value: f.value,
@@ -512,6 +531,7 @@ export const useResumeStore = defineStore('resume', () => {
     setLayout,
     toggleSection,
     toggleEntryLock,
+    toggleEntryVisibility,
     setSectionColumn,
     reorderSections,
     isSectionEnabled,

@@ -28,20 +28,38 @@
           aria-label="Drag to reorder entry"
         >&#x2630;</span>
         <span class="flex-1 text-[0.8125rem] font-medium text-foreground overflow-hidden text-ellipsis whitespace-nowrap">{{ entryTitle(entry, index) }}</span>
-        <!-- Entry lock toggle: protect this sub-item from Tailor edits -->
-        <button
-          type="button"
-          class="w-6 h-6 flex items-center justify-center border-none bg-transparent rounded-sm text-xs shrink-0 transition-colors hover:bg-muted/50 hover:text-foreground"
-          :class="entry.locked ? 'text-muted-foreground/50' : 'text-foreground'"
-          :title="entry.locked ? 'Unlock entry (Tailor may edit it)' : 'Lock entry (protect from Tailor)'"
-          :aria-label="`${entry.locked ? 'Unlock' : 'Lock'} entry`"
-          :aria-pressed="entry.locked"
-          data-testid="entry-lock-toggle"
-          @click.stop="$emit('toggleLock', entry.id)"
-        >
-          <Lock v-if="entry.locked" class="w-3.5 h-3.5" />
-          <LockOpen v-else class="w-3.5 h-3.5" />
-        </button>
+        <!-- Entry visibility toggle: eye shows the sub-item in the resume, eye crossed out hides it (RES-106).
+             Hidden entirely when showEntryToggles is false — bullet sections (Experience/Projects) carry
+             their eye/lock on the bullet rows instead (refined RES-106 spec). -->
+        <template v-if="showEntryToggles">
+          <button
+            type="button"
+            class="w-6 h-6 flex items-center justify-center border-none bg-transparent rounded-sm text-xs shrink-0 transition-colors hover:bg-muted/50 hover:text-foreground"
+            :class="entry.visible === false ? 'text-muted-foreground/50' : 'text-foreground'"
+            :title="entry.visible === false ? 'Show entry in resume' : 'Hide entry from resume'"
+            :aria-label="`${entry.visible === false ? 'Show' : 'Hide'} entry`"
+            :aria-pressed="entry.visible !== false"
+            data-testid="entry-eye-toggle"
+            @click.stop="$emit('toggleVisibility', entry.id)"
+          >
+            <Eye v-if="entry.visible !== false" class="w-3.5 h-3.5" />
+            <EyeOff v-else class="w-3.5 h-3.5" />
+          </button>
+          <!-- Entry lock toggle: protect this sub-item from Tailor edits -->
+          <button
+            type="button"
+            class="w-6 h-6 flex items-center justify-center border-none bg-transparent rounded-sm text-xs shrink-0 transition-colors hover:bg-muted/50 hover:text-foreground"
+            :class="entry.locked ? 'text-muted-foreground/50' : 'text-foreground'"
+            :title="entry.locked ? 'Unlock entry (Tailor may edit it)' : 'Lock entry (protect from Tailor)'"
+            :aria-label="`${entry.locked ? 'Unlock' : 'Lock'} entry`"
+            :aria-pressed="entry.locked"
+            data-testid="entry-lock-toggle"
+            @click.stop="$emit('toggleLock', entry.id)"
+          >
+            <Lock v-if="entry.locked" class="w-3.5 h-3.5" />
+            <LockOpen v-else class="w-3.5 h-3.5" />
+          </button>
+        </template>
         <button
           class="w-6 h-6 flex items-center justify-center border-none bg-transparent text-muted-foreground/70 cursor-pointer rounded-sm text-lg leading-none shrink-0 hover:bg-destructive/10 hover:text-destructive"
           @click.stop="onRemove(entry.id)"
@@ -62,24 +80,33 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { Lock, LockOpen } from '@lucide/vue'
+import { Eye, EyeOff, Lock, LockOpen } from '@lucide/vue'
 
 interface EntryLike {
   id: string
   order: number
   locked?: boolean
+  visible?: boolean
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   entries: EntryLike[]
   addLabel: string
   entryTitle: (entry: EntryLike, index: number) => string
-}>()
+  /**
+   * When false, hide the per-entry eye/lock toggles (RES-106: parent rows of
+   *  bullet sections like Experience/Projects — their toggles live on bullets).
+   */
+  showEntryToggles?: boolean
+}>(), {
+  showEntryToggles: true,
+})
 
 const emit = defineEmits<{
   add: []
   remove: [id: string]
   toggleLock: [id: string]
+  toggleVisibility: [id: string]
   reorder: [fromIndex: number, toIndex: number]
 }>()
 

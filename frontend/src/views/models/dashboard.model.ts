@@ -56,6 +56,8 @@ export interface ResumeFullEntry {
   parentId: string | null
   /** Whether the entry is locked — Tailor must not modify/remove it. */
   locked?: boolean
+  /** Whether the entry is visible in the rendered resume (eye toggle, RES-106). */
+  visible?: boolean
   fields: ResumeFullField[]
   children?: ResumeFullEntry[]
 }
@@ -90,6 +92,7 @@ export function toPreviewSections(
       order: entry.order,
       parentId: entry.parentId ?? null,
       locked: entry.locked ?? false,
+      visible: entry.visible ?? true,
       fields: entry.fields.map((field) => ({
         key: field.key,
         value: field.value,

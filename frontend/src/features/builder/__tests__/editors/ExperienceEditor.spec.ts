@@ -622,4 +622,177 @@ describe('ExperienceEditor', () => {
       expect(wrapper.text()).toContain('Showing')
     })
   })
+
+  describe('bullet visibility/lock toggles (RES-106 refined)', () => {
+    /**
+     * Helper: mount the editor with one job that has two bullets.
+     */
+    function mountWithBullets() {
+      const store = useResumeStore()
+      const section = store.sections.find((s) => s.sectionType === 'experience')!
+      section.entries = [
+        {
+          id: 'exp-1',
+          order: 0,
+          parentId: null,
+          locked: false,
+          visible: true,
+          fields: [
+            { key: 'company', value: 'Acme Corp', order: 0 },
+            { key: 'title', value: 'Engineer', order: 1 },
+            { key: 'startDate', value: '', order: 2 },
+            { key: 'endDate', value: '', order: 3 },
+            { key: 'location', value: '', order: 4 },
+            { key: 'isCurrent', value: '', order: 5 },
+          ],
+        },
+        {
+          id: 'b1',
+          order: 0,
+          parentId: 'exp-1',
+          locked: false,
+          visible: true,
+          fields: [{ key: 'text', value: 'Bullet 1', order: 0 }],
+        },
+        {
+          id: 'b2',
+          order: 1,
+          parentId: 'exp-1',
+          locked: true,
+          visible: false,
+          fields: [{ key: 'text', value: 'Bullet 2', order: 0 }],
+        },
+      ]
+      return { store, section }
+    }
+
+    it('shows eye+lock toggles on bullet rows', async () => {
+      mountWithBullets()
+      const wrapper = mount(ExperienceEditor)
+      await expandAllEntries(wrapper)
+
+      // Two bullets → two eye buttons + two lock buttons.
+      expect(wrapper.findAll('[data-testid="bullet-eye-toggle"]')).toHaveLength(2)
+      expect(wrapper.findAll('[data-testid="bullet-lock-toggle"]')).toHaveLength(2)
+      // b1 visible → Eye icon; b2 hidden → EyeOff icon.
+      expect(wrapper.findAll('svg.lucide-eye')).toHaveLength(1)
+      expect(wrapper.findAll('svg.lucide-eye-off')).toHaveLength(1)
+      // b2 locked → Lock icon; b1 unlocked → LockOpen icon.
+      expect(wrapper.findAll('svg.lucide-lock')).toHaveLength(1)
+      expect(wrapper.findAll('svg.lucide-lock-open')).toHaveLength(1)
+    })
+
+    it('does NOT render eye/lock toggles on the parent (company) rows', async () => {
+      mountWithBullets()
+      const wrapper = mount(ExperienceEditor)
+      await expandAllEntries(wrapper)
+
+      // Parent rows hide the per-entry toggles entirely (refined spec:
+      // Experience carries eye+lock on bullets, NOT the company row).
+      expect(wrapper.findAll('[data-testid="entry-eye-toggle"]')).toHaveLength(0)
+      expect(wrapper.findAll('[data-testid="entry-lock-toggle"]')).toHaveLength(0)
+    })
+
+    it('toggles a bullet visible flag when its eye button is clicked', async () => {
+      const { section } = mountWithBullets()
+      const wrapper = mount(ExperienceEditor)
+      await expandAllEntries(wrapper)
+
+      const eyeButtons = wrapper.findAll('[data-testid="bullet-eye-toggle"]')
+      // b1 is visible → clicking hides it.
+      await eyeButtons[0]!.trigger('click')
+
+      expect(section.entries.find((e) => e.id === 'b1')!.visible).toBe(false)
+      // b2 untouched (already hidden).
+      expect(section.entries.find((e) => e.id === 'b2')!.visible).toBe(false)
+    })
+
+    it('toggles a bullet locked flag when its lock button is clicked', async () => {
+      const { section } = mountWithBullets()
+      const wrapper = mount(ExperienceEditor)
+      await expandAllEntries(wrapper)
+
+      const lockButtons = wrapper.findAll('[data-testid="bullet-lock-toggle"]')
+      // b1 is unlocked → clicking locks it.
+      await lockButtons[0]!.trigger('click')
+
+      expect(section.entries.find((e) => e.id === 'b1')!.locked).toBe(true)
+      // b2 untouched (already locked).
+      expect(section.entries.find((e) => e.id === 'b2')!.locked).toBe(true)
+    })
+
+    it('does not collapse the job panel when a bullet toggle is clicked', async () => {
+      mountWithBullets()
+      const wrapper = mount(ExperienceEditor)
+      await expandAllEntries(wrapper)
+      expect(wrapper.findAll('.p-3.border-t')).toHaveLength(1)
+
+      // Clicking a bullet eye/lock toggle must NOT collapse the job panel.
+      const eyeButtons = wrapper.findAll('[data-testid="bullet-eye-toggle"]')
+      await eyeButtons[0]!.trigger('click')
+      const lockButtons = wrapper.findAll('[data-testid="bullet-lock-toggle"]')
+      await lockButtons[0]!.trigger('click')
+      await flushPromises()
+
+      expect(wrapper.findAll('.p-3.border-t')).toHaveLength(1)
+    })
+
+    it('full round-trip: hiding a bullet in the editor removes it from the preview', async () => {
+      const store = useResumeStore()
+      const section = store.sections.find((s) => s.sectionType === 'experience')!
+      section.entries = [
+        {
+          id: 'exp-1',
+          order: 0,
+          parentId: null,
+          locked: false,
+          visible: true,
+          fields: [
+            { key: 'company', value: 'Acme Corp', order: 0 },
+            { key: 'title', value: 'Engineer', order: 1 },
+            { key: 'startDate', value: '', order: 2 },
+            { key: 'endDate', value: '', order: 3 },
+            { key: 'location', value: '', order: 4 },
+            { key: 'isCurrent', value: '', order: 5 },
+          ],
+        },
+        {
+          id: 'b1',
+          order: 0,
+          parentId: 'exp-1',
+          locked: false,
+          visible: true,
+          fields: [{ key: 'text', value: 'Bullet 1', order: 0 }],
+        },
+        {
+          id: 'b2',
+          order: 1,
+          parentId: 'exp-1',
+          locked: false,
+          visible: true,
+          fields: [{ key: 'text', value: 'Bullet 2', order: 0 }],
+        },
+      ]
+      const wrapper = mount(ExperienceEditor)
+      await expandAllEntries(wrapper)
+
+      // Hide bullet b1 via the eye toggle in the editor (component → store).
+      const eyeButtons = wrapper.findAll('[data-testid="bullet-eye-toggle"]')
+      await eyeButtons[0]!.trigger('click')
+      expect(section.entries.find((e) => e.id === 'b1')!.visible).toBe(false)
+
+      // Render the actual preview component from the same store state
+      // (store → component): the hidden bullet must not appear.
+      const { default: StandardLayout } = await import(
+        '@/features/builder/components/preview/StandardLayout.vue'
+      )
+      const preview = mount(StandardLayout, {
+        props: { sections: store.sections },
+      })
+      const text = preview.text()
+      expect(text).toContain('Acme Corp')
+      expect(text).toContain('Bullet 2')
+      expect(text).not.toContain('Bullet 1')
+    })
+  })
 })

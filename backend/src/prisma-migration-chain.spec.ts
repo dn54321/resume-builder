@@ -87,6 +87,8 @@ describe('Prisma migration chain (fresh DB bootstrap)', () => {
     expect(output).toContain('20260801023955_add_users_and_sessions');
     expect(output).toContain('20260805210327_add_locked_to_resume_section');
     expect(output).toContain('20260806_add_iv_auth_tag_and_enabled');
+    expect(output).toContain('20260806120000_add_locked_to_section_entry');
+    expect(output).toContain('20260807000000_add_visible_to_section_entry');
   });
 
   it('reports the deployed schema is up to date', () => {

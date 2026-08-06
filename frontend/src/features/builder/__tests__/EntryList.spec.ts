@@ -239,4 +239,67 @@ describe('EntryList', () => {
     // Header click would have expanded it; lock click must not.
     expect(wrapper.findAll('.p-3.border-t')).toHaveLength(0)
   })
+
+  // ── Entry visibility (eye) toggle (RES-106) ─────────────────────
+
+  it('renders an eye button per entry (open icon when visible)', () => {
+    const entries = createEntries(2)
+    const wrapper = mount(EntryList, {
+      props: { entries, addLabel: 'Add Item', entryTitle },
+    })
+
+    const eyeButtons = wrapper.findAll('[data-testid="entry-eye-toggle"]')
+    expect(eyeButtons).toHaveLength(2)
+    expect(wrapper.findAll('svg.lucide-eye')).toHaveLength(2)
+    expect(wrapper.findAll('svg.lucide-eye-off')).toHaveLength(0)
+  })
+
+  it('shows an EyeOff icon for hidden entries', () => {
+    const entries = [
+      { id: 'entry-1', order: 0, visible: false },
+      { id: 'entry-2', order: 1 },
+    ]
+    const wrapper = mount(EntryList, {
+      props: { entries, addLabel: 'Add Item', entryTitle },
+    })
+
+    expect(wrapper.findAll('svg.lucide-eye-off')).toHaveLength(1)
+    expect(wrapper.findAll('svg.lucide-eye')).toHaveLength(1)
+
+    const panels = wrapper.findAll('[data-entry-panel]')
+    const firstEye = panels[0]!.find('[data-testid="entry-eye-toggle"]')
+    expect(firstEye.classes()).toContain('text-muted-foreground/50')
+    const secondEye = panels[1]!.find('[data-testid="entry-eye-toggle"]')
+    expect(secondEye.classes()).not.toContain('text-muted-foreground/50')
+  })
+
+  it('emits toggleVisibility with the entry id when the eye button is clicked', async () => {
+    window.confirm = vi.fn<() => boolean>(() => false)
+    const entries = createEntries(1)
+    const wrapper = mount(EntryList, {
+      props: { entries, addLabel: 'Add Item', entryTitle },
+    })
+
+    const eyeBtn = wrapper.find('[data-testid="entry-eye-toggle"]')
+    await eyeBtn.trigger('click')
+
+    expect(wrapper.emitted('toggleVisibility')).toHaveLength(1)
+    expect(wrapper.emitted('toggleVisibility')![0]).toEqual(['entry-1'])
+    // Eye toggle must NOT trigger the remove confirmation.
+    expect(window.confirm).not.toHaveBeenCalled()
+  })
+
+  it('does not expand/collapse the entry when the eye button is clicked', async () => {
+    const entries = createEntries(1)
+    const wrapper = mount(EntryList, {
+      props: { entries, addLabel: 'Add Item', entryTitle },
+    })
+
+    expect(wrapper.findAll('.p-3.border-t')).toHaveLength(0)
+    const eyeBtn = wrapper.find('[data-testid="entry-eye-toggle"]')
+    await eyeBtn.trigger('click')
+
+    // Header click would have expanded it; eye click must not.
+    expect(wrapper.findAll('.p-3.border-t')).toHaveLength(0)
+  })
 })
