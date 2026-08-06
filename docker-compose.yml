@@ -21,15 +21,16 @@ services:
       context: .
       dockerfile: backend/Dockerfile.dev
     container_name: resume-backend
+    # Load infra/app env from .env.docker (ports, DB URL, encryption keys).
+    # The template is .env.docker.template; copy it to .env.docker (or run
+    # ./setup.sh). Docker Compose ALSO auto-reads the root .env for ${VAR}
+    # substitution below — prefer .env.docker for anything container-facing.
+    env_file:
+      - .env.docker
     ports:
       - "${BACKEND_PORT:-3000}:3000"
     environment:
-      - NODE_ENV=${NODE_ENV:-development}
       - PORT=3000
-      - DATABASE_URL=${DATABASE_URL:-file:./prisma/db/dev.db}
-      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:${FRONTEND_PORT:-5173}}
-      - RESUME_FIELD_ENCRYPTION_KEY=${RESUME_FIELD_ENCRYPTION_KEY:-}
-      - SESSION_ENCRYPTION_KEY=${SESSION_ENCRYPTION_KEY:-}
     volumes:
       # Mount source for HMR (exclude node_modules)
       - ./backend/src:/app/src:delegated
@@ -65,7 +66,10 @@ services:
     ports:
       - "${FRONTEND_PORT:-5173}:5173"
     environment:
-      - VITE_API_BASE_URL=http://localhost:3000
+      # Frontend env is app-level (frontend/.env.template → frontend/.env);
+      # the container hard-codes the backend origin because the browser
+      # talks to the HOST-mapped port (localhost:3000), not the container.
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:${BACKEND_PORT:-3000}}
     volumes:
       # Mount source for HMR (exclude node_modules)
       - ./frontend/src:/app/src:delegated
