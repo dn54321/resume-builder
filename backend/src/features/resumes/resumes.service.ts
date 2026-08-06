@@ -248,17 +248,38 @@ export class ResumesService {
     resumeSectionId: string,
     entries: CreateResumeDto['sections'][number]['entries'],
     parentId?: string,
+    /**
+     * Maps the payload's entry `id`s to the newly created DB entry ids.
+     * Lets FLAT payloads (the builder's toPayload() shape: every entry has
+     * `parentId` set directly) keep their hierarchy — the child's parentId
+     * refers to the parent's payload id, which only resolves to a real DB id
+     * after the parent row exists. Nested `children` payloads don't need it
+     * (they pass the created parent id down explicitly).
+     */
+    idMap: Map<string, string> = new Map(),
   ): Promise<void> {
     for (const entryDto of entries) {
+      // The builder sends flat parented entries (entry.parentId points at
+      // the parent's payload id). Resolve that to the parent's CREATED id;
+      // nested `children` payloads keep using the explicit parentId param.
+      let resolvedParentId: string | null | undefined = parentId;
+      if (resolvedParentId === undefined && entryDto.parentId) {
+        resolvedParentId = idMap.get(entryDto.parentId) ?? null;
+      }
       const entry = await tx.sectionEntry.create({
         data: {
           resumeSectionId,
           order: entryDto.order,
-          parentId: parentId ?? null,
+          parentId: resolvedParentId ?? null,
           locked: entryDto.locked ?? false,
           visible: entryDto.visible ?? true,
         },
       });
+      // Remember the payload id → created id so flat children can find
+      // their parent (both flat and nested payloads may carry ids).
+      if (entryDto.id) {
+        idMap.set(entryDto.id, entry.id);
+      }
 
       for (const fieldDto of entryDto.fields) {
         const { encrypted, iv, authTag } = this.crypto.encryptField(
@@ -282,6 +303,7 @@ export class ResumesService {
           resumeSectionId,
           entryDto.children,
           entry.id,
+          idMap,
         );
       }
     }

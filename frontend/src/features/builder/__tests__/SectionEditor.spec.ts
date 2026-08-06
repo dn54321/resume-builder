@@ -12,7 +12,7 @@ describe('SectionEditor', () => {
     store.initializeDefaults()
   })
 
-  // SectionEditor lazy-loads all 10 editors via defineAsyncComponent; the
+  // SectionEditor lazy-loads all 11 editors via defineAsyncComponent; the
   // BulletList chain (ExperienceEditor → BulletList.vue) can still be
   // resolving when the test tears down, producing a vitest
   // EnvironmentTeardownError unhandled rejection that FAILS test:cov
@@ -45,9 +45,9 @@ describe('SectionEditor', () => {
       const wrapper = mountEditor()
       await flushPromises()
 
-      // By default all 10 sections are enabled
+      // By default all 11 sections are enabled
       const headers = wrapper.findAll('button[aria-label]')
-      expect(headers).toHaveLength(10)
+      expect(headers).toHaveLength(11)
 
       for (const sectionType of SECTION_TYPES) {
         expect(wrapper.text()).toContain(SECTION_LABELS[sectionType])

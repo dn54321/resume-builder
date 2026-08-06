@@ -56,6 +56,23 @@
         </div>
       </PreviewSection>
 
+      <!-- volunteer -->
+      <PreviewSection v-else-if="section.sectionType === 'volunteer'" heading="Volunteer">
+        <div v-for="entry in topLevelEntries(section)" :key="entry.id" class="standard-layout__volunteer-entry mb-[8pt]">
+          <div class="standard-layout__volunteer-header flex justify-between items-baseline">
+            <span class="standard-layout__organization text-[10pt] font-bold text-black">{{ fieldValue(section, entry.id, 'organization') }}</span>
+            <span class="standard-layout__dates text-[10pt] text-neutral-700 whitespace-nowrap">{{ formatDateRange(section, entry.id) }}</span>
+          </div>
+          <p v-if="fieldValue(section, entry.id, 'role')" class="standard-layout__volunteer-role text-[10pt] italic text-black mt-[1pt]">
+            {{ fieldValue(section, entry.id, 'role') }}
+          </p>
+          <p v-if="fieldValue(section, entry.id, 'location')" class="standard-layout__volunteer-location text-[10pt] text-neutral-700 mt-[1pt]">
+            {{ fieldValue(section, entry.id, 'location') }}
+          </p>
+          <PreviewBulletList :bullets="entryBullets(section, entry.id)" />
+        </div>
+      </PreviewSection>
+
       <!-- hard_skills -->
       <PreviewSection v-else-if="section.sectionType === 'hard_skills'" heading="Hard Skills">
         <p class="standard-layout__skills-text text-[10pt] text-black m-0 leading-[1.4]">{{ commaList(section) }}</p>
@@ -351,6 +368,9 @@ function entryBullets(section: ResumeSectionState, parentId: string) {
 .standard-layout__experience-location,
 .standard-layout__school,
 .standard-layout__education-degree,
+.standard-layout__organization,
+.standard-layout__volunteer-role,
+.standard-layout__volunteer-location,
 .standard-layout__dates,
 .standard-layout__skills-text,
 .standard-layout__project-name,

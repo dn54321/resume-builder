@@ -334,6 +334,37 @@ const sectionRenderers: Record<string, ReturnType<typeof defineComponent>> = {
     },
   }),
 
+  volunteer: defineComponent({
+    props: { section: Object as () => ResumeSectionState },
+    setup(p) {
+      const section: ResumeSectionState = p.section!
+      const entries = computed(() =>
+        section.entries
+          .filter((e) => !e.parentId && e.visible !== false)
+          .sort((a, b) => a.order - b.order),
+      )
+      return () =>
+        h(PreviewSection, { heading: 'Volunteer' }, () =>
+          entries.value.map((entry) => {
+            const bullets = entryBullets(section, entry.id)
+            return h('div', { class: 'two-col-entry mb-[8pt]', key: entry.id }, [
+              h('div', { class: 'two-col-entry-header flex justify-between items-baseline' }, [
+                h('span', { class: 'two-col-bold text-[10pt] font-bold text-black' }, fieldValue(section, entry.id, 'organization')),
+                h('span', { class: 'two-col-dates text-[10pt] text-neutral-700 whitespace-nowrap' }, formatDateRange(section, entry.id)),
+              ]),
+              fieldValue(section, entry.id, 'role')
+                ? h('p', { class: 'two-col-italic text-[10pt] italic text-black mt-[1pt]' }, fieldValue(section, entry.id, 'role'))
+                : null,
+              fieldValue(section, entry.id, 'location')
+                ? h('p', { class: 'two-col-location text-[10pt] text-neutral-700 mt-[1pt]' }, fieldValue(section, entry.id, 'location'))
+                : null,
+              bullets.length > 0 ? h(PreviewBulletList, { bullets }) : null,
+            ])
+          }),
+        )
+    },
+  }),
+
   hard_skills: defineComponent({
     props: { section: Object as () => ResumeSectionState },
     setup(p) {

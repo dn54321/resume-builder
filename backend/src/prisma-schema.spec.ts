@@ -97,12 +97,12 @@ describe('Prisma Schema and Seed', () => {
       });
     });
 
-    it('inserts exactly 10 Section rows', async () => {
+    it('inserts exactly 11 Section rows', async () => {
       const result = await client.execute(
         'SELECT COUNT(*) as count FROM Section',
       );
       const count = Number(result.rows[0]?.[0]);
-      expect(count).toBe(10);
+      expect(count).toBe(11);
     });
 
     it('contains all expected section keys', async () => {
@@ -125,6 +125,7 @@ describe('Prisma Schema and Seed', () => {
         { id: 'projects', label: 'Projects' },
         { id: 'soft_skills', label: 'Soft Skills' },
         { id: 'summary', label: 'Summary' },
+        { id: 'volunteer', label: 'Volunteer' },
       ]);
     });
 
@@ -135,13 +136,13 @@ describe('Prisma Schema and Seed', () => {
         encoding: 'utf-8',
       });
 
-      expect(result).toContain('Seeded 10 sections');
+      expect(result).toContain('Seeded 11 sections');
 
       const countResult = await client.execute(
         'SELECT COUNT(*) as count FROM Section',
       );
       const count = Number(countResult.rows[0]?.[0]);
-      expect(count).toBe(10);
+      expect(count).toBe(11);
     });
   });
 

@@ -40,6 +40,7 @@ function makeResumePayload(name: string) {
     'certifications',
     'languages',
     'hobbies',
+    'volunteer',
   ]
 
   const content: Record<string, { entries: unknown[] }> = {

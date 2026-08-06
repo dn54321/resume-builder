@@ -53,13 +53,22 @@ test.describe('Tailor Resume skips locked entries', () => {
     const bullet1Row = page.getByLabel('Bullet point 1').locator('xpath=..')
     const bullet2Row = page.getByLabel('Bullet point 2').locator('xpath=..')
 
-    // ── 2. Lock the JOB ENTRY (RES-97: locks live on sub-items) ────────
-    // The Experience editor's first entry panel holds the lock toggle.
-    const entryPanel = page.locator('[data-entry-panel]').first()
-    const lockBtn = entryPanel.locator('[data-testid="entry-lock-toggle"]')
-    await expect(lockBtn).toBeVisible()
-    await lockBtn.click()
-    await expect(entryPanel.locator('svg.lucide-lock')).toBeVisible()
+    // ── 2. Lock the BULLETS (RES-97/RES-106: Tailor-protect locks live on
+    //        bullet rows of Experience/Projects, not the parent job row) ──
+    const bullet1Lock = bullet1Row.locator('[data-testid="bullet-lock-toggle"]')
+    const bullet2Lock = bullet2Row.locator('[data-testid="bullet-lock-toggle"]')
+    await expect(bullet1Lock).toBeVisible()
+    await expect(bullet2Lock).toBeVisible()
+    await bullet1Lock.click()
+    await bullet2Lock.click()
+
+    // Parent (job) rows must NOT carry the entry lock toggle (RES-106).
+    await expect(
+      page
+        .locator('[data-entry-panel]')
+        .first()
+        .locator('[data-testid="entry-lock-toggle"]'),
+    ).toHaveCount(0)
 
     // ── 3. Save a JD and run Tailor Resume (one-step from the modal) ───
     await page.locator('[data-testid="jd-toolbar-btn"]').click()
@@ -71,35 +80,36 @@ test.describe('Tailor Resume skips locked entries', () => {
     // Filter became active…
     await expect(page.locator('[data-testid="filtered-badge"]')).toBeVisible()
 
-    // …but the LOCKED entry is untouched: both bullets stay visible,
+    // …but the LOCKED bullets are untouched: both stay visible,
     // including the one with zero JD overlap (coffee).
     await expect(bullet1Row).not.toHaveClass(/opacity-45/)
     await expect(bullet2Row).not.toHaveClass(/opacity-45/)
 
     // ── 4. Unlock → re-run Tailor → non-matching bullet IS now dimmed ──
     // The toolbar button is gone (RES-107): re-run tailoring via the JD modal.
-    await lockBtn.click()
-    await expect(entryPanel.locator('svg.lucide-lock-open')).toBeVisible()
+    await bullet1Lock.click()
+    await bullet2Lock.click()
     await page.locator('[data-testid="jd-toolbar-btn"]').click()
     await page
       .locator('[data-testid="jd-textarea"]')
       .fill('React developer with TypeScript experience')
     await page.locator('[data-testid="jd-modal-tailor"]').click()
 
-    // Unlocked entry: keyword matching applies as before.
+    // Unlocked entries: keyword matching applies as before.
     await expect(bullet1Row).not.toHaveClass(/opacity-45/)
     await expect(bullet2Row).toHaveClass(/opacity-45/)
 
     // ── 5. Lock again → Reset Filter → everything restored, lock persists ──
-    await lockBtn.click()
-    await expect(entryPanel.locator('svg.lucide-lock')).toBeVisible()
+    await bullet1Lock.click()
+    await bullet2Lock.click()
 
     await page.locator('[data-testid="toolbar-reset-btn"]').click()
     await expect(page.locator('[data-testid="filtered-badge"]')).toHaveCount(0)
     await expect(bullet1Row).not.toHaveClass(/opacity-45/)
     await expect(bullet2Row).not.toHaveClass(/opacity-45/)
 
-    // Reset Filter clears visibility state but does NOT unlock the entry.
-    await expect(entryPanel.locator('svg.lucide-lock')).toBeVisible()
+    // Reset Filter clears visibility state but does NOT unlock the bullets.
+    await expect(bullet1Lock).toHaveClass(/text-muted-foreground\/50/)
+    await expect(bullet2Lock).toHaveClass(/text-muted-foreground\/50/)
   })
 })

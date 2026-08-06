@@ -290,4 +290,28 @@ describe('toFilterResponse', () => {
 
     expect(result.filteredBulletIndices).toEqual({});
   });
+
+  it('indexes volunteer bullets like any other bullet section (RES-113)', () => {
+    const role1 = job(0, 'Habitat for Humanity', 'v1');
+    const bulletA = bullet(1, 'v1', 'Built homes for families');
+    const bulletB = bullet(2, 'v1', 'Served coffee to visitors');
+    const request = makeRequest([
+      {
+        sectionId: 'volunteer',
+        order: 0,
+        entries: [role1, bulletA, bulletB],
+      },
+    ]);
+
+    // Engine kept the role + only the matching bullet.
+    const engineResponse: TailorResponse = {
+      sections: [{ sectionId: 'volunteer', entries: [role1, bulletA] }],
+    };
+
+    const result = toFilterResponse(request, engineResponse);
+
+    expect(result.filteredBulletIndices).toEqual({
+      volunteer: [{ entryOrder: 0, bulletIndices: [0] }],
+    });
+  });
 });

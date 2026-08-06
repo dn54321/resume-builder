@@ -768,4 +768,38 @@ describe('KeywordEngine', () => {
     expect(values).toContain('TypeScript');
     expect(values).not.toContain('Excel');
   });
+
+  it('filters volunteer bullets against the JD like other content sections (RES-113)', async () => {
+    const jd = 'community outreach coordinator';
+    const entries = [
+      {
+        order: 0,
+        fields: [{ key: 'organization', value: 'Habitat for Humanity' }],
+        children: [],
+      },
+      {
+        order: 1,
+        parentId: 'v-1',
+        fields: [{ key: 'text', value: 'Led community outreach events' }],
+        children: [],
+      },
+      {
+        order: 2,
+        parentId: 'v-1',
+        fields: [{ key: 'text', value: 'Managed coffee supply chain' }],
+        children: [],
+      },
+    ];
+
+    const result = await engine.match(makeRequest(jd, entries));
+
+    // The organization entry passes through; the matching `text` bullet
+    // survives, the unrelated one is dropped — identical semantics to
+    // experience/projects (RES-113 acceptance: Tailor filters volunteer
+    // content like other content sections).
+    const values = result.sections[0].entries.map((e) => e.fields[0].value);
+    expect(values).toContain('Habitat for Humanity');
+    expect(values).toContain('Led community outreach events');
+    expect(values).not.toContain('Managed coffee supply chain');
+  });
 });

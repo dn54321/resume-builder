@@ -488,6 +488,134 @@ describe('TwoColumnLayout', () => {
     })
   })
 
+  describe('volunteer rendering (RES-113)', () => {
+    it('renders volunteer entries with organization, role, dates, location, bullets', () => {
+      const store = makeStore()
+      store.loadFromPayload({
+        layout: 'column2-1',
+        sections: [
+          {
+            sectionId: 'volunteer',
+            column: 'right',
+            order: 0,
+            entries: [
+              {
+                id: 'v-1',
+                order: 0,
+                parentId: null,
+                locked: false,
+                visible: true,
+                fields: [
+                  { key: 'organization', value: 'Habitat for Humanity', order: 0 },
+                  { key: 'role', value: 'Volunteer Coordinator', order: 1 },
+                  { key: 'startDate', value: '2021-01', order: 2 },
+                  { key: 'endDate', value: '2023-06', order: 3 },
+                  { key: 'location', value: 'Portland, OR', order: 4 },
+                  { key: 'isCurrent', value: 'false', order: 5 },
+                ],
+              },
+              {
+                order: 1,
+                parentId: 'v-1',
+                locked: false,
+                visible: true,
+                fields: [{ key: 'text', value: 'Organized donation drives', order: 0 }],
+              },
+            ],
+          },
+        ],
+      })
+
+      const wrapper = mount(TwoColumnLayout, {
+        props: { sections: store.sections },
+      })
+
+      const heading = wrapper.findAll('.preview-section__heading')
+      expect(heading.some((h) => h.text() === 'Volunteer')).toBe(true)
+
+      const right = wrapper.find('.two-column-layout__right')
+      expect(right.text()).toContain('Habitat for Humanity')
+      expect(right.text()).toContain('Volunteer Coordinator')
+      expect(right.text()).toContain('Portland, OR')
+      expect(right.text()).toContain('Organized donation drives')
+
+      const dates = wrapper.find('.two-col-dates')
+      expect(dates.text()).toContain('Jan 2021')
+      expect(dates.text()).toContain('Jun 2023')
+    })
+
+    it('shows "Present" for a current volunteer role', () => {
+      const store = makeStore()
+      store.loadFromPayload({
+        layout: 'column2-1',
+        sections: [
+          {
+            sectionId: 'volunteer',
+            column: 'right',
+            order: 0,
+            entries: [
+              {
+                order: 0,
+                parentId: null,
+                locked: false,
+                visible: true,
+                fields: [
+                  { key: 'organization', value: 'Local Shelter', order: 0 },
+                  { key: 'role', value: 'Volunteer', order: 1 },
+                  { key: 'startDate', value: '2023-01', order: 2 },
+                  { key: 'endDate', value: '', order: 3 },
+                  { key: 'location', value: '', order: 4 },
+                  { key: 'isCurrent', value: 'true', order: 5 },
+                ],
+              },
+            ],
+          },
+        ],
+      })
+
+      const wrapper = mount(TwoColumnLayout, {
+        props: { sections: store.sections },
+      })
+
+      const dates = wrapper.find('.two-col-dates')
+      expect(dates.text()).toContain('Present')
+      expect(dates.text()).toContain('Jan 2023')
+    })
+
+    it('renders volunteer in the left column when assigned there', () => {
+      const store = makeStore()
+      store.loadFromPayload({
+        layout: 'column2-1',
+        sections: [
+          {
+            sectionId: 'volunteer',
+            column: 'left',
+            order: 0,
+            entries: [
+              {
+                order: 0,
+                parentId: null,
+                locked: false,
+                visible: true,
+                fields: [{ key: 'organization', value: 'Red Cross', order: 0 }],
+              },
+            ],
+          },
+        ],
+      })
+
+      const wrapper = mount(TwoColumnLayout, {
+        props: { sections: store.sections },
+      })
+
+      const heading = wrapper.findAll('.preview-section__heading')
+      expect(heading.some((h) => h.text() === 'Volunteer')).toBe(true)
+
+      const left = wrapper.find('.two-column-layout__left')
+      expect(left.text()).toContain('Red Cross')
+    })
+  })
+
   describe('empty sections are not rendered', () => {
     it('skips sections with no entries or empty values', () => {
       const store = makeStore()

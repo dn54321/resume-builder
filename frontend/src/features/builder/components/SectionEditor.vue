@@ -62,7 +62,7 @@ const props = defineProps<{
 
 const store = useResumeStore()
 
-// All 10 section types exist in the store; filter to enabled ones
+// All 11 section types exist in the store; filter to enabled ones
 const enabledSectionTypes = computed<SectionType[]>(() =>
   SECTION_TYPES.filter((type) => store.sections.some((s) => s.sectionType === type && s.enabled)),
 )
@@ -96,6 +96,7 @@ const editorMap: Record<SectionType, Component> = {
   projects: defineAsyncComponent(() => import('./editors/ProjectsEditor.vue')),
   languages: defineAsyncComponent(() => import('./editors/LanguagesEditor.vue')),
   hobbies: defineAsyncComponent(() => import('./editors/HobbiesEditor.vue')),
+  volunteer: defineAsyncComponent(() => import('./editors/VolunteerEditor.vue')),
 }
 
 // Ref map for scroll-to behavior

@@ -603,6 +603,115 @@ describe('StandardLayout', () => {
     })
   })
 
+  describe('volunteer rendering (RES-113)', () => {
+    it('renders volunteer entries with organization, role, dates, location, bullets', () => {
+      const store = makeStore()
+      store.initializeDefaults()
+      const volSection = store.sections.find((s) => s.sectionType === 'volunteer')!
+      volSection.entries = []
+      volSection.entries.push({
+        id: 'v1',
+        order: 0,
+        parentId: null,
+        locked: false,
+        visible: true,
+        fields: [
+          { key: 'organization', value: 'Habitat for Humanity', order: 0 },
+          { key: 'role', value: 'Volunteer Coordinator', order: 1 },
+          { key: 'startDate', value: '2021-01', order: 2 },
+          { key: 'endDate', value: '2023-06', order: 3 },
+          { key: 'location', value: 'Portland, OR', order: 4 },
+          { key: 'isCurrent', value: 'false', order: 5 },
+        ],
+      })
+      volSection.entries.push({
+        id: 'vb1',
+        order: 0,
+        parentId: 'v1',
+        locked: false,
+        visible: true,
+        fields: [{ key: 'text', value: 'Organized donation drives', order: 0 }],
+      })
+
+      const wrapper = mount(StandardLayout, {
+        props: { sections: store.sections },
+      })
+
+      const heading = wrapper.findAll('.preview-section__heading')
+      expect(heading.some((h) => h.text() === 'Volunteer')).toBe(true)
+
+      const org = wrapper.find('.standard-layout__organization')
+      expect(org.text()).toBe('Habitat for Humanity')
+
+      const role = wrapper.find('.standard-layout__volunteer-role')
+      expect(role.text()).toBe('Volunteer Coordinator')
+
+      const location = wrapper.find('.standard-layout__volunteer-location')
+      expect(location.text()).toBe('Portland, OR')
+
+      const dates = wrapper.find('.standard-layout__dates')
+      expect(dates.text()).toContain('Jan 2021')
+      expect(dates.text()).toContain('Jun 2023')
+
+      const bullets = wrapper.findAll('.preview-bullet-list__item')
+      expect(bullets).toHaveLength(1)
+      expect(bullets[0]!.text()).toBe('Organized donation drives')
+    })
+
+    it('shows "Present" for a current volunteer role', () => {
+      const store = makeStore()
+      store.initializeDefaults()
+      const volSection = store.sections.find((s) => s.sectionType === 'volunteer')!
+      volSection.entries = []
+      volSection.entries.push({
+        id: 'v1',
+        order: 0,
+        parentId: null,
+        locked: false,
+        visible: true,
+        fields: [
+          { key: 'organization', value: 'Local Shelter', order: 0 },
+          { key: 'role', value: 'Volunteer', order: 1 },
+          { key: 'startDate', value: '2023-01', order: 2 },
+          { key: 'endDate', value: '', order: 3 },
+          { key: 'location', value: '', order: 4 },
+          { key: 'isCurrent', value: 'true', order: 5 },
+        ],
+      })
+
+      const wrapper = mount(StandardLayout, {
+        props: { sections: store.sections },
+      })
+
+      const dates = wrapper.find('.standard-layout__dates')
+      expect(dates.text()).toContain('Present')
+      expect(dates.text()).toContain('Jan 2023')
+    })
+
+    it('does not render the volunteer section when all entries are hidden (RES-106)', () => {
+      const store = makeStore()
+      store.initializeDefaults()
+      const volSection = store.sections.find((s) => s.sectionType === 'volunteer')!
+      volSection.entries = []
+      volSection.entries.push({
+        id: 'v1',
+        order: 0,
+        parentId: null,
+        locked: false,
+        visible: false,
+        fields: [{ key: 'organization', value: 'Hidden Org', order: 0 }],
+      })
+
+      const wrapper = mount(StandardLayout, {
+        props: { sections: store.sections },
+      })
+
+      const headings = wrapper.findAll('.preview-section__heading')
+      expect(headings.some((h) => h.text() === 'Volunteer')).toBe(false)
+      expect(wrapper.text()).not.toContain('Hidden Org')
+    })
+  })
+
   describe('section ordering', () => {
     it('renders sections in their defined order', () => {
       const store = makeStore()

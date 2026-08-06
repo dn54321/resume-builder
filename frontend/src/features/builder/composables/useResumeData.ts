@@ -251,11 +251,21 @@ export function useResumeData() {
         Array.isArray((pending as Record<string, unknown>).sections) &&
         ((pending as Record<string, unknown>).sections as unknown[]).length > 0
       ) {
-        const payload = pending as { layout?: string; sections: unknown[] }
+        const payload = pending as {
+          name?: string | null
+          layout?: string
+          sections: unknown[]
+        }
         // The resume id (null for a fresh builder) must survive the restore
         // so the next autosave PUTs /resumes/:id instead of re-creating.
         store.id = id
         store.loadFromPayload({
+          // The pending payload carries `name` too — forward it so the
+          // resume name survives a refresh that restores from sessionStorage
+          // (same contract as the API path below; without it the name
+          // silently resets to empty — found via the authenticated-builder
+          // e2e 'create new resume → save → reload → verify persisted').
+          name: payload.name ?? '',
           layout: (payload.layout as 'standard' | 'column2-1') ?? 'standard',
           sections: payload.sections as ResumePayload['sections'],
         })
@@ -397,7 +407,20 @@ export function useResumeData() {
     // (caught by the unsaved-changes e2e 'no warning after save').
     clearSessionStorage(store.id)
     if (router) {
-      await router.replace(`/builder/${created.id}`)
+      // RES-103 deferred-create: a fresh /builder claims its server id by
+      // replacing the URL with /builder/:id. But only do that when the user
+      // is STILL on the builder — if they navigated away mid-edit (e.g.
+      // clicked "My Resumes" while the debounced autosave was in flight),
+      // the row is created and store.id set, so the dashboard shows it and
+      // later edits PUT /resumes/:id. Without this guard the pending save
+      // yanked the user back to /builder/:id 1.5s after they left (found
+      // via the unsaved-changes e2e 'navigating away mid-edit').
+      const current = router.currentRoute.value
+      const stillOnBuilder =
+        current.name === 'builder' || current.name === 'builder-edit'
+      if (stillOnBuilder) {
+        await router.replace(`/builder/${created.id}`)
+      }
     }
   }
 

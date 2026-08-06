@@ -1,4 +1,4 @@
-// The 10 resume section types (must match backend Section seed)
+// The 11 resume section types (must match backend Section seed)
 export const SECTION_TYPES = [
   'name_contact',
   'summary',
@@ -10,6 +10,7 @@ export const SECTION_TYPES = [
   'certifications',
   'languages',
   'hobbies',
+  'volunteer',
 ] as const
 
 export type SectionType = (typeof SECTION_TYPES)[number]
@@ -80,6 +81,7 @@ export const SECTION_LABELS: Record<SectionType, string> = {
   certifications: 'Certifications',
   languages: 'Languages',
   hobbies: 'Hobbies',
+  volunteer: 'Volunteer',
 }
 
 export type LayoutType = 'standard' | 'column2-1'

@@ -87,7 +87,7 @@ describe('SectionToggles', () => {
 
   // ── Rendering tests ─────────────────────────────────────────────
 
-  it('renders all 10 section types', () => {
+  it('renders all 11 section types', () => {
     const wrapper = mount(SectionToggles, {
       props: {
         layout: 'standard',
@@ -97,7 +97,7 @@ describe('SectionToggles', () => {
     })
 
     const items = wrapper.findAll('li')
-    expect(items).toHaveLength(10)
+    expect(items).toHaveLength(11)
   })
 
   it('shows an eye icon for every section row (lock moved to entries in RES-97)', () => {
@@ -110,7 +110,7 @@ describe('SectionToggles', () => {
     })
 
     const items = wrapper.findAll('li')
-    expect(items).toHaveLength(10)
+    expect(items).toHaveLength(11)
     for (const item of items) {
       expect(item.find('[data-testid="section-eye-toggle"]').exists()).toBe(true)
       // Section rows must NOT carry a lock toggle anymore (RES-97).
@@ -127,7 +127,7 @@ describe('SectionToggles', () => {
       },
     })
 
-    expect(wrapper.findAll('svg.lucide-eye')).toHaveLength(10)
+    expect(wrapper.findAll('svg.lucide-eye')).toHaveLength(11)
     // No EyeOff icons when all sections are enabled
     expect(wrapper.findAll('svg.lucide-eye-off')).toHaveLength(0)
   })
@@ -142,9 +142,9 @@ describe('SectionToggles', () => {
       },
     })
 
-    // 2 enabled sections → 2 Eye icons; 8 disabled → 8 EyeOff icons
+    // 2 enabled sections → 2 Eye icons; 9 disabled → 9 EyeOff icons
     expect(wrapper.findAll('svg.lucide-eye')).toHaveLength(2)
-    expect(wrapper.findAll('svg.lucide-eye-off')).toHaveLength(8)
+    expect(wrapper.findAll('svg.lucide-eye-off')).toHaveLength(9)
 
     // Disabled section shows the slashed EyeOff icon
     const items = wrapper.findAll('li')
@@ -232,7 +232,7 @@ describe('SectionToggles', () => {
     })
 
     const selects = wrapper.findAll('select')
-    expect(selects).toHaveLength(10)
+    expect(selects).toHaveLength(11)
   })
 
   it('hides column select in 2:1 layout when showTwoColumn is false (feature flag off)', () => {
@@ -311,7 +311,7 @@ describe('SectionToggles', () => {
     const moveButtons = wrapper.findAll('button[title="Drag to reorder"]')
     // Grab handles render for every section row — hidden sections are
     // reorderable too (RES-109).
-    expect(moveButtons).toHaveLength(10)
+    expect(moveButtons).toHaveLength(11)
   })
 
   it('shows move buttons for all sections (hidden sections are reorderable too, RES-109)', () => {
@@ -327,7 +327,7 @@ describe('SectionToggles', () => {
     const moveButtons = wrapper.findAll('button[title="Drag to reorder"]')
     // Every section row shows a grab handle — hidden sections stay in the
     // list and must be repositionable as well (RES-109).
-    expect(moveButtons).toHaveLength(10)
+    expect(moveButtons).toHaveLength(11)
   })
 
   it('uses SECTION_TYPES order by default when orderedSectionTypes is not provided', () => {
@@ -346,7 +346,7 @@ describe('SectionToggles', () => {
     expect(labelTexts[0]).toContain('Name & Contact')
     expect(labelTexts[1]).toContain('Summary')
     expect(labelTexts[2]).toContain('Experience')
-    expect(labelTexts).toHaveLength(10)
+    expect(labelTexts).toHaveLength(11)
   })
 
   it('uses orderedSectionTypes prop for custom display order', () => {
@@ -460,7 +460,7 @@ describe('SectionToggles', () => {
     const disabledItems = items.filter((item) =>
       item.classes().includes('opacity-55'),
     )
-    expect(disabledItems).toHaveLength(9)
+    expect(disabledItems).toHaveLength(10)
   })
 
   // ── HTML5 Drag-and-Drop tests ───────────────────────────────────
@@ -739,6 +739,7 @@ describe('SectionToggles', () => {
         'certifications',
         'languages',
         'hobbies',
+        'volunteer',
       ])
     })
 
@@ -776,6 +777,7 @@ describe('SectionToggles', () => {
         'certifications',
         'languages',
         'hobbies',
+        'volunteer',
       ])
     })
 
@@ -815,6 +817,7 @@ describe('SectionToggles', () => {
         'certifications',
         'languages',
         'hobbies',
+        'volunteer',
       ])
     })
 
@@ -851,6 +854,7 @@ describe('SectionToggles', () => {
         'certifications',
         'languages',
         'hobbies',
+        'volunteer',
       ])
     })
 
@@ -941,6 +945,7 @@ describe('SectionToggles', () => {
         'certifications',
         'languages',
         'hobbies',
+        'volunteer',
       ])
 
       // Feed the emitted payload through the store — hidden sections must

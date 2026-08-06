@@ -9,7 +9,7 @@ describe('useResumeStore', () => {
   })
 
   describe('initializeDefaults', () => {
-    it('sets id to null (deferred create), empty name, and all 10 sections with defaults', () => {
+    it('sets id to null (deferred create), empty name, and all 11 sections with defaults', () => {
       const store = useResumeStore()
       store.initializeDefaults()
 
@@ -18,9 +18,9 @@ describe('useResumeStore', () => {
       expect(store.id).toBeNull()
       expect(store.name).toBe('')
       expect(store.layout).toBe('standard')
-      expect(store.sections).toHaveLength(10)
+      expect(store.sections).toHaveLength(11)
 
-      // All 10 section types present
+      // All 11 section types present
       const types = store.sections.map((s) => s.sectionType).sort()
       expect(types).toEqual([...SECTION_TYPES].sort())
 
@@ -79,8 +79,8 @@ describe('useResumeStore', () => {
 
       store.toggleSection('name_contact')
       expect(store.isSectionEnabled('name_contact')).toBe(false)
-      // All 10 sections still in the array
-      expect(store.sections).toHaveLength(10)
+      // All 11 sections still in the array
+      expect(store.sections).toHaveLength(11)
       const section = store.sections.find((s) => s.sectionType === 'name_contact')
       expect(section).toBeDefined()
       expect(section!.enabled).toBe(false)
@@ -117,7 +117,7 @@ describe('useResumeStore', () => {
       // Data preserved
       expect(contact.entries).toHaveLength(1)
       expect(contact.entries[0]!.fields[0]!.value).toBe('Jane Doe')
-      expect(store.sections).toHaveLength(10)
+      expect(store.sections).toHaveLength(11)
     })
 
     it('is a no-op for unknown section types (not in the array)', () => {
@@ -125,7 +125,7 @@ describe('useResumeStore', () => {
       store.initializeDefaults()
       store.toggleSection('unknown' as SectionType)
       // No change — unknown types are not in the sections array
-      expect(store.sections).toHaveLength(10)
+      expect(store.sections).toHaveLength(11)
     })
   })
 
@@ -141,7 +141,7 @@ describe('useResumeStore', () => {
       const section = store.sections.find((s) => s.sectionType === 'experience')!
       section.locked = true
 
-      expect(store.sections).toHaveLength(10)
+      expect(store.sections).toHaveLength(11)
       expect(section.enabled).toBe(true) // lock never affects the eye
     })
   })
@@ -162,7 +162,7 @@ describe('useResumeStore', () => {
       store.initializeDefaults()
       store.setSectionColumn('unknown' as SectionType, 'left')
       // No error thrown, state unchanged
-      expect(store.sections).toHaveLength(10)
+      expect(store.sections).toHaveLength(11)
     })
   })
 
@@ -180,9 +180,10 @@ describe('useResumeStore', () => {
       // Listed (enabled) sections are placed, in the requested order, into
       // the slots the listed sections occupied. Unlisted hidden sections
       // (name_contact at 0, hobbies at 9) keep their positions — they are
-      // NEVER pushed to the end (RES-109).
+      // NEVER pushed to the end (RES-109). volunteer (unlisted, slot 10)
+      // also keeps its position at the end.
       const ordered = store.sections.map((s) => s.sectionType)
-      expect(ordered).toEqual(['name_contact', ...newOrder, 'hobbies'])
+      expect(ordered).toEqual(['name_contact', ...newOrder, 'hobbies', 'volunteer'])
 
       // Orders are contiguous 0..9
       for (let i = 0; i < store.sections.length; i++) {
@@ -207,6 +208,7 @@ describe('useResumeStore', () => {
         'education',
         'summary',
         'name_contact',
+        'volunteer',
       ]
       store.reorderSections(fullOrder)
 
@@ -229,7 +231,8 @@ describe('useResumeStore', () => {
       store.reorderSections(['projects', 'experience'])
 
       // projects (was slot 6) and experience (was slot 2) trade slots; the
-      // other eight sections stay exactly where they were.
+      // other eight sections stay exactly where they were. volunteer
+      // (unlisted) keeps its slot at the end.
       expect(store.sections.map((s) => s.sectionType)).toEqual([
         'name_contact',
         'summary',
@@ -241,10 +244,11 @@ describe('useResumeStore', () => {
         'certifications',
         'languages',
         'hobbies',
+        'volunteer',
       ])
 
-      // All 10 sections preserved and still enabled
-      expect(store.sections).toHaveLength(10)
+      // All 11 sections preserved and still enabled
+      expect(store.sections).toHaveLength(11)
       expect(store.sections.map((s) => s.enabled).every(Boolean)).toBe(true)
     })
 
@@ -262,7 +266,8 @@ describe('useResumeStore', () => {
       // hobbies (slot 9) and name_contact (slot 0) trade slots — the two
       // mentioned sections are placed, in the requested order, into the slots
       // they occupy; duplicates and unknown types are ignored; the other
-      // eight sections keep their positions.
+      // eight sections keep their positions. volunteer (unlisted) keeps its
+      // slot at the end.
       expect(store.sections.map((s) => s.sectionType)).toEqual([
         'hobbies',
         'summary',
@@ -274,6 +279,7 @@ describe('useResumeStore', () => {
         'certifications',
         'languages',
         'name_contact',
+        'volunteer',
       ])
     })
   })
@@ -284,7 +290,7 @@ describe('useResumeStore', () => {
       store.initializeDefaults()
       store.toggleSection('hobbies')
 
-      expect(store.enabledSections).toHaveLength(9)
+      expect(store.enabledSections).toHaveLength(10)
       expect(store.enabledSections).not.toContain('hobbies' as SectionType)
     })
 
@@ -300,7 +306,7 @@ describe('useResumeStore', () => {
       expect(store.orderedSectionTypes).toEqual([...SECTION_TYPES])
 
       // enabledSections still excludes them (preview only renders enabled)
-      expect(store.enabledSections).toHaveLength(8)
+      expect(store.enabledSections).toHaveLength(9)
       expect(store.enabledSections).not.toContain('summary' as SectionType)
       expect(store.enabledSections).not.toContain('languages' as SectionType)
     })
@@ -323,6 +329,7 @@ describe('useResumeStore', () => {
         'certifications',
         'languages',
         'hobbies',
+        'volunteer',
       ]
       store.reorderSections(fullOrder)
 
@@ -339,7 +346,7 @@ describe('useResumeStore', () => {
 
       expect(store.leftColumnSections).toHaveLength(2)
       expect(store.leftColumnSections.map((s) => s.sectionType)).toEqual(['name_contact', 'summary'])
-      expect(store.rightColumnSections).toHaveLength(8)
+      expect(store.rightColumnSections).toHaveLength(9)
       expect(store.rightColumnSections[0]!.sectionType).toBe('experience')
     })
   })
@@ -398,9 +405,9 @@ describe('useResumeStore', () => {
 
       store.loadFromPayload(payload)
       expect(store.layout).toBe('column2-1')
-      // All 10 sections are present — saved ones keep their data,
+      // All 11 sections are present — saved ones keep their data,
       // missing ones are added as disabled defaults
-      expect(store.sections).toHaveLength(10)
+      expect(store.sections).toHaveLength(11)
 
       const contactSection = store.sections.find((s) => s.sectionType === 'name_contact')
       expect(contactSection).toBeDefined()
@@ -424,7 +431,7 @@ describe('useResumeStore', () => {
       // Round-trip
       const output = store.toPayload()
       expect(output.layout).toBe('column2-1')
-      expect(output.sections).toHaveLength(10)
+      expect(output.sections).toHaveLength(11)
     })
 
     it('re-links child entries to regenerated parent ids on load (RES-83)', () => {
@@ -504,7 +511,7 @@ describe('useResumeStore', () => {
 
       // Reload and verify
       store.loadFromPayload(payload)
-      expect(store.sections).toHaveLength(10)
+      expect(store.sections).toHaveLength(11)
       const reloadedHobby = store.sections.find((s) => s.sectionType === 'hobbies')
       expect(reloadedHobby!.enabled).toBe(false)
       expect(store.isSectionEnabled('hobbies')).toBe(false)
@@ -530,7 +537,7 @@ describe('useResumeStore', () => {
 
       // Reload and verify locked survives
       store.loadFromPayload(payload)
-      expect(store.sections).toHaveLength(10)
+      expect(store.sections).toHaveLength(11)
       expect(store.sections.find((s) => s.sectionType === 'experience')!.locked).toBe(true)
       expect(store.sections.find((s) => s.sectionType === 'education')!.locked).toBe(true)
       expect(store.sections.find((s) => s.sectionType === 'name_contact')!.locked).toBe(false)
@@ -579,7 +586,7 @@ describe('useResumeStore', () => {
     it('fills in missing sections as disabled and keeps saved ones', () => {
       const store = useResumeStore()
 
-      // Payload without `enabled` field and with only 1 of 10 sections
+      // Payload without `enabled` field and with only 1 of 11 sections
       const oldPayload = {
         layout: 'standard' as const,
         sections: [
@@ -593,8 +600,8 @@ describe('useResumeStore', () => {
       }
 
       store.loadFromPayload(oldPayload)
-      // All 10 sections are present
-      expect(store.sections).toHaveLength(10)
+      // All 11 sections are present
+      expect(store.sections).toHaveLength(11)
 
       // Saved section defaults enabled to true for backward compat
       const summary = store.sections.find((s) => s.sectionType === 'summary')
@@ -728,7 +735,7 @@ describe('useResumeStore', () => {
       const store = useResumeStore()
       store.initializeDefaults()
       store.toggleEntryLock('unknown' as SectionType, 'whatever')
-      expect(store.sections).toHaveLength(10)
+      expect(store.sections).toHaveLength(11)
     })
 
     it('is a no-op for unknown entry ids', () => {
@@ -841,7 +848,7 @@ describe('useResumeStore', () => {
       const store = useResumeStore()
       store.initializeDefaults()
       store.toggleEntryVisibility('unknown' as SectionType, 'whatever')
-      expect(store.sections).toHaveLength(10)
+      expect(store.sections).toHaveLength(11)
     })
 
     it('is a no-op for unknown entry ids', () => {
@@ -950,8 +957,8 @@ describe('useResumeStore', () => {
       store.toggleSection('hobbies')
 
       const payload = store.toPayload()
-      // All 10 sections are serialized (soft-toggle keeps them)
-      expect(payload.sections).toHaveLength(10)
+      // All 11 sections are serialized (soft-toggle keeps them)
+      expect(payload.sections).toHaveLength(11)
 
       // Disabled sections have enabled: false
       const nc = payload.sections.find((s) => s.sectionId === 'name_contact')
@@ -975,7 +982,7 @@ describe('useResumeStore', () => {
       projects.locked = true
 
       const payload = store.toPayload()
-      expect(payload.sections).toHaveLength(10)
+      expect(payload.sections).toHaveLength(11)
 
       const projectsP = payload.sections.find((s) => s.sectionId === 'projects')
       expect(projectsP!.locked).toBe(true)

@@ -133,7 +133,6 @@ test.describe('Autosave + immediate navigation (RES-105)', () => {
     )
     // First edit POSTed → URL now carries the uuid (refresh-safe)
     await page.waitForURL('**/builder/**', { timeout: 15_000 })
-  }
 
     // Navigate away — should just work, no modal
     await page.getByRole('link', { name: 'My Resumes' }).click()

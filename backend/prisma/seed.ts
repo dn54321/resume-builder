@@ -21,6 +21,7 @@ const sections = [
   { id: 'projects', label: 'Projects' },
   { id: 'languages', label: 'Languages' },
   { id: 'hobbies', label: 'Hobbies' },
+  { id: 'volunteer', label: 'Volunteer' },
 ];
 
 async function main() {

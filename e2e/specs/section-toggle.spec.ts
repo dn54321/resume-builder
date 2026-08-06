@@ -35,6 +35,7 @@ test.describe('Section toggle', () => {
       'Certifications',
       'Languages',
       'Hobbies',
+      'Volunteer',
     ]
 
     for (const label of sectionLabels) {
@@ -49,9 +50,9 @@ test.describe('Section toggle', () => {
     const rows = page
       .locator('li')
       .filter({ has: page.locator('[data-testid="section-eye-toggle"]') })
-    await expect(rows).toHaveCount(10)
+    await expect(rows).toHaveCount(11)
 
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 11; i++) {
       const row = rows.nth(i)
       await expect(row.locator('[data-testid="section-eye-toggle"]')).toBeVisible()
       // The lock toggle no longer exists on section rows.
@@ -83,7 +84,7 @@ test.describe('Section toggle', () => {
     await expect(summaryRow).not.toHaveClass(/opacity-55/)
   })
 
-  test('entry lock toggle protects a sub-item inside the editor (RES-97)', async ({ page }) => {
+  test('bullet lock toggle protects a sub-item inside the editor (RES-97/RES-106)', async ({ page }) => {
     await page.goto('/builder')
     await page.waitForSelector('text=Experience', { timeout: 10_000 })
 
@@ -91,27 +92,35 @@ test.describe('Section toggle', () => {
     const experienceRow = page.locator('li').filter({ hasText: 'Experience' })
     await experienceRow.locator('label').first().click()
 
-    // Add a job entry so there is a sub-item to lock.
+    // Add a job entry and a bullet — the Tailor-protect lock lives on the
+    // bullet rows of Experience/Projects (RES-106 refined), not the parent.
     const addBtn = page.locator('button', { hasText: '+ Add Job' })
     await addBtn.click()
 
     const entryPanel = page.locator('[data-entry-panel]').first()
-    const lockBtn = entryPanel.locator('[data-testid="entry-lock-toggle"]')
+    const addBulletBtn = page.locator('button', { hasText: '+ Add bullet point' })
+    await addBulletBtn.click()
+
+    // Parent (job) rows must NOT carry the entry lock toggle — it moved to
+    // the bullet rows (RES-106).
+    await expect(entryPanel.locator('[data-testid="entry-lock-toggle"]')).toHaveCount(0)
+
+    const lockBtn = page.locator('[data-testid="bullet-lock-toggle"]').first()
     await expect(lockBtn).toBeVisible()
 
     // Unlocked by default: open LockOpen icon.
-    await expect(entryPanel.locator('svg.lucide-lock-open')).toBeVisible()
-    await expect(entryPanel.locator('svg.lucide-lock')).toHaveCount(0)
+    await expect(page.locator('svg.lucide-lock-open').first()).toBeVisible()
+    await expect(page.locator('svg.lucide-lock').first()).toHaveCount(0)
 
     // Click the lock → locked: closed Lock icon.
     await lockBtn.click()
-    await expect(entryPanel.locator('svg.lucide-lock')).toBeVisible()
-    await expect(entryPanel.locator('svg.lucide-lock-open')).toHaveCount(0)
+    await expect(page.locator('svg.lucide-lock').first()).toBeVisible()
+    await expect(page.locator('svg.lucide-lock-open').first()).toHaveCount(0)
 
     // Click again → unlocked.
     await lockBtn.click()
-    await expect(entryPanel.locator('svg.lucide-lock-open')).toBeVisible()
-    await expect(entryPanel.locator('svg.lucide-lock')).toHaveCount(0)
+    await expect(page.locator('svg.lucide-lock-open').first()).toBeVisible()
+    await expect(page.locator('svg.lucide-lock').first()).toHaveCount(0)
   })
 
   test('label click selects the section in the editor', async ({ page }) => {
@@ -125,7 +134,7 @@ test.describe('Section toggle', () => {
     await expect(experienceRow.locator('label span').first()).toHaveClass(/text-primary/)
   })
 
-  test('disabled section is not draggable', async ({ page }) => {
+  test('disabled section stays in the list, dimmed, and remains draggable (RES-109)', async ({ page }) => {
     await page.goto('/builder')
     await page.waitForSelector('text=Hobbies', { timeout: 10_000 })
 
@@ -134,9 +143,11 @@ test.describe('Section toggle', () => {
     // Enabled by default → draggable
     await expect(hobbiesRow).toHaveAttribute('draggable', 'true')
 
-    // Disable it via the eye icon → no longer draggable
+    // Disable it via the eye icon → dimmed. RES-109 keeps hidden sections
+    // interleaved in the sidebar and reorderable, so the row STAYS draggable
+    // (it never gets pushed to the bottom).
     await hobbiesRow.locator('[data-testid="section-eye-toggle"]').click()
-    await expect(hobbiesRow).toHaveAttribute('draggable', 'false')
     await expect(hobbiesRow).toHaveClass(/opacity-55/)
+    await expect(hobbiesRow).toHaveAttribute('draggable', 'true')
   })
 })

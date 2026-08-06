@@ -13,15 +13,17 @@ vi.stubGlobal('fetch', mockFetch)
 // ─── Mock vue-router ──────────────────────────────────────────────
 // useResumeData reads the route param (loadResume fallback) and performs
 // the deferred-create navigation (router.replace). Tests control the route
-// via mockRoute.params and assert navigation via mockReplace.
-const { mockRoute, mockReplace } = vi.hoisted(() => ({
+// via mockRoute.params / mockCurrentRoute.name and assert navigation via
+// mockReplace.
+const { mockRoute, mockReplace, mockCurrentRoute } = vi.hoisted(() => ({
   mockRoute: { params: {} as Record<string, string | undefined> },
   mockReplace: vi.fn<() => Promise<unknown>>(),
+  mockCurrentRoute: { value: { name: 'builder' as string | undefined } },
 }))
 
 vi.mock('vue-router', () => ({
   useRoute: () => mockRoute,
-  useRouter: () => ({ replace: mockReplace }),
+  useRouter: () => ({ replace: mockReplace, currentRoute: mockCurrentRoute }),
 }))
 
 /**
@@ -45,6 +47,7 @@ describe('useResumeData', () => {
     mockFetch.mockReset()
     mockRoute.params = {}
     mockReplace.mockReset()
+    mockCurrentRoute.value = { name: 'builder' as string | undefined }
     // Set VITE_API_BASE_URL for useApi
     vi.stubEnv('VITE_API_BASE_URL', 'http://localhost:3000')
   })
@@ -78,15 +81,15 @@ describe('useResumeData', () => {
       for (const t of SECTION_TYPES) {
         store.toggleSection(t)
       }
-      expect(store.sections).toHaveLength(10)
+      expect(store.sections).toHaveLength(11)
       expect(store.sections.every((s) => !s.enabled)).toBe(true)
 
       const { loadResume } = useResumeData()
       await loadResume()
 
       expect(store.layout).toBe('column2-1')
-      // loadFromPayload fills missing sections to 10 — saved one is enabled
-      expect(store.sections).toHaveLength(10)
+      // loadFromPayload fills missing sections to 11 — saved one is enabled
+      expect(store.sections).toHaveLength(11)
       const nc = store.sections.find((s) => s.sectionType === 'name_contact')
       expect(nc).toBeDefined()
       expect(nc!.enabled).toBe(true)
@@ -101,15 +104,15 @@ describe('useResumeData', () => {
       // Soft-toggle: disable all sections
       store.initializeDefaults()
       SECTION_TYPES.forEach((t) => store.toggleSection(t))
-      expect(store.sections).toHaveLength(10)
+      expect(store.sections).toHaveLength(11)
       expect(store.sections.every((s) => !s.enabled)).toBe(true)
 
       const { loadResume } = useResumeData()
       await loadResume()
 
-      // Defaults initialize all 10 sections (enabled)
+      // Defaults initialize all 11 sections (enabled)
       expect(store.layout).toBe('standard')
-      expect(store.sections).toHaveLength(10)
+      expect(store.sections).toHaveLength(11)
     })
 
     it('handles corrupted localStorage gracefully', async () => {
@@ -128,7 +131,7 @@ describe('useResumeData', () => {
 
       // Corrupted data is cleared, defaults loaded
       expect(localStorage.getItem('resume_data_anon-last')).toBeNull()
-      expect(store.sections).toHaveLength(10)
+      expect(store.sections).toHaveLength(11)
       // After load, dirty should be false
       expect(dirty.value).toBe(false)
     })
@@ -258,8 +261,8 @@ describe('useResumeData', () => {
       const stored = JSON.parse(localStorage.getItem(`resume_data_${store.id}`)!)
       expect(stored.name).toBe('Local Resume')
       expect(stored.layout).toBe('column2-1')
-      // All 10 sections serialized; hobbies is disabled
-      expect(stored.sections).toHaveLength(10)
+      // All 11 sections serialized; hobbies is disabled
+      expect(stored.sections).toHaveLength(11)
       const hobbies = stored.sections.find((s: { sectionId: string }) => s.sectionId === 'hobbies')
       expect(hobbies).toBeDefined()
       expect(hobbies.enabled).toBe(false)
@@ -320,7 +323,7 @@ describe('useResumeData', () => {
       expect(store.id).toBe('resume-1')
       expect(store.layout).toBe('column2-1')
       // loadFromPayload fills missing sections — the saved one is enabled, rest are disabled
-      expect(store.sections).toHaveLength(10)
+      expect(store.sections).toHaveLength(11)
       const nc = store.sections.find((s) => s.sectionType === 'name_contact')
       expect(nc!.enabled).toBe(true)
     })
@@ -372,7 +375,7 @@ describe('useResumeData', () => {
 
       // No GET /resumes call at all — the fresh builder is pure local state
       expect(mockFetch).not.toHaveBeenCalled()
-      expect(store.sections).toHaveLength(10)
+      expect(store.sections).toHaveLength(11)
       expect(store.layout).toBe('standard')
       // No server id yet — the first edit's autosave will POST
       expect(store.id).toBeNull()
@@ -398,7 +401,7 @@ describe('useResumeData', () => {
       await loadResume()
 
       expect(store.layout).toBe('standard')
-      expect(store.sections).toHaveLength(10)
+      expect(store.sections).toHaveLength(11)
       expect(store.sections.every((s) => s.enabled)).toBe(true)
       expect(store.id).toBeNull()
     })
@@ -487,7 +490,7 @@ describe('useResumeData', () => {
       await loadResume('deleted-resume')
 
       // Falls back to defaults (fresh, no server id)
-      expect(store.sections).toHaveLength(10)
+      expect(store.sections).toHaveLength(11)
       expect(store.layout).toBe('standard')
       expect(store.id).toBeNull()
     })
@@ -628,6 +631,40 @@ describe('useResumeData', () => {
       expect(mockFetch.mock.calls[0]![1]!.method).toBe('POST')
       expect(store.id).toBe('new-resume-1')
       expect(mockReplace).toHaveBeenCalledWith('/builder/new-resume-1')
+      expect(dirty.value).toBe(false)
+    })
+
+    it('does NOT navigate back to the builder when the user has already left it (RES-105)', async () => {
+      const auth = useAuthStore()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ user: { id: 'user-1', email: 'test@test.com' }, sessionToken: 'fake-token' }),
+      )
+      await auth.login('test@test.com', 'password')
+
+      mockFetch.mockClear()
+      mockFetch.mockResolvedValueOnce(
+        createFetchResponse({ id: 'new-resume-1', layout: 'standard', sections: [] }, 201),
+      )
+
+      const store = useResumeStore()
+      store.initializeDefaults()
+      store.name = 'Mid-Edit Name'
+
+      // The user clicked "My Resumes" mid-edit — the debounced autosave
+      // fires while they are on /dashboard. The row must still be created
+      // and store.id claimed, but the URL must NOT be yanked back to the
+      // builder (otherwise the save bounces the user off the dashboard
+      // ~1.5s after they left — found via the unsaved-changes e2e).
+      mockCurrentRoute.value = { name: 'dashboard' }
+
+      const { saveResume, dirty } = useResumeData()
+      await saveResume()
+
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+      expect(mockFetch.mock.calls[0]![1]!.method).toBe('POST')
+      expect(store.id).toBe('new-resume-1')
+      // The row is created + id claimed, but no navigation happens.
+      expect(mockReplace).not.toHaveBeenCalled()
       expect(dirty.value).toBe(false)
     })
 
@@ -946,8 +983,8 @@ describe('useResumeData', () => {
 
       // Should load from sessionStorage, not from API defaults
       expect(store.layout).toBe('column2-1')
-      // loadFromPayload fills missing sections to 10 — saved one is enabled
-      expect(store.sections).toHaveLength(10)
+      // loadFromPayload fills missing sections to 11 — saved one is enabled
+      expect(store.sections).toHaveLength(11)
       const summ = store.sections.find((s) => s.sectionType === 'summary')
       expect(summ!.enabled).toBe(true)
       // Should be marked dirty because changes are pending
@@ -1014,8 +1051,8 @@ describe('useResumeData', () => {
       await loadResume('resume-1')
 
       expect(store.layout).toBe('standard')
-      // loadFromPayload fills missing sections to 10 — saved one is enabled
-      expect(store.sections).toHaveLength(10)
+      // loadFromPayload fills missing sections to 11 — saved one is enabled
+      expect(store.sections).toHaveLength(11)
       const exp = store.sections.find((s) => s.sectionType === 'experience')
       expect(exp!.enabled).toBe(true)
       expect(dirty.value).toBe(false)
@@ -1055,8 +1092,8 @@ describe('useResumeData', () => {
 
       // Corrupted data is cleared, falls back to API
       expect(sessionStorage.getItem('resume_pending_changes_resume-1')).toBeNull()
-      // loadFromPayload fills missing sections to 10 — saved one is enabled
-      expect(store.sections).toHaveLength(10)
+      // loadFromPayload fills missing sections to 11 — saved one is enabled
+      expect(store.sections).toHaveLength(11)
       const nc = store.sections.find((s) => s.sectionType === 'name_contact')
       expect(nc!.enabled).toBe(true)
     })
@@ -1342,9 +1379,9 @@ describe('useResumeData', () => {
       const { loadResume } = useResumeData()
       await loadResume()
 
-      // Fresh defaults — all 10 sections enabled, standard layout
+      // Fresh defaults — all 11 sections enabled, standard layout
       expect(store.layout).toBe('standard')
-      expect(store.sections).toHaveLength(10)
+      expect(store.sections).toHaveLength(11)
       expect(store.sections.every((s) => s.enabled)).toBe(true)
       expect(store.name).toBe('')
     })

@@ -1718,6 +1718,119 @@ describe('ResumesService', () => {
       expect(result.name).toBe('New Name');
     });
 
+    it('preserves parent-child hierarchy from FLAT parented entries (RES-113)', async () => {
+      const existingResume: ResumeRow = {
+        id: resumeId,
+        userId,
+        name: null,
+        layout: 'standard',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      const updatedResume = makeResumeResponse({
+        layout: 'standard',
+      });
+      const entryCreate = jest
+        .fn()
+        .mockResolvedValueOnce({ id: 'db-parent', parentId: null })
+        .mockResolvedValueOnce({ id: 'db-b1', parentId: 'db-parent' });
+
+      mockPrisma.$transaction.mockImplementation(
+        async (cb: TransactionCallback<ResumeTreeRow>) => {
+          const tx = {
+            resume: {
+              findUnique: jest
+                .fn()
+                .mockResolvedValueOnce(existingResume)
+                .mockResolvedValueOnce(updatedResume),
+              update: jest.fn().mockResolvedValue({}),
+            },
+            resumeSection: {
+              findMany: jest.fn().mockResolvedValue([{ id: 'rs-1' }]),
+              deleteMany: jest.fn().mockResolvedValue({}),
+              create: jest.fn().mockResolvedValue({
+                id: 'rs-2',
+                resumeId,
+                sectionId: 'volunteer',
+                column: 'right',
+                order: 0,
+              }),
+            },
+            sectionEntry: {
+              deleteMany: jest.fn().mockResolvedValue({}),
+              create: entryCreate,
+            },
+            sectionField: {
+              create: jest.fn().mockResolvedValue({}),
+            },
+          };
+          const result = cb(tx);
+          return result instanceof Promise ? result : Promise.resolve(result);
+        },
+      );
+
+      mockCrypto.encryptField.mockImplementation((value: string) =>
+        makeEncryptedField(value),
+      );
+      mockCrypto.decryptField.mockImplementation(
+        (encrypted: string, _iv: string, _authTag: string) =>
+          encrypted.replace('enc_', ''),
+      );
+
+      // The builder's toPayload() sends FLAT entries: every entry carries
+      // `parentId` (pointing at the parent's payload id), no `children`.
+      const dto = {
+        sections: [
+          {
+            sectionId: 'volunteer',
+            column: 'right',
+            order: 0,
+            entries: [
+              {
+                id: 'local-parent',
+                order: 0,
+                parentId: null,
+                locked: false,
+                visible: true,
+                fields: [{ key: 'organization', value: 'Habitat' }],
+              },
+              {
+                id: 'local-b1',
+                order: 0,
+                parentId: 'local-parent',
+                locked: false,
+                visible: true,
+                fields: [{ key: 'text', value: 'Organized drives' }],
+              },
+            ],
+          },
+        ],
+      } as unknown as UpdateResumeDto;
+
+      await service.update(resumeId, userId, dto);
+
+      // The bullet's parentId must resolve to the parent's CREATED db id
+      // (payload id 'local-parent' → db id 'db-parent'), not null.
+      expect(entryCreate).toHaveBeenCalledWith({
+        data: {
+          resumeSectionId: 'rs-2',
+          order: 0,
+          parentId: null,
+          locked: false,
+          visible: true,
+        },
+      });
+      expect(entryCreate).toHaveBeenLastCalledWith({
+        data: {
+          resumeSectionId: 'rs-2',
+          order: 0,
+          parentId: 'db-parent',
+          locked: false,
+          visible: true,
+        },
+      });
+    });
+
     it('clears name when updated with empty string', async () => {
       const existingResume: ResumeRow = {
         id: resumeId,

@@ -104,7 +104,7 @@ export const useResumeStore = defineStore('resume', () => {
 
   /**
    * Soft-toggle: flip the `enabled` flag without losing entries/fields.
-   * All 10 section types always stay in the array.
+   * All 11 section types always stay in the array.
    * @param sectionType
    */
   function toggleSection(sectionType: SectionType) {
