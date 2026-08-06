@@ -6,6 +6,9 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { SqlDriverAdapterFactory } from '@prisma/client/runtime/client';
+import { PrismaLibSql } from '@prisma/adapter-libsql';
+import { PrismaPg } from '@prisma/adapter-pg';
 import type { EnvConfig } from '../config/models/env-config.model';
 import type { PrismaClient as PrismaClientType } from '../../generated/prisma/client';
 
@@ -50,15 +53,27 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async _init(): Promise<PrismaClientType> {
-    const [{ PrismaClient }, { PrismaLibSql }] = await Promise.all([
+    const [{ PrismaClient }] = await Promise.all([
       import('../../generated/prisma/client.js'),
-      import('@prisma/adapter-libsql'),
     ]);
 
     const databaseUrl: string = this.config.getOrThrow('DATABASE_URL');
 
+    // Engine selection by DATABASE_URL scheme (see scripts/set-db-provider.js
+    // — the schema provider is rewritten to match BEFORE prisma generate):
+    //   file:… / libsql:…  → SQLite via @prisma/adapter-libsql (dev/tests)
+    //   postgresql:…       → PostgreSQL via @prisma/adapter-pg (production)
+    const isPostgres = /^postgres(ql)?:\/\//.test(databaseUrl);
+
+    let adapter: SqlDriverAdapterFactory;
+    if (isPostgres) {
+      adapter = new PrismaPg({ connectionString: databaseUrl });
+    } else {
+      adapter = new PrismaLibSql({ url: databaseUrl });
+    }
+
     this._client = new PrismaClient({
-      adapter: new PrismaLibSql({ url: databaseUrl }),
+      adapter,
       log: [
         { emit: 'stdout', level: 'warn' },
         { emit: 'stdout', level: 'error' },

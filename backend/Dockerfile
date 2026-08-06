@@ -6,8 +6,9 @@
 #                                  match where the frontend is served from,
 #                                  e.g. https://resumes.example.com. The
 #                                  backend allows this origin via CORS.
-#   DATABASE_URL                 — SQLite file path (default) or a real DB
-#                                  connection string for production.
+#   DATABASE_URL                 — file:…/libsql:… (SQLite) or postgresql://…
+#                                  (PostgreSQL). The schema provider + adapter
+#                                  are chosen automatically from the scheme.
 #   RESUME_FIELD_ENCRYPTION_KEY  — 64-hex AES-256-GCM key (PII fields).
 #   SESSION_ENCRYPTION_KEY       — 64-hex AES-256-GCM key (session tokens).
 #   NODE_ENV                     — production
@@ -22,21 +23,33 @@ WORKDIR /app
 # pnpm
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
+# DATABASE_URL build arg selects the Prisma provider for `prisma generate`
+# (set-db-provider.js rewrites schema.prisma: sqlite for file:/libsql:,
+# postgresql for postgresql://). Defaults to the sqlite dev path so a bare
+# `docker build` still works; production builds pass their real URL.
+ARG DATABASE_URL=file:./prisma/db/dev.db
+ENV DATABASE_URL=$DATABASE_URL
+
 # Copy manifests first for layer caching
 COPY backend/pnpm-workspace.yaml ./
 COPY backend/package.json backend/pnpm-lock.yaml ./
 
 RUN pnpm install --frozen-lockfile
 
-# Prisma schema + client (patched for CJS compatibility)
+# Prisma schema + scripts (client is generated AFTER src is copied — the
+# generated output lands in src/generated and would be clobbered otherwise)
 COPY backend/prisma ./prisma
 COPY backend/scripts ./scripts
-RUN pnpm run prisma:generate
 
 # Copy source + config and compile
 COPY backend/src ./src
 COPY backend/nest-cli.json backend/tsconfig.json backend/tsconfig.build.json ./
-RUN pnpm run build
+
+# Generate the client with the provider selected by DATABASE_URL (ARG above),
+# patch for CJS, then compile. Order matters: generate writes src/generated,
+# so it must run AFTER the src copy to avoid being overwritten by the host's
+# committed (sqlite) client.
+RUN pnpm run prisma:generate && pnpm run build
 
 # ─── Stage 2: slim runtime ──────────────────────────────────────────
 FROM node:22-alpine AS runtime
