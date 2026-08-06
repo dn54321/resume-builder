@@ -20,6 +20,7 @@ RUN corepack enable
 
 # Manifests first for layer caching
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
+ENV NODE_OPTIONS="--max-old-space-size=2048"
 RUN pnpm install --frozen-lockfile --child-concurrency=1 --network-concurrency=4
 
 # Config + source
