@@ -67,6 +67,8 @@ scoped (see Environment Variables) and never shared across agents.
 
 ### Running Atlas (the agent system)
 
+![Dashboard](docs/screenshots/ai-agents.png)
+
 To launch the multi-agent ticket system:
 
 ```bash
