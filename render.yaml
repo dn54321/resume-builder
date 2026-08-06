@@ -1,26 +1,25 @@
 # ─── Render Blueprint (render.yaml) ──────────────────────────────────────
-# Declares both services as DOCKER type so Render uses our production
-# Dockerfiles + their CMDs — it will NOT run its own buildpack install
-# (which tried to install the full 329-package devDep tree from the root
-# package.json and OOM'd with status 137).
+# Declares both services as `runtime: docker` so Render builds from our
+# production Dockerfiles and runs the image CMDs — it will NOT run its own
+# buildpack install (which installed the full 329-package devDep tree from
+# the root package.json and OOM'd with status 137).
 #
-# Deploy: create a Blueprint from this file, or copy these settings into
-# the two existing services. For docker services Render builds the image
-# from dockerfilePath/dockerContext and runs the image's CMD — no
+# Schema: `type: web` is the service category; `runtime: docker` tells
+# Render to build from the Dockerfile. Build args pass through
+# `dockerBuildArgs`. For Docker services Render runs the image's CMD — no
 # buildCommand, no buildpack install.
 #
-# Build args are passed via the dockerBuildArgs section.
+# Deploy: New → Blueprint from this repo, then fill the sync:false secrets.
 
 services:
   # ─── Backend API (NestJS + Prisma) ──────────────────────────────────
-  - type: docker
+  - type: web
     name: resume-backend
     runtime: docker
     repo: https://github.com/dn54321/resume-v3
     dockerfilePath: ./backend/Dockerfile
     dockerContext: .
-    # Pass DATABASE_URL as a build arg so the Prisma provider (sqlite vs
-    # postgresql) is generated correctly. Value comes from the envVar below.
+    # DATABASE_URL build arg selects the Prisma provider (sqlite vs pg).
     dockerBuildArgs:
       DATABASE_URL: ${DATABASE_URL}
     # Render injects PORT; the app binds 0.0.0.0. 401 is the auth-gated
@@ -47,7 +46,7 @@ services:
         value: "5"
 
   # ─── Frontend (Vite build → nginx) ──────────────────────────────────
-  - type: docker
+  - type: web
     name: resume-frontend
     runtime: docker
     repo: https://github.com/dn54321/resume-v3
