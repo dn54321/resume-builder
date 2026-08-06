@@ -63,14 +63,15 @@ export const useResumeStore = defineStore('resume', () => {
     sections.value.filter((s) => s.column === 'right'),
   )
 
-  // Derived: all section types sorted by order, enabled first, disabled at end
-  // (respects drag-and-drop reordering from SectionToggles)
-  const orderedSectionTypes = computed(() => {
-    const sorted = [...sections.value].sort((a, b) => a.order - b.order)
-    const enabled = sorted.filter((s) => s.enabled).map((s) => s.sectionType)
-    const disabled = sorted.filter((s) => !s.enabled).map((s) => s.sectionType)
-    return [...enabled, ...disabled]
-  })
+  // Derived: all section types sorted by order. Enabled AND disabled sections
+  // stay interleaved by their `order` — hiding a section keeps it in place
+  // instead of jumping to the bottom (RES-109). Respects drag-and-drop
+  // reordering from SectionToggles.
+  const orderedSectionTypes = computed(() =>
+    [...sections.value]
+      .sort((a, b) => a.order - b.order)
+      .map((s) => s.sectionType),
+  )
 
   /**
    *
@@ -140,38 +141,47 @@ export const useResumeStore = defineStore('resume', () => {
   }
 
   /**
-   * Reorder only enabled sections; disabled sections stay at the end
-   * preserving their relative order.
+   * Apply a new display order to the listed section types.
+   *
+   * Section types present in `orderedTypes` are placed, in the requested
+   * order, into the slots currently occupied by the listed types. Types NOT
+   * listed keep their current position — they are never pushed to the end
+   * (RES-109: hiding a section must keep it in place).
+   *
+   * SectionToggles emits the FULL ordered list (hidden sections included), so
+   * in normal use this is an exact reorder. The slot-preserving behaviour
+   * also makes partial/enabled-only lists safe: unlisted hidden sections stay
+   * exactly where they are.
    * @param orderedTypes
    */
   function reorderSections(orderedTypes: SectionType[]) {
-    const enabledSectionsList = sections.value.filter((s) => s.enabled)
-    const disabledSectionsList = sections.value.filter((s) => !s.enabled)
+    const orderedSet = new Set(orderedTypes)
+    const knownTypes = new Set(sections.value.map((s) => s.sectionType))
+    // Dedupe + drop unknown types — these are the types that get moved.
+    const reorderedTypes = orderedTypes.filter(
+      (t, i) => knownTypes.has(t) && orderedTypes.indexOf(t) === i,
+    )
 
+    const sorted = [...sections.value].sort((a, b) => a.order - b.order)
+
+    let reorderIdx = 0
     const newSections: ResumeSectionState[] = []
 
-    // First, place enabled sections in the requested order
-    for (let i = 0; i < orderedTypes.length; i++) {
-      const existing = enabledSectionsList.find((s) => s.sectionType === orderedTypes[i])
-      if (existing) {
-        existing.order = i
-        newSections.push(existing)
+    for (let i = 0; i < sorted.length; i++) {
+      const section = sorted[i]!
+      if (orderedSet.has(section.sectionType)) {
+        // This slot participates in the reorder — place the next requested
+        // type here.
+        const type = reorderedTypes[reorderIdx]!
+        reorderIdx++
+        const target = sections.value.find((s) => s.sectionType === type)!
+        target.order = i
+        newSections.push(target)
+      } else {
+        // Not part of the reorder — keep the section in its current slot.
+        section.order = i
+        newSections.push(section)
       }
-    }
-
-    // Append any enabled sections not in orderedTypes (safety net)
-    for (const s of enabledSectionsList) {
-      if (!newSections.includes(s)) {
-        s.order = newSections.length
-        newSections.push(s)
-      }
-    }
-
-    // Append disabled sections at the end, preserving their relative order
-    const disabledBase = newSections.length
-    for (let i = 0; i < disabledSectionsList.length; i++) {
-      disabledSectionsList[i]!.order = disabledBase + i
-      newSections.push(disabledSectionsList[i]!)
     }
 
     sections.value = newSections

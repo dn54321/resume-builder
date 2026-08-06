@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import { setActivePinia, createPinia } from 'pinia'
 import SectionToggles from '@/features/builder/components/SectionToggles.vue'
+import { useResumeStore } from '@/features/builder/stores/resume'
 import { SECTION_TYPES, type SectionType } from '@/features/builder/types/resume'
 
 // jsdom 29 does not provide DataTransfer or DragEvent globals.
@@ -297,7 +298,7 @@ describe('SectionToggles', () => {
     expect(wrapper.emitted('setColumn')![0]).toEqual(['name_contact' as SectionType, 'left'])
   })
 
-  it('shows move buttons for enabled sections', () => {
+  it('shows move buttons for all sections (visible and hidden)', () => {
     const enabled: SectionType[] = ['name_contact', 'summary', 'experience']
     const wrapper = mount(SectionToggles, {
       props: {
@@ -308,10 +309,12 @@ describe('SectionToggles', () => {
     })
 
     const moveButtons = wrapper.findAll('button[title="Drag to reorder"]')
-    expect(moveButtons).toHaveLength(3)
+    // Grab handles render for every section row — hidden sections are
+    // reorderable too (RES-109).
+    expect(moveButtons).toHaveLength(10)
   })
 
-  it('hides move buttons for disabled sections', () => {
+  it('shows move buttons for all sections (hidden sections are reorderable too, RES-109)', () => {
     const enabled: SectionType[] = ['name_contact']
     const wrapper = mount(SectionToggles, {
       props: {
@@ -322,7 +325,9 @@ describe('SectionToggles', () => {
     })
 
     const moveButtons = wrapper.findAll('button[title="Drag to reorder"]')
-    expect(moveButtons).toHaveLength(1)
+    // Every section row shows a grab handle — hidden sections stay in the
+    // list and must be repositionable as well (RES-109).
+    expect(moveButtons).toHaveLength(10)
   })
 
   it('uses SECTION_TYPES order by default when orderedSectionTypes is not provided', () => {
@@ -461,7 +466,7 @@ describe('SectionToggles', () => {
   // ── HTML5 Drag-and-Drop tests ───────────────────────────────────
 
   describe('drag and drop', () => {
-    it('sets draggable="true" on enabled sections only', () => {
+    it('sets draggable="true" on all sections (hidden sections are reorderable too, RES-109)', () => {
       const enabled: SectionType[] = ['name_contact', 'summary']
       const wrapper = mount(SectionToggles, {
         props: {
@@ -472,11 +477,11 @@ describe('SectionToggles', () => {
       })
 
       const items = wrapper.findAll('li')
-      // name_contact (index 0) and summary (index 1) are enabled → draggable
-      expect(items[0]!.attributes('draggable')).toBe('true')
-      expect(items[1]!.attributes('draggable')).toBe('true')
-      // experience (index 2) is disabled → not draggable
-      expect(items[2]!.attributes('draggable')).toBe('false')
+      // Every section — visible or hidden — is draggable: hidden sections stay
+      // in the list (interleaved by order) and can be repositioned (RES-109).
+      for (const item of items) {
+        expect(item.attributes('draggable')).toBe('true')
+      }
     })
 
     it('onDragStart sets dataTransfer.effectAllowed and hides dragged item', async () => {
@@ -502,7 +507,7 @@ describe('SectionToggles', () => {
       expect(li.classes()).toContain('opacity-50')
     })
 
-    it('onDragStart prevents dragging disabled sections', () => {
+    it('onDragStart allows dragging disabled (hidden) sections', () => {
       const enabled: SectionType[] = ['name_contact']
       const wrapper = mount(SectionToggles, {
         props: {
@@ -512,14 +517,18 @@ describe('SectionToggles', () => {
         },
       })
 
-      // summary is disabled (index 1)
+      // summary is disabled (index 1) but still draggable (RES-109)
       const disabledLi = wrapper.findAll('li')[1]!
       const event = createDragEvent('dragstart')
       const preventDefaultSpy = vi.spyOn(event, 'preventDefault')
       disabledLi.element.dispatchEvent(event)
 
-      // preventDefault should be called because the section is not enabled
-      expect(preventDefaultSpy).toHaveBeenCalled()
+      // Dragging a hidden section is allowed — it stays in the list and can
+      // be repositioned, so preventDefault must NOT be called.
+      expect(preventDefaultSpy).not.toHaveBeenCalled()
+      const dt = (event as unknown as { dataTransfer: MockDataTransfer }).dataTransfer
+      expect(dt.effectAllowed).toBe('move')
+      expect(dt.getData('text/plain')).toBe('summary')
     })
 
     it('onDragOver prevents default and sets dropIndicator (above)', async () => {
@@ -578,7 +587,7 @@ describe('SectionToggles', () => {
       expect(targetLi.classes()).toContain('border-primary')
     })
 
-    it('onDragOver does nothing for disabled sections', () => {
+    it('onDragOver allows dropping on disabled (hidden) sections', async () => {
       const enabled: SectionType[] = ['name_contact', 'summary']
       const wrapper = mount(SectionToggles, {
         props: {
@@ -591,19 +600,22 @@ describe('SectionToggles', () => {
       // Start drag on name_contact
       const sourceLi = wrapper.findAll('li')[0]!
       sourceLi.element.dispatchEvent(createDragEvent('dragstart'))
+      await nextTick()
 
-      // Try to drag over "experience" (disabled, index 2)
+      // Drag over "experience" (disabled, index 2) — hidden sections hold a
+      // position in the list and are valid drop targets (RES-109)
       const disabledLi = wrapper.findAll('li')[2]!
       mockRect(disabledLi.element, { top: 200, bottom: 240, height: 40 })
-      const dragOverEvent = createDragEvent('dragover', { clientY: 210 })
+      const dragOverEvent = createDragEvent('dragover', { clientY: 230 }) // bottom half (> 220)
       const preventDefaultSpy = vi.spyOn(dragOverEvent, 'preventDefault')
       disabledLi.element.dispatchEvent(dragOverEvent)
+      await nextTick()
 
-      // preventDefault should NOT be called (drop not allowed on disabled)
-      expect(preventDefaultSpy).not.toHaveBeenCalled()
-      // No indicator classes
-      expect(disabledLi.classes()).not.toContain('border-t-2')
-      expect(disabledLi.classes()).not.toContain('border-b-2')
+      // preventDefault SHOULD be called (drop allowed on hidden sections)
+      expect(preventDefaultSpy).toHaveBeenCalled()
+      // Indicator classes applied
+      expect(disabledLi.classes()).toContain('border-b-2')
+      expect(disabledLi.classes()).toContain('border-primary')
     })
 
     it('onDragOver skips indicator when dragging over self', () => {
@@ -709,16 +721,25 @@ describe('SectionToggles', () => {
       targetLi.element.dispatchEvent(createDragEvent('dragover', { clientY: 210 }))
 
       // Drop on experience
-      const dropEvent = createDragEvent('drop', { clientY: 210 })
-      targetLi.element.dispatchEvent(dropEvent)
+      targetLi.element.dispatchEvent(createDragEvent('drop', { clientY: 210 }))
 
       // Should emit reorder with name_contact moved before experience
       expect(wrapper.emitted('reorder')).toBeTruthy()
       const reorderPayload = wrapper.emitted('reorder')![0]![0] as SectionType[]
-      // name_contact was index 0, experience was index 2.
-      // Drop above experience → name_contact goes to index 1 (before experience)
-      // New order: summary, name_contact, experience, education
-      expect(reorderPayload).toEqual(['summary', 'name_contact', 'experience', 'education'])
+      // Full order emitted — hidden (disabled) sections keep their interleaved
+      // positions and are never pushed to the end (RES-109)
+      expect(reorderPayload).toEqual([
+        'summary',
+        'name_contact',
+        'experience',
+        'education',
+        'hard_skills',
+        'soft_skills',
+        'projects',
+        'certifications',
+        'languages',
+        'hobbies',
+      ])
     })
 
     it('onDrop reorders sections when dropping below target', () => {
@@ -744,14 +765,22 @@ describe('SectionToggles', () => {
       targetLi.element.dispatchEvent(createDragEvent('drop', { clientY: 230 }))
 
       const reorderPayload = wrapper.emitted('reorder')![0]![0] as SectionType[]
-      // name_contact was index 0, experience was index 2.
-      // Drop below experience → name_contact goes after experience
-      // New order: summary, experience, name_contact, education
-      expect(reorderPayload).toEqual(['summary', 'experience', 'name_contact', 'education'])
+      expect(reorderPayload).toEqual([
+        'summary',
+        'experience',
+        'name_contact',
+        'education',
+        'hard_skills',
+        'soft_skills',
+        'projects',
+        'certifications',
+        'languages',
+        'hobbies',
+      ])
     })
 
-    it('onDrop does nothing on disabled sections', () => {
-      const enabledSections: SectionType[] = ['name_contact', 'summary']
+    it('onDrop reorders relative to a hidden (disabled) section — hidden keeps its position (RES-109)', () => {
+      const enabledSections: SectionType[] = ['name_contact', 'summary', 'experience', 'education']
       const wrapper = mount(SectionToggles, {
         props: {
           layout: 'standard',
@@ -760,16 +789,69 @@ describe('SectionToggles', () => {
         },
       })
 
-      // Start drag on name_contact
+      // Start drag on name_contact (index 0)
       const sourceLi = wrapper.findAll('li')[0]!
       sourceLi.element.dispatchEvent(createDragEvent('dragstart'))
 
-      // Try to drop on disabled experience section
-      const disabledLi = wrapper.findAll('li')[2]!
-      disabledLi.element.dispatchEvent(createDragEvent('drop'))
+      // Drop ABOVE "soft_skills" (index 5, hidden) — hidden sections are
+      // valid drop targets
+      const hiddenLi = wrapper.findAll('li')[5]!
+      mockRect(hiddenLi.element, { top: 500, bottom: 540, height: 40 })
+      hiddenLi.element.dispatchEvent(createDragEvent('dragover', { clientY: 510 }))
+      hiddenLi.element.dispatchEvent(createDragEvent('drop', { clientY: 510 }))
 
-      // Should not emit reorder
-      expect(wrapper.emitted('reorder')).toBeFalsy()
+      expect(wrapper.emitted('reorder')).toBeTruthy()
+      const reorderPayload = wrapper.emitted('reorder')![0]![0] as SectionType[]
+      // name_contact moves to just before soft_skills; the hidden section
+      // stays in the emitted full order (never pushed to the end)
+      expect(reorderPayload).toEqual([
+        'summary',
+        'experience',
+        'education',
+        'hard_skills',
+        'name_contact',
+        'soft_skills',
+        'projects',
+        'certifications',
+        'languages',
+        'hobbies',
+      ])
+    })
+
+    it('onDrop reorders a hidden (disabled) section itself (RES-109)', () => {
+      const enabledSections: SectionType[] = ['name_contact', 'summary', 'experience', 'education']
+      const wrapper = mount(SectionToggles, {
+        props: {
+          layout: 'standard',
+          enabledSections,
+          columnAssignments: noAssignments,
+        },
+      })
+
+      // Drag hidden "soft_skills" (index 5) above name_contact (index 0)
+      const sourceLi = wrapper.findAll('li')[5]! // soft_skills (hidden)
+      sourceLi.element.dispatchEvent(createDragEvent('dragstart'))
+
+      const targetLi = wrapper.findAll('li')[0]! // name_contact
+      mockRect(targetLi.element, { top: 0, bottom: 40, height: 40 })
+      targetLi.element.dispatchEvent(createDragEvent('dragover', { clientY: 10 }))
+      targetLi.element.dispatchEvent(createDragEvent('drop', { clientY: 10 }))
+
+      expect(wrapper.emitted('reorder')).toBeTruthy()
+      const reorderPayload = wrapper.emitted('reorder')![0]![0] as SectionType[]
+      // soft_skills (hidden) moves to the top, everything else shifts down
+      expect(reorderPayload).toEqual([
+        'soft_skills',
+        'name_contact',
+        'summary',
+        'experience',
+        'education',
+        'hard_skills',
+        'projects',
+        'certifications',
+        'languages',
+        'hobbies',
+      ])
     })
 
     it('onDrop does nothing when dropping on self', () => {
@@ -822,9 +904,11 @@ describe('SectionToggles', () => {
       expect(targetLi.classes()).not.toContain('border-t-2')
     })
 
-    it('integrates with store reorderSections via emit', () => {
+    it('integrates with store reorderSections via emit (hidden sections keep position, RES-109)', () => {
       // This test verifies the emitted payload is compatible with
-      // reorderSections in resume.ts (which expects SectionType[]).
+      // reorderSections in resume.ts: the FULL order is emitted and the
+      // store applies it verbatim, so hidden sections are never pushed to
+      // the end.
       const enabledSections: SectionType[] = ['experience', 'education', 'hard_skills']
       const wrapper = mount(SectionToggles, {
         props: {
@@ -834,7 +918,7 @@ describe('SectionToggles', () => {
         },
       })
 
-      // Drag experience (li index 2, enabled index 0) below hard_skills (li index 4, enabled index 2)
+      // Drag experience (li index 2, full index 2) below hard_skills (li index 4, full index 4)
       const sourceLi = wrapper.findAll('li')[2]! // experience
       sourceLi.element.dispatchEvent(createDragEvent('dragstart'))
 
@@ -845,8 +929,42 @@ describe('SectionToggles', () => {
       targetLi.element.dispatchEvent(createDragEvent('drop', { clientY: 430 }))
 
       const reorderPayload = wrapper.emitted('reorder')![0]![0] as SectionType[]
-      // experience moves after hard_skills → [education, hard_skills, experience]
-      expect(reorderPayload).toEqual(['education', 'hard_skills', 'experience'])
+      // experience moves after hard_skills; hidden sections stay interleaved
+      expect(reorderPayload).toEqual([
+        'name_contact',
+        'summary',
+        'education',
+        'hard_skills',
+        'experience',
+        'soft_skills',
+        'projects',
+        'certifications',
+        'languages',
+        'hobbies',
+      ])
+
+      // Feed the emitted payload through the store — hidden sections must
+      // keep their positions (RES-109).
+      const store = useResumeStore()
+      store.initializeDefaults()
+      store.toggleSection('name_contact')
+      store.toggleSection('summary')
+      store.toggleSection('soft_skills')
+      store.toggleSection('projects')
+      store.toggleSection('certifications')
+      store.toggleSection('languages')
+      store.toggleSection('hobbies')
+      // Restore the enabled set used by the component above
+      store.toggleSection('name_contact')
+      store.toggleSection('summary')
+      store.reorderSections(reorderPayload)
+
+      const ordered = store.sections.map((s) => s.sectionType)
+      expect(ordered).toEqual(reorderPayload)
+      // Orders are contiguous 0..9
+      for (let i = 0; i < store.sections.length; i++) {
+        expect(store.sections[i]!.order).toBe(i)
+      }
     })
   })
 })

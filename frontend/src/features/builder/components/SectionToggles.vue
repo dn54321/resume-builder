@@ -13,7 +13,7 @@
           'border-t-2 border-primary': dropIndicator?.type === section.type && dropIndicator?.position === 'above',
           'border-b-2 border-primary': dropIndicator?.type === section.type && dropIndicator?.position === 'below',
         }"
-        :draggable="section.enabled"
+        :draggable="true"
         @dragstart="onDragStart($event, section.type)"
         @dragover="onDragOver($event, section.type)"
         @dragleave="onDragLeave($event, section.type)"
@@ -58,11 +58,12 @@
           <option value="right">Right</option>
         </select>
 
+        <!-- Grab handle: shown for ALL sections (visible and hidden) — hidden
+             sections stay in the list and are reorderable too (RES-109). -->
         <button
-          v-if="section.enabled"
           class="w-7 h-7 flex items-center justify-center border-none bg-transparent text-muted-foreground/70 cursor-grab rounded-sm text-sm hover:bg-muted/50 hover:text-foreground active:cursor-grabbing"
           title="Drag to reorder"
-          aria-label="Reorder {{ section.label }}"
+          :aria-label="`Reorder ${section.label}`"
         >
           &#x2630;
         </button>
@@ -84,7 +85,7 @@ import {
 const props = withDefaults(defineProps<{
   layout: LayoutType
   enabledSections: SectionType[]
-  /** Display order of enabled sections (from store, respects drag-and-drop reordering) */
+  /** Display order of ALL sections (visible + hidden interleaved by order — RES-109) */
   orderedSectionTypes?: SectionType[]
   columnAssignments: Record<SectionType, 'left' | 'right'>
   selectedSectionId?: string | null
@@ -140,16 +141,12 @@ const orderedSections = computed<OrderedSection[]>(() => {
 
 /**
  * Handle HTML5 dragstart — set effect allowed and store the dragged section type.
- * Only fires on enabled (draggable) items.
+ * Both visible AND hidden sections are draggable: hidden sections stay in the
+ * list (interleaved by order, RES-109) and must be reorderable too.
  * @param event
  * @param sectionType
  */
 function onDragStart(event: DragEvent, sectionType: SectionType) {
-  const section = orderedSections.value.find((s) => s.type === sectionType)
-  if (!section?.enabled) {
-    event.preventDefault()
-    return
-  }
   if (!event.dataTransfer) return
   dragType.value = sectionType
   event.dataTransfer.effectAllowed = 'move'
@@ -159,14 +156,12 @@ function onDragStart(event: DragEvent, sectionType: SectionType) {
 /**
  * Handle dragover — determine above/below position and show insertion indicator.
  * Must call preventDefault() to allow dropping.
+ * Drops are allowed on ALL sections (visible and hidden) — hidden sections
+ * hold a position in the list and must be usable as drop targets (RES-109).
  * @param event
  * @param sectionType
  */
 function onDragOver(event: DragEvent, sectionType: SectionType) {
-  // Only allow drops on enabled sections (disabled stay at end)
-  const section = orderedSections.value.find((s) => s.type === sectionType)
-  if (!section?.enabled) return
-
   // Don't show indicator when dragging over yourself
   if (dragType.value === sectionType) return
 
@@ -200,8 +195,8 @@ function onDragLeave(event: DragEvent, sectionType: SectionType) {
 }
 
 /**
- * Handle drop — compute new section order from dragged + target + indicator position,
- * then emit the reorder event.
+ * Handle drop — compute the new FULL section order (hidden sections keep
+ * their interleaved position) and emit the reorder event.
  * @param event
  * @param targetType
  */
@@ -214,14 +209,6 @@ function onDrop(event: DragEvent, targetType: SectionType) {
     return
   }
 
-  // Don't allow dropping on disabled sections
-  const targetSection = orderedSections.value.find((s) => s.type === targetType)
-  if (!targetSection?.enabled) {
-    dragType.value = null
-    dropIndicator.value = null
-    return
-  }
-
   // Don't allow dropping on self
   if (dragType.value === targetType) {
     dragType.value = null
@@ -229,13 +216,12 @@ function onDrop(event: DragEvent, targetType: SectionType) {
     return
   }
 
-  // Get current enabled sections in order
-  const enabledList = orderedSections.value
-    .filter((s) => s.enabled)
-    .map((s) => s.type)
+  // Full display order (visible + hidden interleaved) — hidden sections are
+  // valid drop targets and keep their position in the emitted order (RES-109).
+  const fullList = orderedSections.value.map((s) => s.type)
 
-  const draggedIdx = enabledList.indexOf(dragType.value)
-  let targetIdx = enabledList.indexOf(targetType)
+  const draggedIdx = fullList.indexOf(dragType.value)
+  let targetIdx = fullList.indexOf(targetType)
 
   if (draggedIdx === -1 || targetIdx === -1) {
     dragType.value = null
@@ -248,13 +234,15 @@ function onDrop(event: DragEvent, targetType: SectionType) {
     targetIdx++
   }
 
-  const newOrder = [...enabledList]
+  const newOrder = [...fullList]
   newOrder.splice(draggedIdx, 1)
 
   // Adjust target index if dragged was before target (array shrank by 1)
   const adjustedTargetIdx = draggedIdx < targetIdx ? targetIdx - 1 : targetIdx
   newOrder.splice(adjustedTargetIdx, 0, dragType.value)
 
+  // Emit the FULL order (all section types, hidden included) — the store
+  // applies it verbatim so hidden sections never get pushed to the end.
   emit('reorder', newOrder)
 
   dragType.value = null
