@@ -211,6 +211,114 @@ export function pushBranch(worktreePath: string, branch: string): GitResult {
 // ─── Merge ──────────────────────────────────────────────────────────
 
 /**
+ * Check whether a merge is in progress in the given repo.
+ * A merge in progress leaves .git/MERGE_HEAD on disk. Used to detect:
+ *  - stale merges orphaned by a crashed worker (exit -1 mid-merge)
+ *  - conflicted merges that were never aborted (RES-103 board stall)
+ */
+export function hasMergeInProgress(repoRoot: string): boolean {
+  return fs.existsSync(path.join(repoRoot, '.git', 'MERGE_HEAD'));
+}
+
+/**
+ * ⚠️ RES-110 — abort an in-progress/stale merge in the main repo, returning
+ * the working tree to a clean state.
+ *
+ * WHY: a conflicted merge that is never aborted leaves .git/MERGE_HEAD +
+ * conflict markers in the main repo working tree. The pre-push hook lints
+ * the whole tree, so EVERY subsequent push fails ("conflict markers"/syntax
+ * errors) until a human aborts — the entire board stalls (observed: RES-103
+ * left three orphaned merges and blocked every worker's push).
+ *
+ * SAFETY: a plain `git merge --abort` wipes any legitimately staged work in
+ * the same tree (the boss stages its atlas fixes here — observed twice, see
+ * AGENTS.md). So we PRESERVE staged/unstaged changes on files NOT involved
+ * in the conflict and re-apply them after the abort. Conflict-marker content
+ * on the merged files is deliberately NOT restored (that would re-dirty the
+ * tree and re-block pushes). If restoration fails (patch no longer applies),
+ * the tree stays CLEAN — that is the primary safety property.
+ *
+ * Callers: mergeToBranch pre-flight (stale merge from a crashed run),
+ * mergeToBranch conflict path (abort + re-queue), startOrchestrator startup,
+ * checkAgentHealth sweep.
+ */
+export function abortInProgressMerge(
+  repoRoot: string,
+): { aborted: boolean; note: string } {
+  const mergeHead = path.join(repoRoot, '.git', 'MERGE_HEAD');
+  if (!fs.existsSync(mergeHead)) {
+    return { aborted: false, note: 'no merge in progress' };
+  }
+
+  // Files involved in the conflict — their working-tree content is conflict
+  // markers, which must NOT be re-applied after the abort. When the list
+  // cannot be computed (exitCode !== 0) we skip the UNSTAGED restore below
+  // (a blind `git diff` could include conflict markers and re-dirty the
+  // tree — the exact failure mode this function exists to prevent). Staged
+  // content is always safe: git blocks staging unmerged paths, so staged
+  // changes can never contain conflict markers.
+  const conflicted = execGit(['diff', '--name-only', '--diff-filter=U'], repoRoot);
+  const conflictedFiles =
+    conflicted.exitCode === 0
+      ? conflicted.stdout.split('\n').filter(Boolean)
+      : [];
+  const exclude = conflictedFiles.map((f) => `:(exclude)${f}`);
+
+  const staged = execGit(['diff', '--cached', '--', '.', ...exclude], repoRoot);
+  const unstagedKnown = conflicted.exitCode === 0;
+  const unstaged = unstagedKnown
+    ? execGit(['diff', '--', '.', ...exclude], repoRoot)
+    : { stdout: '', stderr: '', exitCode: 0 };
+
+  const abort = execGit(['merge', '--abort'], repoRoot);
+  if (abort.exitCode !== 0) {
+    return {
+      aborted: false,
+      note: `git merge --abort failed: ${abort.stderr || abort.stdout || 'unknown error'}`,
+    };
+  }
+
+  // Best-effort restore of preserved work. Failures keep the tree CLEAN
+  // (primary safety property) and are reported in the note.
+  const restored: string[] = [];
+  if (staged.stdout && !applyPatch(staged.stdout, repoRoot, true)) {
+    restored.push('staged (FAILED to restore)');
+  } else if (staged.stdout) {
+    restored.push('staged');
+  }
+  if (unstaged.stdout && !applyPatch(unstaged.stdout, repoRoot, false)) {
+    restored.push('unstaged (FAILED to restore)');
+  } else if (unstaged.stdout) {
+    restored.push('unstaged');
+  }
+
+  return {
+    aborted: true,
+    note: `aborted in-progress merge (${conflictedFiles.length} conflicted file(s))` +
+      (restored.length ? `; restored: ${restored.join(', ')}` : ''),
+  };
+}
+
+/**
+ * Apply a patch to a repo via `git apply`, optionally to the index only
+ * (--cached). Reads the patch from stdin. Returns true on success.
+ */
+function applyPatch(patch: string, repoRoot: string, cached: boolean): boolean {
+  try {
+    const args = cached ? ['apply', '--cached', '-'] : ['apply', '-'];
+    const result = cp.spawnSync('git', args, {
+      cwd: repoRoot,
+      encoding: 'utf-8',
+      input: patch,
+      timeout: 30_000,
+    });
+    return result.status === 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Merge the worker's branch into the target branch and push.
  * Runs from the MAIN repo directory (worktrees cannot checkout branches
  * that are already checked out in another worktree).
@@ -238,6 +346,17 @@ export function mergeToBranch(
       stderr: `Merge aborted — cannot resolve the main repo: ${msg}`,
       exitCode: 1,
     };
+  }
+
+  // ⚠️ RES-110 — PRE-FLIGHT: clear any stale in-progress merge BEFORE the
+  // dirty-tree guard below. A crashed worker (exit -1 mid-merge) orphans
+  // .git/MERGE_HEAD + conflict markers; `git status --porcelain` then shows
+  // UU/M entries, so the dirty guard would wait its full timeout and DEFER
+  // every merge forever. Abort the stale merge first (preserving any work
+  // staged since), then the tree is clean again and the guard can proceed.
+  if (hasMergeInProgress(mainRepo)) {
+    const cleared = abortInProgressMerge(mainRepo);
+    console.warn(`[mergeToBranch] Cleared stale in-progress merge in ${mainRepo}: ${cleared.note}`);
   }
 
   // ⚠️ GUARD: refuse to merge when the main repo working tree is DIRTY.
@@ -282,7 +401,24 @@ export function mergeToBranch(
 
   // Merge
   const mergeResult = execGit(['merge', sourceBranch, '-m', commitMessage], mainRepo);
-  if (mergeResult.exitCode !== 0) return mergeResult;
+  if (mergeResult.exitCode !== 0) {
+    // ⚠️ RES-110 — a conflicted merge MUST be aborted, never left in
+    // progress. MERGE_HEAD + conflict markers in the main repo break every
+    // subsequent push (the pre-push hook lints the tree) and stall the whole
+    // board (observed: RES-103, three orphaned merges + manual recovery).
+    // Abort restores the tree to its pre-merge (clean) state; the strategy
+    // layer re-queues the ticket with the conflict details.
+    const abortInfo = abortInProgressMerge(mainRepo);
+    const detail = mergeResult.stderr || mergeResult.stdout || 'merge failed';
+    if (abortInfo.aborted) {
+      return {
+        stdout: '',
+        stderr: `Merge conflict detected: ${detail}. ${abortInfo.note} — tree restored clean, ticket re-queued.`,
+        exitCode: 1,
+      };
+    }
+    return { stdout: '', stderr: `Merge failed: ${detail}`, exitCode: 1 };
+  }
 
   // Push — MUST use PUSH_TIMEOUT_MS: the pre-push hook runs the full
   // test:cov suites (see the ⚠️ WARNING above execGit). The default 30s

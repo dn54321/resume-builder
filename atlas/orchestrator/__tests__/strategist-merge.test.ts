@@ -191,4 +191,24 @@ describe('Strategist — merge throw resilience', () => {
     expect(result.success).toBe(false);
     expect(result.error).toContain('bare');
   });
+
+  it('surfaces merge-CONFLICT errors (abort + clean tree) as retryable failures for re-queue', async () => {
+    // RES-110: on conflict, mergeToBranch now aborts and returns the
+    // conflict details. executeDirect must surface them so onWorkerComplete
+    // re-queues the ticket with the details (instead of the board stalling
+    // on orphaned MERGE_HEAD + conflict markers — observed RES-103).
+    vi.mocked(mergeToBranch).mockReturnValue({
+      exitCode: 1,
+      stdout: '',
+      stderr: 'Merge conflict detected: CONFLICT (content): Merge conflict in src/useResumeData.ts. aborted in-progress merge (1 conflicted file(s)) — tree restored clean, ticket re-queued.',
+    });
+
+    const node = makeNode();
+    const result = await executeStrategy(node);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Merge conflict detected');
+    expect(result.error).toContain('CONFLICT (content)');
+    expect(result.error).toContain('tree restored clean');
+  });
 });
