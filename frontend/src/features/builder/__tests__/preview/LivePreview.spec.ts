@@ -262,7 +262,9 @@ describe('LivePreview', () => {
     expect(controls.exists()).toBe(true)
     expect(controls.classes()).toContain('absolute')
     expect(controls.classes()).toContain('bottom-3')
-    expect(controls.classes()).toContain('right-3')
+    // right-6: the control clears the preview scrollbar (regression — it
+    // used to sit flush against the scrollbar at right-3)
+    expect(controls.classes()).toContain('right-6')
 
     expect(wrapper.find('[data-testid="preview-zoom-in"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="preview-zoom-out"]').exists()).toBe(true)

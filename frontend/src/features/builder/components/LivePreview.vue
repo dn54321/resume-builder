@@ -33,7 +33,7 @@
          paper scales up/down around the fitted size. Range 50%–150% in 10%
          steps; the % indicator shows the current zoom factor. -->
     <div
-      class="live-preview__zoom-controls absolute bottom-3 right-3 z-10 inline-flex items-center gap-0.5 rounded-full border border-border bg-surface/95 p-1 shadow-md"
+      class="live-preview__zoom-controls absolute bottom-3 right-6 z-10 inline-flex items-center gap-0.5 rounded-full border border-border bg-surface/95 p-1 shadow-md"
       role="group"
       aria-label="Preview zoom"
       data-testid="preview-zoom-controls"
