@@ -225,6 +225,23 @@ export class BossRelay {
     // receipt that only a live boss emits.
     const delivered = await this.waitForReceipt(result.id);
     if (!delivered) {
+      // ⚠️ Receipt timeout does NOT prove the boss died — it proves the boss
+      // did not ACK within the window. A busy boss (mid-tool-call, its
+      // intercom loop blocked) routinely misses the window; the broker holds
+      // the message and injects it when the boss is responsive again (the
+      // late receipt then proves liveness). Only mark dead when the OS probe
+      // confirms the process is actually gone (observed: boss flagged dead
+      // at 01:49:19Z while running a `sleep 20` tool call — all notifications
+      // queued for nothing).
+      const processAlive =
+        this.bossPid != null &&
+        this.isProcessAliveFn(this.bossPid, this.bossStartedAt ?? undefined);
+      if (processAlive) {
+        // Busy-but-alive boss: the broker will deliver when it frees up.
+        // Don't enqueue (would duplicate); don't mark dead. The late
+        // receipt resolves liveness.
+        return 'delivered';
+      }
       this.markDead(`no delivery receipt within ${this.receiptTimeoutMs}ms (boss likely disconnected)`);
       this.enqueue(text);
       return 'queued';
