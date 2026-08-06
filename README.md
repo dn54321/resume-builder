@@ -1,4 +1,4 @@
-# resume-v3
+# Resume Builder
 
 A resume-building application with a NestJS backend and Vue 3 frontend.
 Build resumes in a live-preview builder, tailor them to any job description,
@@ -30,6 +30,27 @@ resume-v3/
 └── .github/
     └── workflows/    # CI/CD pipelines
 ```
+
+## AI Harness
+
+This project is built **by AI, for humans** — an agentic harness writes,
+tests, and ships most of the code, with a human reviewing the results.
+
+The harness is the [`atlas`](./atlas) system: a `pi`-based orchestrator
+spawns one-shot **worker agents** in isolated git worktrees, each assigned a
+[Linear](https://linear.app) ticket. Workers read the ticket, implement it
+end-to-end (code, tests, migrations), run the full verification suite, and
+merge to master — all autonomously, in parallel. A **boss** agent oversees
+the flow, fixes harness bugs, and fields human feedback, while the
+orchestrator schedules spawns, sweeps stale merges, and reports status to a
+live dashboard.
+
+Why it works: every change lands with tests + a green pre-push gate
+(frontend 800+ unit tests, backend 280+, e2e, coverage ≥90%), so the AI's
+output is continuously validated rather than trusted on faith. The
+[Agentic Development](#agentic-development) section below documents how the
+harness operates, and [Running Atlas](#running-atlas-the-agent-system)
+covers launching it.
 
 ## Agentic Development
 
