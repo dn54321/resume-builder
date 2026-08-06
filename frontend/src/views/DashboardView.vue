@@ -304,6 +304,10 @@ function handleEditResume(resume: ResumeSummary): void {
 const DOUBLE_TAP_MS = 300
 let lastCardTap: { resumeId: string; at: number } | null = null
 
+/**
+ *
+ * @param resume
+ */
 function onCardTap(resume: ResumeSummary): void {
   const now = Date.now()
   if (lastCardTap && lastCardTap.resumeId === resume.id && now - lastCardTap.at <= DOUBLE_TAP_MS) {
