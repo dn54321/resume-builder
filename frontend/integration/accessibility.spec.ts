@@ -25,7 +25,13 @@ test.describe('Accessibility axe-core audits', () => {
       // Ensure the page has rendered meaningful content before auditing
       await expect(page.locator('main')).toBeVisible()
 
-      const results = await new AxeBuilder({ page }).analyze()
+      const results = await new AxeBuilder({ page })
+        // vite-plugin-vue-devtools injects a dev-only button (`.vue-devtools__anchor-btn`)
+        // carrying an aria-prohibited-attr (role=button + aria-pressed). It is not part
+        // of the app and only exists in the dev server, so exclude it from the audit —
+        // otherwise every axe run fails on dev infra, not app code.
+        .exclude('.vue-devtools__anchor-btn')
+        .analyze()
 
       // axe-core uses four impact levels.  Fail the build on 'critical' and
       // 'serious' violations; log 'moderate' and 'minor' for visibility

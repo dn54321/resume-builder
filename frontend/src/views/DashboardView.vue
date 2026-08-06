@@ -501,52 +501,65 @@ async function handleConfirmDelete(): Promise<void> {
                 <span v-if="renameLoading" class="rename-spinner" />
               </div>
 
-              <!-- Card actions: Edit in Builder / Rename / Duplicate / Delete -->
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  class="resume-card__menu-btn"
-                  data-testid="resume-menu-trigger"
-                  :aria-label="`Options for ${resume.name || 'Untitled'}`"
-                  @click.stop
+              <!-- Card actions: pencil edit shortcut (RES-114) + ⋮ menu -->
+              <div class="resume-card__actions">
+                <button
+                  class="resume-card__edit-btn"
+                  data-testid="resume-edit-btn"
+                  :aria-label="`Edit ${resume.name || 'Untitled'} in builder`"
+                  title="Edit in builder"
+                  @click.stop="handleEditResume(resume)"
                   @dblclick.stop
                   @keydown.stop
                 >
-                  <Ellipsis class="size-4" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" class="w-44">
-                  <DropdownMenuItem
-                    data-testid="menu-edit-builder"
-                    @select="handleEditResume(resume)"
+                  <Pencil class="size-4" />
+                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    class="resume-card__menu-btn"
+                    data-testid="resume-menu-trigger"
+                    :aria-label="`Options for ${resume.name || 'Untitled'}`"
+                    @click.stop
+                    @dblclick.stop
+                    @keydown.stop
                   >
-                    <SquarePen class="size-4" />
-                    Edit in Builder
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    data-testid="menu-rename"
-                    @select="startEditing(resume)"
-                  >
-                    <Pencil class="size-4" />
-                    Rename
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    data-testid="menu-duplicate"
-                    :disabled="duplicatingId === resume.id"
-                    @select="handleDuplicate(resume)"
-                  >
-                    <Copy class="size-4" />
-                    {{ duplicatingId === resume.id ? 'Duplicating…' : 'Duplicate' }}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    data-testid="menu-delete"
-                    variant="destructive"
-                    @select="handleDeleteClick(resume)"
-                  >
-                    <Trash2 class="size-4" />
-                    Delete
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                    <Ellipsis class="size-4" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" class="w-44">
+                    <DropdownMenuItem
+                      data-testid="menu-edit-builder"
+                      @select="handleEditResume(resume)"
+                    >
+                      <SquarePen class="size-4" />
+                      Edit in Builder
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      data-testid="menu-rename"
+                      @select="startEditing(resume)"
+                    >
+                      <Pencil class="size-4" />
+                      Rename
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      data-testid="menu-duplicate"
+                      :disabled="duplicatingId === resume.id"
+                      @select="handleDuplicate(resume)"
+                    >
+                      <Copy class="size-4" />
+                      {{ duplicatingId === resume.id ? 'Duplicating…' : 'Duplicate' }}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      data-testid="menu-delete"
+                      variant="destructive"
+                      @select="handleDeleteClick(resume)"
+                    >
+                      <Trash2 class="size-4" />
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
 
             <!-- Rename error -->
@@ -773,6 +786,29 @@ async function handleConfirmDelete(): Promise<void> {
   flex: 1;
 }
 
+.resume-card__actions {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* Pencil edit shortcut (RES-114) — always-visible entry point into the
+   builder, mirroring the ⋮ menu button's styling and hover behavior. */
+.resume-card__edit-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-radius: 4px;
+  color: var(--muted-foreground);
+  transition: color 0.15s, background-color 0.15s;
+}
+
 .resume-card__menu-btn {
   flex-shrink: 0;
   display: inline-flex;
@@ -832,6 +868,7 @@ async function handleConfirmDelete(): Promise<void> {
   color: #dc2626;
 }
 
+.resume-card__edit-btn:hover,
 .resume-card__menu-btn:hover {
   color: var(--color-foreground);
   background-color: var(--muted);

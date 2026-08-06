@@ -953,6 +953,165 @@ describe('DashboardView', () => {
     wrapper.unmount()
   })
 
+  // ── Pencil Edit Button (RES-114) ──────────────────────────
+
+  it('renders a visible pencil edit button on each resume card', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    const editBtns = wrapper.findAll('[data-testid="resume-edit-btn"]')
+    expect(editBtns.length).toBe(2)
+
+    // Each button is a real <button>, shows the Pencil icon, and carries an
+    // accessible label naming the resume it edits.
+    for (const btn of editBtns) {
+      expect(btn.element.tagName).toBe('BUTTON')
+      expect(btn.find('svg').exists()).toBe(true)
+      expect(btn.attributes('aria-label')).toBeTruthy()
+    }
+    expect(editBtns[0]!.attributes('aria-label')).toBe(
+      'Edit Software Engineer Resume in builder',
+    )
+    expect(editBtns[1]!.attributes('aria-label')).toBe('Edit Untitled in builder')
+
+    wrapper.unmount()
+  })
+
+  it('navigates to the builder when the pencil button is clicked', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    const pushSpy = vi.spyOn(router, 'push')
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    const editBtns = wrapper.findAll('[data-testid="resume-edit-btn"]')
+    await editBtns[0]!.trigger('click')
+    await flushPromises()
+
+    // Same action as the dropdown "Edit in Builder" / double-click
+    expect(pushSpy).toHaveBeenCalledWith('/builder/resume-1')
+
+    // No preview fetch — the pencil navigates, it does not select.
+    const previewFetches = mockFetch.mock.calls.filter(
+      (call: unknown[]) =>
+        typeof call[0] === 'string' &&
+        call[0].includes('/api/v1/resumes/resume-1'),
+    )
+    expect(previewFetches.length).toBe(0)
+
+    wrapper.unmount()
+  })
+
+  it('navigates to the builder for the correct resume from a non-first card', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    const pushSpy = vi.spyOn(router, 'push')
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    const editBtns = wrapper.findAll('[data-testid="resume-edit-btn"]')
+    await editBtns[1]!.trigger('click')
+    await flushPromises()
+
+    expect(pushSpy).toHaveBeenCalledWith('/builder/resume-2')
+
+    wrapper.unmount()
+  })
+
+  it('does not select a resume for preview when the pencil is clicked', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockFullResumeStandard))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    const editBtns = wrapper.findAll('[data-testid="resume-edit-btn"]')
+    await editBtns[0]!.trigger('click')
+    await flushPromises()
+
+    // The card's single-click preview must NOT fire — the click is stopped
+    // at the button. Placeholder stays; no preview body, no full-resume GET.
+    expect(wrapper.find('[data-testid="preview-body"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="preview-placeholder"]').exists()).toBe(true)
+    const fullResumeFetches = mockFetch.mock.calls.filter(
+      (call: unknown[]) =>
+        typeof call[0] === 'string' &&
+        call[0].includes('/api/v1/resumes/resume-1'),
+    )
+    expect(fullResumeFetches.length).toBe(0)
+
+    wrapper.unmount()
+  })
+
+  it('does not double-navigate when the pencil button is double-clicked', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+    const pushSpy = vi.spyOn(router, 'push')
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    const editBtn = wrapper.findAll('[data-testid="resume-edit-btn"]')[0]!
+    // Browser fires click, then dblclick — the dblclick must be stopped at
+    // the button so it does not bubble to the card's own dblclick handler
+    // (which would push a second time).
+    await editBtn.trigger('click')
+    await editBtn.trigger('dblclick')
+    await flushPromises()
+
+    expect(pushSpy).toHaveBeenCalledTimes(1)
+    expect(pushSpy).toHaveBeenCalledWith('/builder/resume-1')
+
+    wrapper.unmount()
+  })
+
+  it('keyboard Enter on the pencil does not bubble to the card (no preview select)', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    const editBtn = wrapper.findAll('[data-testid="resume-edit-btn"]')[0]!
+    await editBtn.trigger('keydown.enter')
+    await flushPromises()
+
+    // The card's @keydown.enter (preview select) must not fire.
+    const fullResumeFetches = mockFetch.mock.calls.filter(
+      (call: unknown[]) =>
+        typeof call[0] === 'string' &&
+        call[0].includes('/api/v1/resumes/resume-1'),
+    )
+    expect(fullResumeFetches.length).toBe(0)
+    expect(wrapper.find('[data-testid="preview-placeholder"]').exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
   // ── Duplicate ───────────────────────────────────────────────
 
   it('duplicates a resume and adds the copy to the list', async () => {
