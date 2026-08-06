@@ -1273,11 +1273,17 @@ describe('DashboardView', () => {
 
     // Must use --color-foreground (defined in main.css) for background-color
     expect(styleBlock).toContain(
-      'background-color: var(--color-foreground)',
+      'background-color: var(--color-foreground',
     )
 
     // Must NOT use --color-text (does not exist → transparent/invisible button)
     expect(styleBlock).not.toContain('var(--color-text)')
+
+    // Defense-in-depth (RES-101): a missing/renamed theme var must not be
+    // able to make the button invisible again — the fallback literal only
+    // applies when the var is undefined.
+    expect(styleBlock).toContain('var(--color-foreground, #0a0a0a)')
+    expect(styleBlock).toContain('var(--color-background, #ffffff)')
   })
 
   it('disables Create New Resume button while loading', () => {
@@ -1290,6 +1296,80 @@ describe('DashboardView', () => {
 
     const btn = wrapper.find('.dashboard-header .btn-primary')
     expect(btn.attributes('disabled')).toBeDefined()
+  })
+
+  it('enables Create New Resume button once resumes load', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockResumes))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    const btn = wrapper.find('.dashboard-header .btn-primary')
+    expect(btn.exists()).toBe(true)
+    // Not stuck disabled — a user with resumes present can always create.
+    expect(btn.attributes('disabled')).toBeUndefined()
+  })
+
+  it('enables Create New Resume button when the resumes fetch fails', async () => {
+    createAuthenticatedStore()
+    mockFetch.mockResolvedValueOnce(mockJsonResponse({ message: 'Error' }, 500))
+
+    const wrapper = mount(DashboardView, {
+      global: { plugins: [router] },
+    })
+
+    await flushPromises()
+
+    // Error surfaced…
+    expect(wrapper.find('[role="alert"]').exists()).toBe(true)
+
+    // …and the header button is usable again (a failed list load must not
+    // leave the user unable to create a resume).
+    const btn = wrapper.find('.dashboard-header .btn-primary')
+    expect(btn.attributes('disabled')).toBeUndefined()
+  })
+
+  it('clears loading and re-enables Create New Resume when the resumes fetch times out', async () => {
+    vi.useFakeTimers()
+    try {
+      // Keep the timeout bound in sync with the component's constant.
+      const source = readFileSync(resolve(__dirname, '../DashboardView.vue'), 'utf-8')
+      const timeoutMatch = source.match(
+        /const RESUMES_FETCH_TIMEOUT_MS = (\d+)/,
+      )
+      expect(timeoutMatch).not.toBeNull()
+      const timeoutMs = Number(timeoutMatch![1])
+
+      createAuthenticatedStore()
+      // The resumes request never settles (backend hung) — previously this
+      // left isLoading=true forever, disabling the Create button.
+      mockFetch.mockImplementation(() => new Promise(() => {}))
+
+      const wrapper = mount(DashboardView, {
+        global: { plugins: [router] },
+      })
+
+      // While the request is pending, the header button is disabled.
+      const btn = wrapper.find('.dashboard-header .btn-primary')
+      expect(btn.attributes('disabled')).toBeDefined()
+
+      // Advance past the fetch timeout.
+      await vi.advanceTimersByTimeAsync(timeoutMs)
+
+      // Loading resolved: skeletons gone, timeout error surfaced, and the
+      // header button is re-enabled so the user can still create.
+      expect(wrapper.findAll('.resume-card--skeleton').length).toBe(0)
+      const alert = wrapper.find('[role="alert"]')
+      expect(alert.exists()).toBe(true)
+      expect(alert.text()).toBe('Timed out loading resumes — please try again')
+      expect(btn.attributes('disabled')).toBeUndefined()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   // ── Responsive <768px ──────────────────────────────────────

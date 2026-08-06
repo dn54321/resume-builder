@@ -39,6 +39,47 @@ const router = useRouter()
 const auth = useAuth()
 const api = useApi()
 
+/**
+ * Upper bound for the initial resume-list request.
+ *
+ * If `GET /api/v1/resumes` never settles (backend down but the connection
+ * hangs, proxy wedged), `isLoading` stays `true` forever: skeleton cards
+ * render indefinitely and the header "Create New Resume" button remains
+ * DISABLED (`:disabled="isLoading"`), so the user has no way to create a
+ * resume — the exact failure reported in RES-101. Bounding the fetch with
+ * a timeout guarantees loading always resolves and the button becomes
+ * usable again.
+ */
+const RESUMES_FETCH_TIMEOUT_MS = 15000
+
+/** Error thrown when a request exceeds its timeout bound. */
+class RequestTimeoutError extends Error {
+  constructor(label: string) {
+    super(`Request timed out: ${label}`)
+    this.name = 'RequestTimeoutError'
+  }
+}
+
+/**
+ * Race a promise against a timeout so a hung request cannot leave the
+ * UI stuck in a loading state. The timer is cleared as soon as either
+ * side settles.
+ * @param {Promise<T>} promise - The operation to bound
+ * @param {number} ms - Timeout in milliseconds
+ * @param {string} label - Human-readable operation name (for the error)
+ * @returns {Promise<T>} Resolves with the operation result, or rejects
+ * with {@link RequestTimeoutError} after `ms`.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new RequestTimeoutError(label)), ms)
+  })
+  return Promise.race([promise, timeout]).finally(() => {
+    clearTimeout(timer)
+  })
+}
+
 const resumes = ref<ResumeSummary[]>([])
 const isLoading = ref(true)
 const error = ref('')
@@ -144,9 +185,18 @@ async function fetchResumes(): Promise<void> {
   error.value = ''
 
   try {
-    resumes.value = await api.get<ResumeSummary[]>('/api/v1/resumes')
+    resumes.value = await withTimeout(
+      api.get<ResumeSummary[]>('/api/v1/resumes'),
+      RESUMES_FETCH_TIMEOUT_MS,
+      'loading resumes',
+    )
   } catch (err) {
-    if (err instanceof ApiRequestError) {
+    if (err instanceof RequestTimeoutError) {
+      // Distinct message: a hung request is a connectivity problem, not a
+      // server-side rejection. Loading resolves so the header Create
+      // button re-enables and the user can still create a resume.
+      error.value = 'Timed out loading resumes — please try again'
+    } else if (err instanceof ApiRequestError) {
       error.value = err.message
     } else {
       error.value = 'Something went wrong'
@@ -647,8 +697,14 @@ async function handleConfirmDelete(): Promise<void> {
   cursor: pointer;
   border: none;
   border-radius: 6px;
-  background-color: var(--color-foreground);
-  color: var(--color-background);
+  /* Fallback literals guard against a missing/renamed theme variable.
+     The stale frontend/dist shipped for RES-101 referenced the removed
+     legacy text-color token — the button rendered with a transparent
+     background and light text, i.e. completely invisible in light mode.
+     These defaults only apply when the var is undefined, so the button
+     can never silently disappear again. */
+  background-color: var(--color-foreground, #0a0a0a);
+  color: var(--color-background, #ffffff);
   font-weight: 500;
 }
 
