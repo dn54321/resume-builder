@@ -10,7 +10,7 @@
  * branch — silently corrupting it (observed 2026-08-06: the RES-91 branch
  * gained stray "base" commits and its tree was replaced by a single
  * file.txt while the atlas suite ran inside a worktree pre-push hook;
- * tracked files such as frontend/.env and frontend/screenshots/*.png were
+ * tracked files such as frontend/.env.template and frontend/screenshots/*.png were
  * deleted from the branch).
  *
  * Fix (two layers):
