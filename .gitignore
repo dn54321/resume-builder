@@ -5,6 +5,10 @@ node_modules
 agent-status.txt
 pr-*
 screenshots
+# Screenshot artifacts — not source; captured for PR proof and docs only.
+frontend/screenshots/
+frontend/public/screenshots/
+**/__screenshots__/
 frontend/resume.pdf
 
 # Atlas agent system state
