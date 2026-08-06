@@ -57,9 +57,19 @@ export interface BossRelayOptions {
 }
 
 /**
- * POSIX /proc probe: true when the process exists AND its start time matches
- * (field 22 of /proc/<pid>/stat). The startTime guards against PID recycling —
- * a recycled PID (new process reusing the number) has a different start time.
+ * POSIX /proc probe: true when the process exists AND it started before the
+ * session began (field 22 of /proc/<pid>/stat). The startTime guards against
+ * PID recycling — a recycled PID (new process reusing the number) starts AFTER
+ * the session, so its startEpochMs is > the session's startedAt.
+ *
+ * ⚠️ The comparison is ONE-SIDED (startEpochMs <= sessionStart + tolerance),
+ * NOT |diff| < tolerance. The session's startedAt is recorded when pi's
+ * intercom context initializes — which happens AFTER the process exec
+ * (model/extension load adds seconds of skew). A live boss therefore ALWAYS
+ * satisfies processStart <= sessionStart, often by several seconds. The old
+ * symmetric check marked live bosses dead whenever boot skew exceeded 5s
+ * (observed: orchestrator flagged this very process dead while it was running
+ * normally). The tolerance covers clock rounding only.
  */
 export function defaultIsProcessAlive(pid: number, startTime?: number): boolean {
   try {
@@ -82,8 +92,10 @@ export function defaultIsProcessAlive(pid: number, startTime?: number): boolean 
     const bootEpochMs = Date.now() - uptimeS * 1000;
     const startEpochMs = bootEpochMs + (startJiffies / CLK_TCK) * 1000;
 
-    // Allow 5s skew (clock/rounding between the two sources).
-    return Math.abs(startEpochMs - Number(startTime)) < 5000;
+    // Live boss: process started before (or at) the session start — allow 5s
+    // clock skew. Recycled PID: new process started AFTER the session began,
+    // so startEpochMs > startTime → dead.
+    return startEpochMs <= Number(startTime) + 5000;
   } catch {
     return false;
   }

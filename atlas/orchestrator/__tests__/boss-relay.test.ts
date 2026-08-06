@@ -396,6 +396,28 @@ describe('BossRelay — OS-level liveness (PID check)', () => {
     const startEpochMs = (Date.now() - uptimeS * 1000) + (startJiffies / 100) * 1000;
 
     expect(defaultIsProcessAlive(process.pid, startEpochMs)).toBe(true);
-    expect(defaultIsProcessAlive(process.pid, startEpochMs + 60_000)).toBe(false); // wrong start
+    // Recycled PID: the new process started AFTER the session began → dead.
+    expect(defaultIsProcessAlive(process.pid, startEpochMs - 60_000)).toBe(false);
+  });
+
+  it('keeps a live boss alive when boot skew exceeds 5s (session starts after process)', () => {
+    // Regression: the probe used |processStart - sessionStartedAt| < 5s, but
+    // session.startedAt is recorded when pi's intercom context initializes —
+    // AFTER the process exec (model/extension load). Any boot skew > 5s
+    // marked a LIVE boss dead (observed: orchestrator flagged pid 3020978,
+    // a running boss, as 'no longer alive (PID check)' at 01:26:47Z). The
+    // correct check is one-sided: the process must start BEFORE the session;
+    // a session starting seconds later is normal and must stay alive.
+    const fs = require('node:fs') as typeof import('node:fs');
+    const stat = fs.readFileSync(`/proc/${process.pid}/stat`, 'utf-8');
+    const fields = stat.slice(stat.lastIndexOf(')') + 2).trim().split(/\s+/);
+    const startJiffies = Number(fields[19]);
+    const uptimeS = Number(fs.readFileSync('/proc/uptime', 'utf-8').split(/\s+/)[0]);
+    const startEpochMs = (Date.now() - uptimeS * 1000) + (startJiffies / 100) * 1000;
+
+    // Session initialized 10s after the process exec'd — normal pi boot.
+    expect(defaultIsProcessAlive(process.pid, startEpochMs + 10_000)).toBe(true);
+    // Even 60s boot skew is fine — the process still predates the session.
+    expect(defaultIsProcessAlive(process.pid, startEpochMs + 60_000)).toBe(true);
   });
 });
