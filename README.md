@@ -4,6 +4,8 @@ A resume-building application with a NestJS backend and Vue 3 frontend.
 Build resumes in a live-preview builder, tailor them to any job description,
 and export polished PDFs.
 
+Demo Link: https://resume-builder.dnxe.dev/
+
 ## Screenshots
 
 | | |
