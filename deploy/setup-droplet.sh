@@ -102,13 +102,25 @@ fi
 REQUIRED_VARS="POSTGRES_PASSWORD DATABASE_URL FRONTEND_URL VITE_API_BASE_URL RESUME_FIELD_ENCRYPTION_KEY SESSION_ENCRYPTION_KEY"
 
 # Returns 0 if the env file is present AND every required var has a real
-# value; 1 otherwise.
+# value; 1 otherwise. A real value is non-empty and contains no '<' —
+# template tokens (<RANDOM:32>, <ENC:AES-256>, <your-domain>) always do.
 env_file_usable() {
   local missing="" v
   for v in $REQUIRED_VARS; do
-    grep -qE "^${v}=[^<].+" "$ENV_FILE" 2>/dev/null || missing="$missing $v"
+    grep -qE "^${v}=[^<]+$" "$ENV_FILE" 2>/dev/null || missing="$missing $v"
   done
   [ -z "$missing" ]
+}
+
+# Echoes how many required vars currently hold a real (non-placeholder)
+# value in the env file. 0 = fresh/placeholder-only; all = complete;
+# between = half-filled by hand — which we refuse to auto-overwrite.
+real_required_vars() {
+  local n=0 v
+  for v in $REQUIRED_VARS; do
+    grep -qE "^${v}=[^<]+$" "$ENV_FILE" 2>/dev/null && n=$((n + 1)) || true
+  done
+  echo "$n"
 }
 
 generate_env_file() {
@@ -137,14 +149,28 @@ generate_env_file() {
   log "Generated .env.prod (DB password + 2 encryption keys + URLs) — back it up, never regenerate"
 }
 
-if [ -f "$ENV_FILE" ] && env_file_usable; then
-  log "Preserving existing $ENV_FILE (secrets are never regenerated)"
-else
-  if [ -f "$ENV_FILE" ]; then
+if [ -f "$ENV_FILE" ]; then
+  REAL_COUNT="$(real_required_vars)"
+  REQUIRED_COUNT="$(printf '%s\n' $REQUIRED_VARS | wc -l | tr -d ' ')"
+  if [ "$REAL_COUNT" -eq "$REQUIRED_COUNT" ]; then
+    log "Preserving existing $ENV_FILE (secrets are never regenerated)"
+  elif [ "$REAL_COUNT" -eq 0 ]; then
     warn "$ENV_FILE exists but is empty or still holds template placeholders (a copied template or a stray empty file)."
     warn "It never contained real secrets, so regenerating is safe (no database volume exists yet)."
+    rm -f "$ENV_FILE"
+    generate_env_file
+  else
+    # Half-filled by hand (some real values, some placeholders/missing).
+    # Never silently overwrite real secrets — say exactly what's missing.
+    MISSING=""
+    for v in $REQUIRED_VARS; do
+      grep -qE "^${v}=[^<]+$" "$ENV_FILE" 2>/dev/null || MISSING="$MISSING $v"
+    done
+    warn "$ENV_FILE exists with REAL values but is missing:$MISSING"
+    warn "Fill those in manually — or, if this is a fresh install with no data yet, delete the file and re-run to regenerate."
+    die "refusing to overwrite real secrets in $ENV_FILE"
   fi
-  rm -f "$ENV_FILE"
+else
   generate_env_file
 fi
 
@@ -152,7 +178,7 @@ fi
 # 'required variable X is missing a value' interpolation errors later.
 MISSING=""
 for v in $REQUIRED_VARS; do
-  grep -qE "^${v}=[^<].+" "$ENV_FILE" 2>/dev/null || MISSING="$MISSING $v"
+  grep -qE "^${v}=[^<]+$" "$ENV_FILE" 2>/dev/null || MISSING="$MISSING $v"
 done
 [ -z "$MISSING" ] || die "generated $ENV_FILE is incomplete — missing:$MISSING (template drift? update .env.prod.template)"
 
