@@ -120,10 +120,17 @@ const MAX_ZOOM = 1.5
 const ZOOM_STEP = 0.1
 const ZOOM_STORAGE_KEY = 'resume-dashboard:preview-zoom'
 
+/**
+ *
+ * @param value
+ */
 function clampZoom(value: number): number {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value))
 }
 
+/**
+ *
+ */
 function loadInitialZoom(): number {
   try {
     const raw = window.sessionStorage?.getItem(ZOOM_STORAGE_KEY)
@@ -137,6 +144,9 @@ function loadInitialZoom(): number {
   return 1
 }
 
+/**
+ *
+ */
 function persistZoom() {
   try {
     window.sessionStorage?.setItem(ZOOM_STORAGE_KEY, String(zoomFactor.value))
@@ -145,15 +155,25 @@ function persistZoom() {
   }
 }
 
+/**
+ *
+ * @param value
+ */
 function setZoom(value: number) {
   zoomFactor.value = clampZoom(value)
   persistZoom()
 }
 
+/**
+ *
+ */
 function zoomIn() {
   setZoom(zoomFactor.value + ZOOM_STEP)
 }
 
+/**
+ *
+ */
 function zoomOut() {
   setZoom(zoomFactor.value - ZOOM_STEP)
 }
