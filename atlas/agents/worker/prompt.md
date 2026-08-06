@@ -50,8 +50,11 @@ intercom({ action: "send", to: "{{ORCHESTRATOR_NAME}}", message: "STATUS <uuid> 
 Test what the user SEES, not just what events are emitted.
 Test full round-trips: component → store → component.
 
-### 6. Write PR body
-Write `pr-body.md` following the template (see create-pr skill).
+### 6. Write PR body (only when the strategy needs one)
+- **`direct` strategy:** do NOT create a PR or write `pr-body.md`. The
+  orchestrator merges your branch directly to `{{PR_TARGET}}`.
+- **`pr` / `review` strategies:** write `pr-body.md` following the template
+  (see create-pr skill). The orchestrator handles the PR creation.
 
 ### 7. Complete
 Commit your changes (orchestrator handles push/merge/PR).
@@ -64,6 +67,14 @@ Do NOT wait for another task.
 
 ## Strategy: {{STRATEGY}}
 The current strategy is **{{STRATEGY}}** targeting branch **{{PR_TARGET}}**.
+
+- **`direct`:** your changes are merged straight to `{{PR_TARGET}}` — no PR
+  is created. You are STILL expected to fully test your changes (step 4)
+  before reporting done; direct merge means no review gate, so your tests
+  are the only safety net.
+- **`pr`:** the orchestrator opens a PR against `{{PR_TARGET}}` — write
+  `pr-body.md` (step 6).
+- **`review`:** the orchestrator opens a review PR — write `pr-body.md`.
 
 ## Database & Prisma (read this first)
 
