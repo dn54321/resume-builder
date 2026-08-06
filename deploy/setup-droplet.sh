@@ -184,17 +184,39 @@ done
 
 # ─── 4. nginx site + TLS ────────────────────────────────────────────────
 SITE_CONF=/etc/nginx/sites-available/resume-builder
-log "Installing nginx site config for $DOMAIN …"
-sed "s|DOMAIN|$DOMAIN|g" "$REPO_DIR/deploy/nginx/resume-builder.conf" > "$SITE_CONF"
-ln -sf "$SITE_CONF" /etc/nginx/sites-enabled/resume-builder
-rm -f /etc/nginx/sites-enabled/default
+if [ -f "$SITE_CONF" ]; then
+  # certbot --nginx upgrades this block to TLS (443 server + redirect +
+  # managed cert paths). Overwriting it on EVERY run stripped that TLS
+  # config (leaving nginx HTTP-only until certbot re-added it) — and the
+  # re-add could hang (see below). Preserve the installed file so re-runs
+  # are idempotent and TLS stays wired.
+  log "Preserving existing $SITE_CONF (certbot-managed TLS config)"
+else
+  log "Installing nginx site config for $DOMAIN …"
+  sed "s|DOMAIN|$DOMAIN|g" "$REPO_DIR/deploy/nginx/resume-builder.conf" > "$SITE_CONF"
+  ln -sf "$SITE_CONF" /etc/nginx/sites-enabled/resume-builder
+  rm -f /etc/nginx/sites-enabled/default
+fi
 
 nginx -t >/dev/null
 systemctl reload nginx
 
 if [ -d "/etc/letsencrypt/live/$DOMAIN" ]; then
   log "Certificate for $DOMAIN already exists — skipping issuance"
-  certbot --nginx -d "$DOMAIN" --redirect >/dev/null 2>&1 || true
+  # ⚠️ Was: `certbot --nginx -d $DOMAIN --redirect >/dev/null 2>&1 || true`
+  # WITHOUT --non-interactive — certbot could block on an interactive
+  # prompt whose output was hidden by the redirect, freezing the script at
+  # this exact line (observed in the field on a re-run whose template
+  # overwrite had stripped the 443 block). --non-interactive turns any
+  # question into a safe default/error; `|| true` tolerates errors.
+  certbot --nginx -d "$DOMAIN" --redirect --non-interactive >/dev/null 2>&1 || true
+  # Repair: if the vhost still has no TLS block (an older run already
+  # clobbered it), deterministically install the EXISTING cert into nginx
+  # — no ACME/network involved, cannot prompt, cannot hang.
+  if ! nginx -T 2>/dev/null | grep -q "ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem"; then
+    log "nginx has no TLS block for $DOMAIN — reinstalling existing certificate …"
+    certbot install --nginx -d "$DOMAIN" --cert-name "$DOMAIN" --non-interactive >/dev/null 2>&1 || true
+  fi
   systemctl reload nginx
 else
   if [ -n "${DOMAIN_IP:-}" ] && { [ -z "${PUBLIC_IP:-}" ] || [ "${PUBLIC_IP:-}" = "${DOMAIN_IP:-}" ]; }; then
@@ -207,21 +229,36 @@ else
 fi
 
 # ─── 5. Build & start the stack ─────────────────────────────────────────
+# Self-hosted Postgres (USE_EXTERNAL_DB=0, default) merges in the local db
+# container via docker-compose.prod.local-db.yml. USE_EXTERNAL_DB=1 runs
+# WITHOUT it — DATABASE_URL then points at externally managed Postgres.
+# Read from .env.prod so the flag survives on the droplet (same pattern
+# backup.sh uses). COMPOSE_FILES is intentionally unquoted below so it
+# word-splits into multiple -f args (no spaces inside the values).
+USE_EXTERNAL_DB="$(sed -n 's/^USE_EXTERNAL_DB=//p' "$ENV_FILE" | tail -1)"
+USE_EXTERNAL_DB="${USE_EXTERNAL_DB:-0}"
+COMPOSE_FILES="-f docker-compose.prod.yml"
+if [ "$USE_EXTERNAL_DB" = "1" ]; then
+  log "USE_EXTERNAL_DB=1 — no local Postgres container (DATABASE_URL must be an external host)"
+else
+  COMPOSE_FILES="$COMPOSE_FILES -f docker-compose.prod.local-db.yml"
+fi
+
 log "Building and starting containers (first build takes a few minutes) …"
 cd "$REPO_DIR"
-docker compose --env-file "$ENV_FILE" -f docker-compose.prod.yml up -d --build
+docker compose --env-file "$ENV_FILE" $COMPOSE_FILES up -d --build
 
 log "Waiting for services to become healthy …"
 for _ in $(seq 1 30); do
-  PS_OUT="$(docker compose --env-file "$ENV_FILE" -f docker-compose.prod.yml ps --format '{{.Service}}={{.Health}}' 2>/dev/null || true)"
+  PS_OUT="$(docker compose --env-file "$ENV_FILE" $COMPOSE_FILES ps --format '{{.Service}}={{.Health}}' 2>/dev/null || true)"
   if echo "$PS_OUT" | grep -q 'backend=healthy' \
      && echo "$PS_OUT" | grep -q 'frontend=healthy' \
-     && echo "$PS_OUT" | grep -q 'db=healthy'; then
+     && { [ "$USE_EXTERNAL_DB" = "1" ] || echo "$PS_OUT" | grep -q 'db=healthy'; }; then
     break
   fi
   sleep 5
 done
-docker compose --env-file "$ENV_FILE" -f docker-compose.prod.yml ps
+docker compose --env-file "$ENV_FILE" $COMPOSE_FILES ps
 
 log "──────────────────────────────────────────────────────────────"
 log "Done. Site: https://$DOMAIN"
@@ -230,5 +267,5 @@ log "  1. Auto-deploy: add GitHub repo secrets DROPLET_HOST, DROPLET_USER,"
 log "     DROPLET_SSH_KEY (see .github/workflows/deploy.yml) — every push"
 log "     to the release branch then rebuilds & restarts the stack."
 log "  2. Backups: crontab -e →  0 3 * * * $REPO_DIR/deploy/backup.sh"
-log "  3. Logs: docker compose --env-file $ENV_FILE -f docker-compose.prod.yml logs -f"
+log "  3. Logs: docker compose --env-file $ENV_FILE $COMPOSE_FILES logs -f"
 log "──────────────────────────────────────────────────────────────"

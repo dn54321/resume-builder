@@ -1,0 +1,55 @@
+# ─── Resume Builder — local Postgres override (self-hosted mode) ────────
+#
+# Merged into docker-compose.prod.yml when USE_EXTERNAL_DB=0 (the default)
+# in .env.prod: adds the self-hosted Postgres 16 container, makes backend
+# wait for its healthcheck, and declares the pgdata volume.
+#
+# When USE_EXTERNAL_DB=1 the deploy scripts OMIT this file — DATABASE_URL
+# then points at an externally managed Postgres and no local db container
+# is started (nor does backend depend on one).
+#
+# NOTE: YAML anchors do not cross files — x-logging is re-declared here so
+# this file parses standalone (docker compose requires it).
+
+name: resume-builder-prod
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  # ─── Database (Postgres 16, persisted in a named volume) ──────────────
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    # Trimmed for a 1GB droplet: 64MB shared buffers (vs 128MB default) and
+    # 50 max connections (vs 100) — Prisma's pool needs only a handful.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=64MB
+      - -c
+      - max_connections=50
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-resume}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}
+      POSTGRES_DB: ${POSTGRES_DB:-resume_builder}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-resume} -d ${POSTGRES_DB:-resume_builder}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+
+  # Backend waits for the local DB only when it actually exists (merged in).
+  backend:
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

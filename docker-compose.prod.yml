@@ -3,13 +3,21 @@
 # Deploys the whole stack on a single droplet:
 #   postgres:16  ←  backend (NestJS)  ←  host nginx (TLS)  →  frontend (nginx)
 #
+# The local Postgres container lives in docker-compose.prod.local-db.yml
+# and is merged in by default (USE_EXTERNAL_DB=0 in .env.prod). Set
+# USE_EXTERNAL_DB=1 and the deploy scripts omit that file — DATABASE_URL
+# then points at an externally managed Postgres and NO local db container
+# is started (backend also stops depending on one).
+#
 # Sized for a 1GB RAM droplet: idle stack ~500MB (Postgres ~180MB, backend
 # ~250MB, two nginx ~25MB, dockerd ~60MB) with the setup script's 2G swap
 # covering build-time spikes. The backend heap is capped at 512MB and the
 # postgres buffers/connections trimmed so nothing can balloon past RAM.
 #
 # Usage (run from the repo root ON the droplet):
-#   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml \
+#     -f docker-compose.prod.local-db.yml up -d --build   # self-hosted DB
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build  # USE_EXTERNAL_DB=1
 #
 # The env file is created by deploy/setup-droplet.sh (or hand-made from
 # .env.prod.template). Every ${VAR} below is interpolated from that file —
@@ -37,31 +45,6 @@ x-logging: &default-logging
     max-file: "3"
 
 services:
-  # ─── Database (Postgres 16, persisted in a named volume) ──────────────
-  db:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    # Trimmed for a 1GB droplet: 64MB shared buffers (vs 128MB default) and
-    # 50 max connections (vs 100) — Prisma's pool needs only a handful.
-    command:
-      - postgres
-      - -c
-      - shared_buffers=64MB
-      - -c
-      - max_connections=50
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-resume}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}
-      POSTGRES_DB: ${POSTGRES_DB:-resume_builder}
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-resume} -d ${POSTGRES_DB:-resume_builder}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    logging: *default-logging
-
   # ─── Backend (NestJS + Prisma, Postgres provider) ─────────────────────
   backend:
     build:
@@ -72,9 +55,8 @@ services:
         # postgresql:// → postgres. Must match the runtime DATABASE_URL.
         DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env.prod}
     restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
+    # depends_on db (condition: service_healthy) is merged in via
+    # docker-compose.prod.local-db.yml (self-hosted mode only).
     environment:
       NODE_ENV: production
       PORT: 3000
@@ -122,5 +104,3 @@ services:
       retries: 5
     logging: *default-logging
 
-volumes:
-  pgdata:

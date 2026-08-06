@@ -228,6 +228,13 @@ This idempotent script:
    and issues a Let's Encrypt certificate (auto-renewed by a systemd timer)
 5. Builds & starts the stack, waits for all healthchecks to pass
 
+**External database:** the droplet runs its own Postgres container by
+default. To point the app at an externally managed Postgres (e.g. a DO
+managed database), set `USE_EXTERNAL_DB=1` and `DATABASE_URL` to the
+external host in `.env.prod` before (re)running the bootstrap — the local
+`db` container is then never started. `setup-droplet.sh`, `deploy.sh`, the
+CI workflow, and `backup.sh` all honor the flag.
+
 ### 4. Deploy updates
 
 **Automatic** — add these GitHub repo secrets and every push to the
